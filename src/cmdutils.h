@@ -246,7 +246,7 @@ void show_help_options(const OptionDef *options, const char *msg, int req_flags,
  * Show help for all options with given flags in class and all its
  * children.
  */
-void show_help_children(const AVClass *class, int flags);
+void show_help_children(const AVClass * avclass, int flags);
 
 /**
  * Per-fftool specific help handler. Implemented in each
@@ -620,7 +620,7 @@ void *grow_array(void *array, int elem_size, int *size, int new_size);
 #define media_type_string av_get_media_type_string
 
 #define GROW_ARRAY(array, nb_elems)\
-    array = grow_array(array, sizeof(*array), &nb_elems, nb_elems + 1)
+    array = grow_array((void*)array, sizeof(*array), &nb_elems, nb_elems + 1)
 
 #define GET_PIX_FMT_NAME(pix_fmt)\
     const char *name = av_get_pix_fmt_name(pix_fmt);
