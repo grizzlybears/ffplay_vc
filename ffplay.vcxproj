@@ -153,6 +153,12 @@
   <ItemGroup>
     <ClCompile Include="src\cmdutils.c" />
     <ClCompile Include="src\ffplay.cpp" />
+    <ClCompile Include="utils\thread_utils.cpp" />
+    <ClCompile Include="utils\utils.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="utils\thread_utils.h" />
+    <ClInclude Include="utils\utils.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -70,6 +70,8 @@ extern "C"
 
 #include <assert.h>
 
+#include "../utils/utils.h"
+
 const char program_name[] = "ffplay";
 const int program_birth_year = 2003;
 
@@ -3703,6 +3705,13 @@ int main(int argc, char **argv)
 {
     int flags;
     VideoState *is;
+
+
+    //printf_as_default_logger();
+    init_default_logger(GetModuleHandle(NULL), "ffplay.log");
+
+    LOG_DEBUG("hello.\n");
+
 
     init_dynload();
 
