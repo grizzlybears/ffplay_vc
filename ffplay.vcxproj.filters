@@ -16,6 +16,9 @@
     <Filter Include="utils">
       <UniqueIdentifier>{d569dbc3-8169-4254-b46a-32b84a61806e}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ffdecoder">
+      <UniqueIdentifier>{d1597394-1dcf-4246-97b7-d2239480693e}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\cmdutils.c">
@@ -30,6 +33,9 @@
     <ClCompile Include="utils\utils.cpp">
       <Filter>utils</Filter>
     </ClCompile>
+    <ClCompile Include="ffdecoder\ffdecoder.cpp">
+      <Filter>ffdecoder</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="utils\thread_utils.h">
@@ -37,6 +43,9 @@
     </ClInclude>
     <ClInclude Include="utils\utils.h">
       <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="ffdecoder\ffdecoder.h">
+      <Filter>ffdecoder</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

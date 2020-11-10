@@ -94,7 +94,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32; _CRT_SECURE_NO_WARNINGS; _DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>min_ffmpeg</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.; min_ffmpeg;</AdditionalIncludeDirectories>
       <ExceptionHandling>Async</ExceptionHandling>
       <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
@@ -112,7 +112,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32; _CRT_SECURE_NO_WARNINGS; NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>min_ffmpeg</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.; min_ffmpeg;</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -151,12 +151,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="ffdecoder\ffdecoder.cpp" />
     <ClCompile Include="src\cmdutils.c" />
     <ClCompile Include="src\ffplay.cpp" />
     <ClCompile Include="utils\thread_utils.cpp" />
     <ClCompile Include="utils\utils.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="ffdecoder\ffdecoder.h" />
     <ClInclude Include="utils\thread_utils.h" />
     <ClInclude Include="utils\utils.h" />
   </ItemGroup>
