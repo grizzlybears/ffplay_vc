@@ -525,8 +525,8 @@ int main(int argc, char **argv)
     SDL_EventState(SDL_SYSWMEVENT, SDL_IGNORE);
     SDL_EventState(SDL_USEREVENT, SDL_IGNORE);
 
-    av_init_packet(&flush_pkt);
-    flush_pkt.data = (uint8_t *)&flush_pkt;
+    av_init_packet(& PacketQueue::flush_pkt);
+    PacketQueue::flush_pkt.data = (uint8_t *)& PacketQueue::flush_pkt;
 
     if (!display_disable) {
         int flags = SDL_WINDOW_HIDDEN;

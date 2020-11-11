@@ -115,22 +115,61 @@ extern "C"
 
 static unsigned sws_flags = SWS_BICUBIC;
 
-typedef struct MyAVPacketList {
+
+typedef struct MyAVPacketList {  // 扩展了 AVPacket，增加serial， 将来可以考虑改成继承 AVPacke，再套一个std::list
     AVPacket pkt;
     struct MyAVPacketList *next;
     int serial;
 } MyAVPacketList;
 
-typedef struct PacketQueue {
+class PacketQueue 
+{
+public:
     MyAVPacketList *first_pkt, *last_pkt;
     int nb_packets;
     int size;
     int64_t duration;
     int abort_request;
     int serial;
-    SDL_mutex *mutex;
-    SDL_cond *cond;
-} PacketQueue;
+    
+    static AVPacket flush_pkt;  
+
+    int static is_flush_pkt(const AVPacket& to_check);
+
+    SimpleConditionVar cond;
+
+    PacketQueue()
+    {
+        first_pkt = NULL;
+        last_pkt = NULL;
+        nb_packets = 0;
+        size = 0;
+        duration = 0;
+        serial = 0;
+        abort_request = 1;
+    }
+
+    // 接管pkt生命周期，put失败也释放掉
+    int packet_queue_put( AVPacket* pkt);
+
+    // 清空queue
+    void packet_queue_flush();
+
+    void packet_queue_destroy();
+
+    void packet_queue_abort();
+
+    void packet_queue_start();
+
+    // return < 0 if aborted, 0 if no packet and > 0 if packet.  
+    int packet_queue_get(AVPacket* pkt, int block, int* serial);
+
+    int packet_queue_put_nullpacket(int stream_index);
+
+protected:
+    int packet_queue_put_private(AVPacket* pkt);
+    
+};
 
 #define VIDEO_PICTURE_QUEUE_SIZE 3
 #define SUBPICTURE_QUEUE_SIZE 16
@@ -206,7 +245,8 @@ typedef struct Decoder {
     SDL_Thread *decoder_tid;
 } Decoder;
 
-typedef struct VideoState {
+class VideoState {
+public:
     SDL_Thread *read_tid;
     AVInputFormat *iformat;
     int abort_request;
@@ -310,7 +350,8 @@ typedef struct VideoState {
     int last_video_stream, last_audio_stream, last_subtitle_stream;
 
     SDL_cond *continue_read_thread;
-} VideoState;
+
+};
 
 /* options specified by the user */
 extern AVInputFormat *file_iformat;
@@ -366,7 +407,6 @@ extern int filter_nbthreads ;
 extern int is_full_screen;
 extern int64_t audio_callback_time;
 
-extern AVPacket flush_pkt;
 
 #define FF_QUIT_EVENT    (SDL_USEREVENT + 2)
 
@@ -401,26 +441,6 @@ inline int64_t get_valid_channel_layout(int64_t channel_layout, int channels)
     else
         return 0;
 }
-
-///     packet_queue section {{{
-int packet_queue_put_private(PacketQueue* q, AVPacket* pkt);
-int packet_queue_put(PacketQueue* q, AVPacket* pkt);
-int packet_queue_put_nullpacket(PacketQueue* q, int stream_index);
-/* packet queue handling */
-int packet_queue_init(PacketQueue* q);
-
-void packet_queue_flush(PacketQueue* q);
-
-void packet_queue_destroy(PacketQueue* q);
-
-void packet_queue_abort(PacketQueue* q);
-
-void packet_queue_start(PacketQueue* q);
-
-/* return < 0 if aborted, 0 if no packet and > 0 if packet.  */
-int packet_queue_get(PacketQueue* q, AVPacket* pkt, int block, int* serial);
-
-////       }}} packet_queue section
 
 
 //     decoder section {{{
@@ -486,6 +506,8 @@ void video_audio_display(VideoState* s);
 
 
 void stream_component_close(VideoState* is, int stream_index);
+
+// 关闭并释放 'is'
 void stream_close(VideoState* is);
 void do_exit(VideoState* is);
 void sigterm_handler(int sig);

@@ -83,8 +83,7 @@ double rdftspeed = 0.02;
  int is_full_screen;
  int64_t audio_callback_time;
 
- AVPacket flush_pkt;
-
+ 
  SDL_Window *window;
  SDL_Renderer *renderer;
  SDL_RendererInfo renderer_info = {0};
@@ -124,146 +123,153 @@ int opt_add_vfilter(void *optctx, const char *opt, const char *arg)
 
 ///////////// packet_queue section {{{
 
-int packet_queue_put_private(PacketQueue *q, AVPacket *pkt)
+/* packet queue handling */
+/*
+int packet_queue_init()
+{
+    memset(q, 0, sizeof(PacketQueue));
+    q->abort_request = 1;
+    return 0;
+}
+*/
+
+AVPacket PacketQueue::flush_pkt;
+
+int PacketQueue::is_flush_pkt(const AVPacket& to_check)
+{
+    return to_check.data == flush_pkt.data;
+}
+
+int PacketQueue::packet_queue_put_private( AVPacket *pkt)
 {
     MyAVPacketList *pkt1;
 
-    if (q->abort_request)
+    if (this->abort_request)
        return -1;
 
     pkt1 = (MyAVPacketList*) av_malloc(sizeof(MyAVPacketList));
     if (!pkt1)
         return -1;
-    pkt1->pkt = *pkt;
+
+    pkt1->pkt = *pkt;   // 要点, ‘pkt’ 已经被 clone 进 MyAVPacketList， 因此无所谓‘pkt’是来自heap/stack/global
     pkt1->next = NULL;
     if (pkt == &flush_pkt)
-        q->serial++;
-    pkt1->serial = q->serial;
+        this->serial++;
 
-    if (!q->last_pkt)
-        q->first_pkt = pkt1;
+    pkt1->serial = this->serial;
+
+    if (!this->last_pkt)
+        this->first_pkt = pkt1;
     else
-        q->last_pkt->next = pkt1;
-    q->last_pkt = pkt1;
-    q->nb_packets++;
-    q->size += pkt1->pkt.size + sizeof(*pkt1);
-    q->duration += pkt1->pkt.duration;
+        this->last_pkt->next = pkt1;
+
+    this->last_pkt = pkt1;
+
+    this->nb_packets++;
+    this->size += pkt1->pkt.size + sizeof(*pkt1);
+
+    this->duration += pkt1->pkt.duration;
     /* XXX: should duplicate packet data in DV case */
-    SDL_CondSignal(q->cond);
+
+    this->cond.wake();
+    
     return 0;
 }
 
-int packet_queue_put(PacketQueue *q, AVPacket *pkt)
+// 接管pkt生命周期，put失败也释放掉
+int PacketQueue::packet_queue_put( AVPacket *pkt)
 {
     int ret;
 
-    SDL_LockMutex(q->mutex);
-    ret = packet_queue_put_private(q, pkt);
-    SDL_UnlockMutex(q->mutex);
-
+    AutoLocker _yes_locked(this->cond);
+    ret = packet_queue_put_private(pkt);
+        
     if (pkt != &flush_pkt && ret < 0)
         av_packet_unref(pkt);
 
     return ret;
 }
 
-int packet_queue_put_nullpacket(PacketQueue *q, int stream_index)
+int PacketQueue::packet_queue_put_nullpacket( int stream_index)
 {
-    AVPacket pkt1, *pkt = &pkt1;
+    AVPacket pkt1, *pkt = &pkt1;  
     av_init_packet(pkt);
     pkt->data = NULL;
     pkt->size = 0;
     pkt->stream_index = stream_index;
-    return packet_queue_put(q, pkt);
+    return packet_queue_put(pkt);
 }
 
-/* packet queue handling */
-int packet_queue_init(PacketQueue *q)
-{
-    memset(q, 0, sizeof(PacketQueue));
-    q->mutex = SDL_CreateMutex();
-    if (!q->mutex) {
-        av_log(NULL, AV_LOG_FATAL, "SDL_CreateMutex(): %s\n", SDL_GetError());
-        return AVERROR(ENOMEM);
-    }
-    q->cond = SDL_CreateCond();
-    if (!q->cond) {
-        av_log(NULL, AV_LOG_FATAL, "SDL_CreateCond(): %s\n", SDL_GetError());
-        return AVERROR(ENOMEM);
-    }
-    q->abort_request = 1;
-    return 0;
-}
 
-void packet_queue_flush(PacketQueue *q)
+void PacketQueue::packet_queue_flush()
 {
     MyAVPacketList *pkt, *pkt1;
 
-    SDL_LockMutex(q->mutex);
-    for (pkt = q->first_pkt; pkt; pkt = pkt1) {
+    AutoLocker _yes_locked(this->cond);
+    
+    for (pkt = this->first_pkt; pkt; pkt = pkt1) {
         pkt1 = pkt->next;
-        av_packet_unref(&pkt->pkt);
-        av_freep(&pkt);
+        av_packet_unref(&pkt->pkt);   
+        av_freep(&pkt);  
     }
-    q->last_pkt = NULL;
-    q->first_pkt = NULL;
-    q->nb_packets = 0;
-    q->size = 0;
-    q->duration = 0;
-    SDL_UnlockMutex(q->mutex);
+    this->last_pkt = NULL;
+    this->first_pkt = NULL;
+    this->nb_packets = 0;
+    this->size = 0;
+    this->duration = 0;
 }
 
-void packet_queue_destroy(PacketQueue *q)
+void PacketQueue::packet_queue_destroy()
 {
-    packet_queue_flush(q);
-    SDL_DestroyMutex(q->mutex);
-    SDL_DestroyCond(q->cond);
+    packet_queue_flush();    
 }
 
-void packet_queue_abort(PacketQueue *q)
+void PacketQueue::packet_queue_abort()
 {
-    SDL_LockMutex(q->mutex);
-
-    q->abort_request = 1;
-
-    SDL_CondSignal(q->cond);
-
-    SDL_UnlockMutex(q->mutex);
+    AutoLocker _yes_locked(this->cond);
+    this->abort_request = 1;
+    this->cond.wake();
 }
 
-void packet_queue_start(PacketQueue *q)
+void PacketQueue::packet_queue_start()
 {
-    SDL_LockMutex(q->mutex);
-    q->abort_request = 0;
-    packet_queue_put_private(q, &flush_pkt);
-    SDL_UnlockMutex(q->mutex);
+    AutoLocker _yes_locked(this->cond);
+    this->abort_request = 0;
+    this->cond.wake();
 }
 
 /* return < 0 if aborted, 0 if no packet and > 0 if packet.  */
-int packet_queue_get(PacketQueue *q, AVPacket *pkt, int block, int *serial)
+int PacketQueue::packet_queue_get( AVPacket *pkt, int block, int *serial)
 {
     MyAVPacketList *pkt1;
     int ret;
 
-    SDL_LockMutex(q->mutex);
+    AutoLocker _yes_locked(this->cond);
 
     for (;;) {
-        if (q->abort_request) {
+        if (this->abort_request) {
             ret = -1;
             break;
         }
 
-        pkt1 = q->first_pkt;
+        pkt1 = this->first_pkt;
         if (pkt1) {
-            q->first_pkt = pkt1->next;
-            if (!q->first_pkt)
-                q->last_pkt = NULL;
-            q->nb_packets--;
-            q->size -= pkt1->pkt.size + sizeof(*pkt1);
-            q->duration -= pkt1->pkt.duration;
+            
+            // 推移 list_header
+            this->first_pkt = pkt1->next;
+            if (!this->first_pkt)
+                this->last_pkt = NULL;
+
+            // 调整 ‘queue统计’
+            this->nb_packets--;
+            this->size -= pkt1->pkt.size + sizeof(*pkt1);
+            this->duration -= pkt1->pkt.duration;
+            
+            // output 节点
             *pkt = pkt1->pkt;
             if (serial)
                 *serial = pkt1->serial;
+            
             av_free(pkt1);
             ret = 1;
             break;
@@ -271,10 +277,10 @@ int packet_queue_get(PacketQueue *q, AVPacket *pkt, int block, int *serial)
             ret = 0;
             break;
         } else {
-            SDL_CondWait(q->cond, q->mutex);
+            this->cond.wait();
         }
     }
-    SDL_UnlockMutex(q->mutex);
+    
     return ret;
 }
 
@@ -346,7 +352,7 @@ int decoder_decode_frame(Decoder *d, AVFrame *frame, AVSubtitle *sub) {
                 av_packet_move_ref(&pkt, &d->pkt);
                 d->packet_pending = 0;
             } else {
-                if (packet_queue_get(d->queue, &pkt, 1, &d->pkt_serial) < 0)
+                if (d->queue->packet_queue_get( &pkt, 1, &d->pkt_serial) < 0)
                     return -1;
             }
             if (d->queue->serial == d->pkt_serial)
@@ -354,7 +360,7 @@ int decoder_decode_frame(Decoder *d, AVFrame *frame, AVSubtitle *sub) {
             av_packet_unref(&pkt);
         } while (1);
 
-        if (pkt.data == flush_pkt.data) {
+        if (PacketQueue::is_flush_pkt(pkt)) {
             avcodec_flush_buffers(d->avctx);
             d->finished = 0;
             d->next_pts = d->start_pts;
@@ -391,11 +397,11 @@ void decoder_destroy(Decoder *d) {
 
 void decoder_abort(Decoder* d, FrameQueue* fq)
 {
-    packet_queue_abort(d->queue);
+    d->queue->packet_queue_abort();
     frame_queue_signal(fq);
     SDL_WaitThread(d->decoder_tid, NULL);
     d->decoder_tid = NULL;
-    packet_queue_flush(d->queue);
+    d->queue->packet_queue_flush();
 }
 
 //     }}} decoder section 
@@ -968,6 +974,7 @@ void stream_component_close(VideoState *is, int stream_index)
     }
 }
 
+// 关闭并释放 'is'
 void stream_close(VideoState *is)
 {
     /* XXX: use a special url_shutdown call to abort parse cleanly */
@@ -984,9 +991,9 @@ void stream_close(VideoState *is)
 
     avformat_close_input(&is->ic);
 
-    packet_queue_destroy(&is->videoq);
-    packet_queue_destroy(&is->audioq);
-    packet_queue_destroy(&is->subtitleq);
+    is->videoq.packet_queue_destroy();
+    is->audioq.packet_queue_destroy();
+    is->subtitleq.packet_queue_destroy();
 
     /* free all pictures */
     frame_queue_destory(&is->pictq);
@@ -1002,7 +1009,9 @@ void stream_close(VideoState *is)
         SDL_DestroyTexture(is->vid_texture);
     if (is->sub_texture)
         SDL_DestroyTexture(is->sub_texture);
-    av_free(is);
+    
+    //av_free(is);
+    delete is;
 }
 
 void do_exit(VideoState *is)
@@ -1832,7 +1841,7 @@ int audio_thread(void *arg)
 
 int decoder_start(Decoder *d, int (*fn)(void *), const char *thread_name, void* arg)
 {
-    packet_queue_start(d->queue);
+    d->queue->packet_queue_start();
     d->decoder_tid = SDL_CreateThread(fn, thread_name, arg);
     if (!d->decoder_tid) {
         av_log(NULL, AV_LOG_ERROR, "SDL_CreateThread(): %s\n", SDL_GetError());
@@ -2673,16 +2682,16 @@ int read_thread(void *arg)
                        "%s: error while seeking\n", is->ic->url);
             } else {
                 if (is->audio_stream >= 0) {
-                    packet_queue_flush(&is->audioq);
-                    packet_queue_put(&is->audioq, &flush_pkt);
+                    is->audioq.packet_queue_flush();
+                    is->audioq.packet_queue_put(&PacketQueue::flush_pkt);
                 }
                 if (is->subtitle_stream >= 0) {
-                    packet_queue_flush(&is->subtitleq);
-                    packet_queue_put(&is->subtitleq, &flush_pkt);
+                    is->subtitleq.packet_queue_flush();
+                    is->subtitleq.packet_queue_put(&PacketQueue::flush_pkt);
                 }
                 if (is->video_stream >= 0) {
-                    packet_queue_flush(&is->videoq);
-                    packet_queue_put(&is->videoq, &flush_pkt);
+                    is->videoq.packet_queue_flush();
+                    is->videoq.packet_queue_put(&PacketQueue::flush_pkt);
                 }
                 if (is->seek_flags & AVSEEK_FLAG_BYTE) {
                    set_clock(&is->extclk, NAN, 0);
@@ -2701,8 +2710,8 @@ int read_thread(void *arg)
                 AVPacket copy;
                 if ((ret = av_packet_ref(&copy, &is->video_st->attached_pic)) < 0)
                     goto fail;
-                packet_queue_put(&is->videoq, &copy);
-                packet_queue_put_nullpacket(&is->videoq, is->video_stream);
+                is->videoq.packet_queue_put( &copy);
+                is->videoq.packet_queue_put_nullpacket(is->video_stream);
             }
             is->queue_attachments_req = 0;
         }
@@ -2733,11 +2742,11 @@ int read_thread(void *arg)
         if (ret < 0) {
             if ((ret == AVERROR_EOF || avio_feof(ic->pb)) && !is->eof) {
                 if (is->video_stream >= 0)
-                    packet_queue_put_nullpacket(&is->videoq, is->video_stream);
+                    is->videoq.packet_queue_put_nullpacket( is->video_stream);
                 if (is->audio_stream >= 0)
-                    packet_queue_put_nullpacket(&is->audioq, is->audio_stream);
+                    is->audioq.packet_queue_put_nullpacket( is->audio_stream);
                 if (is->subtitle_stream >= 0)
-                    packet_queue_put_nullpacket(&is->subtitleq, is->subtitle_stream);
+                    is->subtitleq.packet_queue_put_nullpacket( is->subtitle_stream);
                 is->eof = 1;
             }
             if (ic->pb && ic->pb->error) {
@@ -2762,12 +2771,12 @@ int read_thread(void *arg)
                 (double)(start_time != AV_NOPTS_VALUE ? start_time : 0) / 1000000
                 <= ((double)duration / 1000000);
         if (pkt->stream_index == is->audio_stream && pkt_in_play_range) {
-            packet_queue_put(&is->audioq, pkt);
+            is->audioq.packet_queue_put( pkt);
         } else if (pkt->stream_index == is->video_stream && pkt_in_play_range
                    && !(is->video_st->disposition & AV_DISPOSITION_ATTACHED_PIC)) {
-            packet_queue_put(&is->videoq, pkt);
+            is->videoq.packet_queue_put( pkt);
         } else if (pkt->stream_index == is->subtitle_stream && pkt_in_play_range) {
-            packet_queue_put(&is->subtitleq, pkt);
+            is->subtitleq.packet_queue_put( pkt);
         } else {
             av_packet_unref(pkt);
         }
@@ -2793,9 +2802,11 @@ VideoState *stream_open(const char *filename, AVInputFormat *iformat)
 {
     VideoState *is;
 
-    is = (VideoState*)av_mallocz(sizeof(VideoState));
+    //is = (VideoState*)av_mallocz(sizeof(VideoState));
+    is = new VideoState();
     if (!is)
         return NULL;
+
     is->last_video_stream = is->video_stream = -1;
     is->last_audio_stream = is->audio_stream = -1;
     is->last_subtitle_stream = is->subtitle_stream = -1;
@@ -2814,10 +2825,6 @@ VideoState *stream_open(const char *filename, AVInputFormat *iformat)
     if (frame_queue_init(&is->sampq, &is->audioq, SAMPLE_QUEUE_SIZE, 1) < 0)
         goto fail;
 
-    if (packet_queue_init(&is->videoq) < 0 ||
-        packet_queue_init(&is->audioq) < 0 ||
-        packet_queue_init(&is->subtitleq) < 0)
-        goto fail;
 
     if (!(is->continue_read_thread = SDL_CreateCond())) {
         av_log(NULL, AV_LOG_FATAL, "SDL_CreateCond(): %s\n", SDL_GetError());
