@@ -211,18 +211,44 @@ typedef struct Frame {
     int flip_v;
 } Frame;
 
-typedef struct FrameQueue {
+class FrameQueue 
+{
+public:
+    int frame_queue_init(PacketQueue* pktq, int max_size, int keep_last);
+    void frame_queue_destory();
+    void frame_queue_signal();
+
+    Frame* frame_queue_peek();          // 获得‘读头’，读完之后用 frame_queue_next 移动‘读头’。无并发保护
+    Frame* frame_queue_peek_next();     // 无并发保护 
+    Frame* frame_queue_peek_readable(); // 有并发保护
+    Frame* frame_queue_peek_last();     // 无并发保护
+
+    void frame_queue_next();        //  ‘出队列’
+    
+    Frame* frame_queue_peek_writable();   // 获得‘写头’，写完之后用 frame_queue_push 移动‘写头’。有并发保护
+    void frame_queue_push();              // ‘入队列’
+
+    static void unref_item(Frame* vp);
+
+    // return the number of undisplayed frames in the queue 
+    int frame_queue_nb_remaining();
+
+    // return last shown position 
+    int64_t frame_queue_last_pos();
+
+
+    PacketQueue* pktq;
+    SimpleConditionVar cond;
+    int rindex_shown;
+
+protected:
     Frame queue[FRAME_QUEUE_SIZE];
     int rindex;
     int windex;
     int size;
     int max_size;
     int keep_last;
-    int rindex_shown;
-    SDL_mutex *mutex;
-    SDL_cond *cond;
-    PacketQueue *pktq;
-} FrameQueue;
+};
 
 enum {
     AV_SYNC_AUDIO_MASTER, /* default choice */
@@ -373,7 +399,7 @@ extern int display_disable;
 extern int borderless;
 extern int alwaysontop;
 extern int startup_volume ;
-extern int show_status ;
+extern int g_show_status ;
 extern int av_sync_type;
 extern int64_t start_time;
 extern int64_t duration ;
@@ -454,28 +480,6 @@ void decoder_abort(Decoder* d, FrameQueue* fq);
 
 
 //     frame_queue section {{{
-void frame_queue_unref_item(Frame* vp);
-int frame_queue_init(FrameQueue* f, PacketQueue* pktq, int max_size, int keep_last);
-void frame_queue_destory(FrameQueue* f);
-void frame_queue_signal(FrameQueue* f);
-
-Frame* frame_queue_peek(FrameQueue* f);
-Frame* frame_queue_peek_next(FrameQueue* f);
-Frame* frame_queue_peek_last(FrameQueue* f);
-
-Frame* frame_queue_peek_writable(FrameQueue* f);
-Frame* frame_queue_peek_readable(FrameQueue* f);
-void frame_queue_push(FrameQueue* f);
-
-void frame_queue_next(FrameQueue* f);
-
-
-/* return the number of undisplayed frames in the queue */
-int frame_queue_nb_remaining(FrameQueue* f);
-
-/* return last shown position */
-int64_t frame_queue_last_pos(FrameQueue* f);
-
 //      }}} frame_queue section
 
 
@@ -493,6 +497,7 @@ int upload_texture(SDL_Texture** tex, AVFrame* frame, struct SwsContext** img_co
 
 void set_sdl_yuv_conversion_mode(AVFrame* frame);
 void video_image_display(VideoState* is);
+Frame*  get_current_subtitle_frame(VideoState* is, Frame* current_video_frame);
 
 inline int compute_mod(int a, int b)
 {
@@ -502,7 +507,6 @@ inline int compute_mod(int a, int b)
 void video_audio_display(VideoState* s);
 
 //  }}} render section 
-
 
 
 void stream_component_close(VideoState* is, int stream_index);
@@ -553,6 +557,8 @@ void update_video_pts(VideoState* is, double pts, int64_t pos, int serial);
 
 /* called to display each frame */
 void video_refresh(void* opaque, double* remaining_time);
+
+void print_stream_status(VideoState* is);
 
 int queue_picture(VideoState* is, AVFrame* src_frame, double pts, double duration, int64_t pos, int serial);
 
