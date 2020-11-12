@@ -24,6 +24,35 @@ unsigned  __stdcall BaseThread::_thread_func( void* arg)
 }
 
 
+int BaseThread::create_thread_with_cb(ThreadFunc cb, const char* thread_name, void* arg)
+{
+	_cb = cb;
+	_arg_4_cb = arg; 
+
+	_thread_handle = (HANDLE)_beginthreadex(NULL, 0
+		, _thread_func_4_cb
+		, this
+		, 0
+		, &_thread_id);
+
+	if (!_thread_handle)
+	{
+		LOG_ERROR("_beginthreadex for %s failed, errno = %d ", thread_name, errno);
+		return -1;
+	}
+
+	return 0;
+}
+
+unsigned  __stdcall BaseThread::_thread_func_4_cb(void* arg)
+{
+	BaseThread* p = (BaseThread*)arg;
+	p->_cb(p->_arg_4_cb);
+	return 0;
+}
+
+
+
 DWORD BaseThread::wait_thread_quit(DWORD  dwMilliseconds)
 {
 	if (!_thread_handle)

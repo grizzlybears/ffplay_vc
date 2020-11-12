@@ -162,7 +162,7 @@ public:
     void packet_queue_start();
 
     // return < 0 if aborted, 0 if no packet and > 0 if packet.  
-    int packet_queue_get(AVPacket* pkt, int block, int* serial);
+    int packet_queue_get(AVPacket* pkt, int block, /*out*/ int* serial);
 
     int packet_queue_put_nullpacket(int stream_index);
 
@@ -256,20 +256,38 @@ enum {
     AV_SYNC_EXTERNAL_CLOCK, /* synchronize to an external clock */
 };
 
-typedef struct Decoder {
-    AVPacket pkt;
-    PacketQueue *queue;
-    AVCodecContext *avctx;
+class Decoder {
+public:
+    void decoder_init( AVCodecContext* avctx, PacketQueue* queue, SimpleConditionVar* empty_queue_cond);
+    /// return: 
+    //      negative    -- failed.
+    //      0           -- EoF
+    //      positive    -- got frame
+    int decoder_decode_frame(AVFrame* frame, AVSubtitle* sub);
+
+    void decoder_destroy();
+    void decoder_abort(FrameQueue* fq);
+    int decoder_start( int (*fn)(void*), const char* thread_name, void* arg);
+
+    AVCodecContext* avctx; // take owner ship
     int pkt_serial;
     int finished;
-    int packet_pending;
-    SDL_cond *empty_queue_cond;
+
     int64_t start_pts;
     AVRational start_pts_tb;
+
+protected:    
+    PacketQueue* queue; 
+
+    AVPacket pending_pkt;
+    int is_packet_pending;
+    
     int64_t next_pts;
     AVRational next_pts_tb;
-    SDL_Thread *decoder_tid;
-} Decoder;
+
+    SimpleConditionVar* empty_queue_cond;  // just ref, dont take owner ship
+    BaseThread  decoder_thread;
+};
 
 class VideoState {
 public:
@@ -375,7 +393,7 @@ public:
 
     int last_video_stream, last_audio_stream, last_subtitle_stream;
 
-    SDL_cond *continue_read_thread;
+    SimpleConditionVar continue_read_thread;
 
 };
 
@@ -411,7 +429,7 @@ extern int autoexit;
 extern int exit_on_keydown;
 extern int exit_on_mousedown;
 extern int loop;
-extern int framedrop ;
+extern int g_framedrop;
 extern int infinite_buffer ;
 extern enum VideoState::ShowMode show_mode;
 extern const char *audio_codec_name;
@@ -470,11 +488,7 @@ inline int64_t get_valid_channel_layout(int64_t channel_layout, int channels)
 
 
 //     decoder section {{{
-void decoder_init(Decoder* d, AVCodecContext* avctx, PacketQueue* queue, SDL_cond* empty_queue_cond);
-int decoder_decode_frame(Decoder* d, AVFrame* frame, AVSubtitle* sub);
 
-void decoder_destroy(Decoder* d);
-void decoder_abort(Decoder* d, FrameQueue* fq);
 
 //     }}} decoder section 
 
@@ -577,8 +591,6 @@ int configure_audio_filters(VideoState* is, const char* afilters, int force_outp
 
 
 int audio_thread(void* arg);
-
-int decoder_start(Decoder* d, int (*fn)(void*), const char* thread_name, void* arg);
 
 int video_thread(void* arg);
 

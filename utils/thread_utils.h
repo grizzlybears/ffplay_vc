@@ -127,10 +127,10 @@ public:
 
     // return 0        -- wait success
     // return nonzero  -- wait timeout
-    int timed_wait(unsigned int seconds)
+    int timed_wait(unsigned int milliseconds)
     {
         BOOL b = SleepConditionVariableCS (&_cond, &_cs
-            , seconds * 1000 //The time-out interval, in milliseconds. 
+            , milliseconds
             ); 
 
         if (b)
@@ -222,6 +222,8 @@ public:
 	{
 		_thread_handle =NULL;
 		_thread_id = 0; 
+		_arg_4_cb = NULL;
+		_cb = NULL;
 	}
 
 	virtual ~BaseThread()
@@ -229,7 +231,15 @@ public:
 		safe_cleanup();
 	}
 
-	void create_thread();
+	typedef int (*ThreadFunc)(void* arg);
+	// return 0 on success, else errno.
+	int create_thread_with_cb(ThreadFunc cb, const char* thread_name, void* arg);
+	static unsigned  __stdcall _thread_func_4_cb(void* arg);
+	ThreadFunc _cb;
+	void* _arg_4_cb; // doesnt take ownership
+
+
+	void create_thread();		
 
 	/*
 	WAIT_OBJECT_0  0x00000000L			The state of the specified object is signaled.
