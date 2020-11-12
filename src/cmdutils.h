@@ -37,7 +37,7 @@
 /**
  * program name, defined by the program for show_version().
  */
-extern const char program_name[];
+extern const char g_program_name[];
 
 /**
  * program birth year, defined by the program for show_banner()

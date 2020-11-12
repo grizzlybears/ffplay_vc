@@ -33,12 +33,9 @@ extern "C"
 AVInputFormat *file_iformat;
 const char *input_filename;
  const char *window_title;
- int default_width  = 640;
- int default_height = 480;
- int screen_width  = 0;
- int screen_height = 0;
- int screen_left = SDL_WINDOWPOS_CENTERED;
- int screen_top = SDL_WINDOWPOS_CENTERED;
+ int g_default_width  = 640;
+ int g_default_height = 480;
+  
  int audio_disable;
  int video_disable;
  int subtitle_disable;
@@ -49,7 +46,7 @@ const char *input_filename;
  int borderless;
  int alwaysontop;
  int startup_volume = 100;
- int g_show_status = -1;
+ int opt_show_status = -1;
  int av_sync_type = AV_SYNC_AUDIO_MASTER;
  int64_t start_time = AV_NOPTS_VALUE;
  int64_t duration = AV_NOPTS_VALUE;
@@ -58,10 +55,8 @@ const char *input_filename;
  int lowres = 0;
  int decoder_reorder_pts = -1;
  int autoexit;
- int exit_on_keydown;
- int exit_on_mousedown;
  int loop = 1;
- int g_framedrop = -1;
+ int opt_framedrop = -1;
  int infinite_buffer = -1;
  enum VideoState::ShowMode show_mode = VideoState::SHOW_MODE_NONE;
  const char *audio_codec_name;
@@ -78,17 +73,14 @@ double rdftspeed = 0.02;
  int autorotate = 1;
  int find_stream_info = 1;
  int filter_nbthreads = 0;
+ int opt_full_screen = 0;
 
 /* current context */
- int is_full_screen;
+ 
  int64_t audio_callback_time;
 
+ Render g_render;
  
- SDL_Window *window;
- SDL_Renderer *renderer;
- SDL_RendererInfo renderer_info = {0};
- SDL_AudioDeviceID audio_dev;
-
  const struct TextureFormatEntry sdl_texture_format_map[] = {
     { AV_PIX_FMT_RGB8,           SDL_PIXELFORMAT_RGB332 },
     { AV_PIX_FMT_RGB444,         SDL_PIXELFORMAT_RGB444 },
@@ -570,7 +562,98 @@ int64_t FrameQueue::frame_queue_last_pos()
 //      }}} frame_queue section
 
 // render sectio {{{
-void fill_rectangle(int x, int y, int w, int h)
+
+void Render::init_show_window(const char* window_title, int w, int h, int left, int top, int should_fullscreen)
+{
+    SDL_SetWindowTitle(this->window, window_title);
+
+    SDL_SetWindowSize(this->window, w, h);
+    SDL_SetWindowPosition(this->window, left, top);
+    if (should_fullscreen)
+    {
+        SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+        this->fullscreen = 1;
+    }
+    SDL_ShowWindow(window);    
+}
+
+int Render::create_window(const char* title, int x, int y, int w, int h, Uint32 flags)
+{
+    window = SDL_CreateWindow(title, x, y, w, h, flags);    
+    if (!window)
+    {
+        av_log(NULL, AV_LOG_FATAL, "Failed to create window : %s", SDL_GetError());
+        return 1;
+    }
+    
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
+    
+    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    if (!renderer) {
+        av_log(NULL, AV_LOG_WARNING, "Failed to initialize a hardware accelerated renderer: %s\n", SDL_GetError());
+        renderer = SDL_CreateRenderer(window, -1, 0);
+    }
+
+    if (!renderer) {
+        av_log(NULL, AV_LOG_WARNING, "Failed to initialize renderer: %s\n", SDL_GetError());
+        return 2;
+    }
+    
+    if (SDL_GetRendererInfo(renderer, &renderer_info))
+    {
+        av_log(NULL, AV_LOG_WARNING, "Failed to get  renderer info: %s\n", SDL_GetError());
+        return 3;
+    }
+        
+    av_log(NULL, AV_LOG_VERBOSE, "Initialized %s renderer.\n", renderer_info.name);
+        
+    return 0;
+}
+
+void Render::toggle_full_screen()
+{
+    fullscreen = !fullscreen;
+    SDL_SetWindowFullscreen(window, fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
+}
+
+void Render::clear_render()
+{
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderClear(renderer);
+}
+
+void Render::draw_render()
+{
+    SDL_RenderPresent(renderer);
+}
+
+void Render::close_audio()
+{
+    if (audio_dev > 0)
+    {
+        SDL_CloseAudioDevice(this->audio_dev);
+    }
+
+    audio_dev = 0;
+}
+
+void Render::safe_release()
+{
+    close_audio();
+
+    if (renderer)
+    {
+        SDL_DestroyRenderer(renderer);
+        renderer = NULL;
+    }
+    if (window)
+    {
+        SDL_DestroyWindow(window);
+        window = NULL;
+    }
+
+}
+void Render::fill_rectangle(int x, int y, int w, int h)
 {
     SDL_Rect rect;
     rect.x = x;
@@ -578,10 +661,24 @@ void fill_rectangle(int x, int y, int w, int h)
     rect.w = w;
     rect.h = h;
     if (w && h)
-        SDL_RenderFillRect(renderer, &rect);
+        SDL_RenderFillRect(this->renderer, &rect);
 }
 
-int realloc_texture(SDL_Texture **texture, Uint32 new_format, int new_width, int new_height, SDL_BlendMode blendmode, int init_texture)
+void Render::set_default_window_size(int width, int height, AVRational sar)
+{
+    SDL_Rect rect;
+    int max_width = this->screen_width ? this->screen_width : INT_MAX;
+    int max_height = this->screen_height ? this->screen_height : INT_MAX;
+    if (max_width == INT_MAX && max_height == INT_MAX)
+        max_height = height;
+    
+    calculate_display_rect(&rect, 0, 0, max_width, max_height, width, height, sar);
+    
+    g_default_width = rect.w;
+    g_default_height = rect.h;
+}
+
+int Render::realloc_texture(SDL_Texture **texture, Uint32 new_format, int new_width, int new_height, SDL_BlendMode blendmode, int init_texture)
 {
     Uint32 format;
     int access, w, h;
@@ -590,7 +687,7 @@ int realloc_texture(SDL_Texture **texture, Uint32 new_format, int new_width, int
         int pitch;
         if (*texture)
             SDL_DestroyTexture(*texture);
-        if (!(*texture = SDL_CreateTexture(renderer, new_format, SDL_TEXTUREACCESS_STREAMING, new_width, new_height)))
+        if (!(*texture = SDL_CreateTexture(this->renderer, new_format, SDL_TEXTUREACCESS_STREAMING, new_width, new_height)))
             return -1;
         if (SDL_SetTextureBlendMode(*texture, blendmode) < 0)
             return -1;
@@ -604,6 +701,7 @@ int realloc_texture(SDL_Texture **texture, Uint32 new_format, int new_width, int
     }
     return 0;
 }
+// }}} render sectio 
 
 void calculate_display_rect(SDL_Rect *rect,
                                    int scr_xleft, int scr_ytop, int scr_width, int scr_height,
@@ -632,7 +730,7 @@ void calculate_display_rect(SDL_Rect *rect,
     rect->h = FFMAX((int)height, 1);
 }
 
-void get_sdl_pix_fmt_and_blendmode(int format, Uint32 *sdl_pix_fmt, SDL_BlendMode *sdl_blendmode)
+void Render::get_sdl_pix_fmt_and_blendmode(int format, Uint32 *sdl_pix_fmt, SDL_BlendMode *sdl_blendmode)
 {
     int i;
     *sdl_blendmode = SDL_BLENDMODE_NONE;
@@ -654,8 +752,8 @@ int upload_texture(SDL_Texture **tex, AVFrame *frame, struct SwsContext **img_co
     int ret = 0;
     Uint32 sdl_pix_fmt;
     SDL_BlendMode sdl_blendmode;
-    get_sdl_pix_fmt_and_blendmode(frame->format, &sdl_pix_fmt, &sdl_blendmode);
-    if (realloc_texture(tex, sdl_pix_fmt == SDL_PIXELFORMAT_UNKNOWN ? SDL_PIXELFORMAT_ARGB8888 : sdl_pix_fmt, frame->width, frame->height, sdl_blendmode, 0) < 0)
+    Render::get_sdl_pix_fmt_and_blendmode(frame->format, &sdl_pix_fmt, &sdl_blendmode);
+    if (g_render.realloc_texture(tex, sdl_pix_fmt == SDL_PIXELFORMAT_UNKNOWN ? SDL_PIXELFORMAT_ARGB8888 : sdl_pix_fmt, frame->width, frame->height, sdl_blendmode, 0) < 0)
         return -1;
     switch (sdl_pix_fmt) {
         case SDL_PIXELFORMAT_UNKNOWN:
@@ -701,7 +799,7 @@ int upload_texture(SDL_Texture **tex, AVFrame *frame, struct SwsContext **img_co
     return ret;
 }
 
-void set_sdl_yuv_conversion_mode(AVFrame *frame)
+void Render::set_sdl_yuv_conversion_mode(AVFrame *frame)
 {
 #if SDL_VERSION_ATLEAST(2,0,8)
     SDL_YUV_CONVERSION_MODE mode = SDL_YUV_CONVERSION_AUTOMATIC;
@@ -751,7 +849,7 @@ Frame* get_current_subtitle_frame(VideoState* is, Frame* current_video_frame)
         sp->height = current_video_frame->height;
     }
 
-    if (realloc_texture(&is->sub_texture, SDL_PIXELFORMAT_ARGB8888, sp->width, sp->height, SDL_BLENDMODE_BLEND, 1) < 0)
+    if (g_render.realloc_texture(&is->sub_texture, SDL_PIXELFORMAT_ARGB8888, sp->width, sp->height, SDL_BLENDMODE_BLEND, 1) < 0)
     {
         LOG_WARN("Failed in realloc_texture for substitle start at %u\n" , sp->sub.start_display_time);
         return NULL ;
@@ -804,12 +902,12 @@ void video_image_display(VideoState *is)
         vp->flip_v = vp->frame->linesize[0] < 0;
     }
 
-    set_sdl_yuv_conversion_mode(vp->frame);
-    SDL_RenderCopyEx(renderer, is->vid_texture, NULL, &rect, 0, NULL, (SDL_RendererFlip)(vp->flip_v ? SDL_FLIP_VERTICAL : 0));
-    set_sdl_yuv_conversion_mode(NULL);
+    Render::set_sdl_yuv_conversion_mode(vp->frame);
+    SDL_RenderCopyEx(g_render.renderer, is->vid_texture, NULL, &rect, 0, NULL, (SDL_RendererFlip)(vp->flip_v ? SDL_FLIP_VERTICAL : 0));
+    Render::set_sdl_yuv_conversion_mode(NULL);
     if (sp) {
 #if USE_ONEPASS_SUBTITLE_RENDER
-        SDL_RenderCopy(renderer, is->sub_texture, NULL, &rect);
+        SDL_RenderCopy(g_render.renderer, is->sub_texture, NULL, &rect);
 #else
         int i;
         double xratio = (double)rect.w / (double)sp->width;
@@ -880,7 +978,7 @@ void video_audio_display(VideoState *s)
     }
 
     if (s->show_mode == VideoState::SHOW_MODE_WAVES) {
-        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_SetRenderDrawColor(g_render.renderer, 255, 255, 255, 255);
 
         /* total height for one channel */
         h = s->height / nb_display_channels;
@@ -897,21 +995,21 @@ void video_audio_display(VideoState *s)
                 } else {
                     ys = y1;
                 }
-                fill_rectangle(s->xleft + x, ys, 1, y);
+                g_render.fill_rectangle(s->xleft + x, ys, 1, y);
                 i += channels;
                 if (i >= SAMPLE_ARRAY_SIZE)
                     i -= SAMPLE_ARRAY_SIZE;
             }
         }
 
-        SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255);
+        SDL_SetRenderDrawColor(g_render.renderer, 0, 0, 255, 255);
 
         for (ch = 1; ch < nb_display_channels; ch++) {
             y = s->ytop + ch * h;
-            fill_rectangle(s->xleft, y, s->width, 1);
+            g_render.fill_rectangle(s->xleft, y, s->width, 1);
         }
     } else {
-        if (realloc_texture(&s->vis_texture, SDL_PIXELFORMAT_ARGB8888, s->width, s->height, SDL_BLENDMODE_NONE, 1) < 0)
+        if (g_render.realloc_texture(&s->vis_texture, SDL_PIXELFORMAT_ARGB8888, s->width, s->height, SDL_BLENDMODE_NONE, 1) < 0)
             return;
 
         nb_display_channels= FFMIN(nb_display_channels, 2);
@@ -959,7 +1057,7 @@ void video_audio_display(VideoState *s)
                 }
                 SDL_UnlockTexture(s->vis_texture);
             }
-            SDL_RenderCopy(renderer, s->vis_texture, NULL, NULL);
+            SDL_RenderCopy(g_render.renderer, s->vis_texture, NULL, NULL);
         }
         if (!s->paused)
             s->xpos++;
@@ -982,7 +1080,7 @@ void stream_component_close(VideoState *is, int stream_index)
     switch (codecpar->codec_type) {
     case AVMEDIA_TYPE_AUDIO:
         is->auddec.decoder_abort(&is->sampq);
-        SDL_CloseAudioDevice(audio_dev);
+        g_render.close_audio();        
         is->auddec.decoder_destroy();
         swr_free(&is->swr_ctx);
         av_freep(&is->audio_buf1);
@@ -1073,16 +1171,15 @@ void do_exit(VideoState *is)
     if (is) {
         stream_close(is);
     }
-    if (renderer)
-        SDL_DestroyRenderer(renderer);
-    if (window)
-        SDL_DestroyWindow(window);
+
+    g_render.safe_release();
+    
     uninit_opts();
 #if CONFIG_AVFILTER
     av_freep(&vfilters_list);
 #endif
     avformat_network_deinit();
-    if (g_show_status)
+    if (opt_show_status)
         printf("\n");
     SDL_Quit();
     av_log(NULL, AV_LOG_QUIET, "%s", "");
@@ -1094,35 +1191,20 @@ void sigterm_handler(int sig)
     exit(123);
 }
 
-void set_default_window_size(int width, int height, AVRational sar)
-{
-    SDL_Rect rect;
-    int max_width  = screen_width  ? screen_width  : INT_MAX;
-    int max_height = screen_height ? screen_height : INT_MAX;
-    if (max_width == INT_MAX && max_height == INT_MAX)
-        max_height = height;
-    calculate_display_rect(&rect, 0, 0, max_width, max_height, width, height, sar);
-    default_width  = rect.w;
-    default_height = rect.h;
-}
+
 
 int video_open(VideoState *is)
 {
     int w,h;
 
-    w = screen_width ? screen_width : default_width;
-    h = screen_height ? screen_height : default_height;
+    w = g_render.screen_width ? g_render.screen_width : g_default_width;
+    h = g_render.screen_height ? g_render.screen_height : g_default_height;
 
     if (!window_title)
         window_title = input_filename;
-    SDL_SetWindowTitle(window, window_title);
 
-    SDL_SetWindowSize(window, w, h);
-    SDL_SetWindowPosition(window, screen_left, screen_top);
-    if (is_full_screen)
-        SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
-    SDL_ShowWindow(window);
-
+    g_render.init_show_window(window_title, w, h, g_render.screen_left, g_render.screen_top, opt_full_screen);
+    
     is->width  = w;
     is->height = h;
 
@@ -1135,13 +1217,15 @@ void video_display(VideoState *is)
     if (!is->width)
         video_open(is);
 
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderClear(renderer);
+    g_render.clear_render();
+
     if (is->audio_st && is->show_mode != VideoState::SHOW_MODE_VIDEO)
         video_audio_display(is);
     else if (is->video_st)
         video_image_display(is);
-    SDL_RenderPresent(renderer);
+
+    g_render.draw_render();
+    
 }
 
 double get_clock(Clock *c)
@@ -1410,7 +1494,7 @@ retry:
             if (is->pictq.frame_queue_nb_remaining() > 1) {
                 Frame *nextvp = is->pictq.frame_queue_peek_next();
                 duration = vp_duration(is, vp, nextvp);
-                if(!is->step && (g_framedrop >0 || (g_framedrop && get_master_sync_type(is) != AV_SYNC_VIDEO_MASTER)) && time > is->frame_timer + duration){
+                if(!is->step && (opt_framedrop >0 || (opt_framedrop && get_master_sync_type(is) != AV_SYNC_VIDEO_MASTER)) && time > is->frame_timer + duration){
                     is->frame_drops_late++;
                     is->pictq.frame_queue_next();
                     goto retry;
@@ -1463,7 +1547,7 @@ display:
             video_display(is);
     }
     is->force_refresh = 0;
-    if (g_show_status) {
+    if (opt_show_status) {
         print_stream_status(is);
     }
 }
@@ -1513,7 +1597,7 @@ void print_stream_status(VideoState* is)
         is->video_st ? is->viddec.avctx->pts_correction_num_faulty_dts : 0,
         is->video_st ? is->viddec.avctx->pts_correction_num_faulty_pts : 0);
 
-    if (g_show_status == 1 && AV_LOG_INFO > av_log_get_level())
+    if (opt_show_status == 1 && AV_LOG_INFO > av_log_get_level())
         fprintf(stderr, "%s", buf.str);
     else
         av_log(NULL, AV_LOG_INFO, "%s", buf.str);
@@ -1548,7 +1632,7 @@ int queue_picture(VideoState *is, AVFrame *src_frame, double pts, double duratio
     vp->pos = pos;
     vp->serial = serial;
 
-    set_default_window_size(vp->width, vp->height, vp->sar);
+    g_render.set_default_window_size(vp->width, vp->height, vp->sar);
 
     av_frame_move_ref(vp->frame, src_frame);
     is->pictq.frame_queue_push();
@@ -1575,7 +1659,7 @@ int get_video_frame(VideoState *is, AVFrame *frame)
 
     frame->sample_aspect_ratio = av_guess_sample_aspect_ratio(is->ic, is->video_st, frame);
 
-    if (g_framedrop >0 || (g_framedrop && get_master_sync_type(is) != AV_SYNC_VIDEO_MASTER)) {
+    if (opt_framedrop >0 || (opt_framedrop && get_master_sync_type(is) != AV_SYNC_VIDEO_MASTER)) {
         // 看看是否有必要抛弃帧
         if (frame->pts != AV_NOPTS_VALUE) {
             double diff = dpts - get_master_clock(is);
@@ -1652,9 +1736,9 @@ int configure_video_filters(AVFilterGraph *graph, VideoState *is, const char *vf
     int nb_pix_fmts = 0;
     unsigned int i, j;
 
-    for ( i = 0; i < renderer_info.num_texture_formats; i++) {
+    for ( i = 0; i < g_render.renderer_info.num_texture_formats; i++) {
         for (j = 0; j < FF_ARRAY_ELEMS(sdl_texture_format_map) - 1; j++) {
-            if (renderer_info.texture_formats[i] == sdl_texture_format_map[j].texture_fmt) {
+            if (g_render.renderer_info.texture_formats[i] == sdl_texture_format_map[j].texture_fmt) {
                 pix_fmts[nb_pix_fmts++] = sdl_texture_format_map[j].format;
                 break;
             }
@@ -2325,7 +2409,7 @@ int audio_open(void *opaque, int64_t wanted_channel_layout, int wanted_nb_channe
     wanted_spec.samples = FFMAX(SDL_AUDIO_MIN_BUFFER_SIZE, 2 << av_log2(wanted_spec.freq / SDL_AUDIO_MAX_CALLBACKS_PER_SEC));
     wanted_spec.callback = sdl_audio_callback;
     wanted_spec.userdata = opaque;
-    while (!(audio_dev = SDL_OpenAudioDevice(NULL, 0, &wanted_spec, &spec, SDL_AUDIO_ALLOW_FREQUENCY_CHANGE | SDL_AUDIO_ALLOW_CHANNELS_CHANGE))) {
+    while (!(g_render.audio_dev = SDL_OpenAudioDevice(NULL, 0, &wanted_spec, &spec, SDL_AUDIO_ALLOW_FREQUENCY_CHANGE | SDL_AUDIO_ALLOW_CHANNELS_CHANGE))) {
         av_log(NULL, AV_LOG_WARNING, "SDL_OpenAudio (%d channels, %d Hz): %s\n",
                wanted_spec.channels, wanted_spec.freq, SDL_GetError());
         wanted_spec.channels = next_nb_channels[FFMIN(7, wanted_spec.channels)];
@@ -2488,7 +2572,7 @@ int stream_component_open(VideoState *is, int stream_index)
         }
         if ((ret = is->auddec.decoder_start(audio_thread, "audio_decoder", is)) < 0)
             goto out;
-        SDL_PauseAudioDevice(audio_dev, 0);
+        SDL_PauseAudioDevice(g_render.audio_dev, 0);
         break;
     case AVMEDIA_TYPE_VIDEO:
         is->video_stream = stream_index;
@@ -2647,7 +2731,7 @@ int read_thread(void *arg)
 
     is->realtime = is_realtime(ic);
 
-    if (g_show_status)
+    if (opt_show_status)
         av_dump_format(ic, 0, is->filename, 0);
 
     for (i = 0; i < ic->nb_streams; i++) {
@@ -2691,7 +2775,7 @@ int read_thread(void *arg)
         AVCodecParameters *codecpar = st->codecpar;
         AVRational sar = av_guess_sample_aspect_ratio(ic, st, NULL);
         if (codecpar->width)
-            set_default_window_size(codecpar->width, codecpar->height, sar);
+            g_render.set_default_window_size(codecpar->width, codecpar->height, sar);
     }
 
     /* open the streams */
@@ -2993,13 +3077,6 @@ void stream_cycle_channel(VideoState *is, int codec_type)
 
     stream_component_close(is, old_index);
     stream_component_open(is, stream_index);
-}
-
-
-void toggle_full_screen(VideoState *is)
-{
-    is_full_screen = !is_full_screen;
-    SDL_SetWindowFullscreen(window, is_full_screen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
 }
 
 void toggle_audio_display(VideoState *is)

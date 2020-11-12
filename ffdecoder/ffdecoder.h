@@ -401,12 +401,9 @@ public:
 extern AVInputFormat *file_iformat;
 extern const char *input_filename;
 extern const char *window_title;
-extern int default_width  ;
-extern int default_height ;
-extern int screen_width  ;
-extern int screen_height ;
-extern int screen_left ;
-extern int screen_top ;
+extern int g_default_width  ;
+extern int g_default_height ;
+
 extern int audio_disable;
 extern int video_disable;
 extern int subtitle_disable;
@@ -417,7 +414,7 @@ extern int display_disable;
 extern int borderless;
 extern int alwaysontop;
 extern int startup_volume ;
-extern int g_show_status ;
+extern int opt_show_status;
 extern int av_sync_type;
 extern int64_t start_time;
 extern int64_t duration ;
@@ -426,10 +423,8 @@ extern int genpts ;
 extern int lowres ;
 extern int decoder_reorder_pts ;
 extern int autoexit;
-extern int exit_on_keydown;
-extern int exit_on_mousedown;
 extern int loop;
-extern int g_framedrop;
+extern int opt_framedrop;
 extern int infinite_buffer ;
 extern enum VideoState::ShowMode show_mode;
 extern const char *audio_codec_name;
@@ -446,18 +441,14 @@ extern char *afilters ;
 extern int autorotate ;
 extern int find_stream_info ;
 extern int filter_nbthreads ;
+extern int opt_full_screen;
 
 /* current context */
-extern int is_full_screen;
 extern int64_t audio_callback_time;
 
 
 #define FF_QUIT_EVENT    (SDL_USEREVENT + 2)
 
-extern SDL_Window *window;
-extern SDL_Renderer *renderer;
-extern SDL_RendererInfo renderer_info ;
-extern SDL_AudioDeviceID audio_dev;
 
 extern const struct TextureFormatEntry {
     enum AVPixelFormat format;
@@ -487,29 +478,71 @@ inline int64_t get_valid_channel_layout(int64_t channel_layout, int channels)
 }
 
 
-//     decoder section {{{
+class Render
+{
+public:
+    SDL_Window* window;
+    SDL_Renderer* renderer;
+    SDL_RendererInfo renderer_info;
+    SDL_AudioDeviceID audio_dev;
+    int fullscreen;
+    int screen_width;
+    int screen_height;
+    int screen_left;
+    int screen_top;
+    Render()
+    {
+        window = NULL;
+        renderer = NULL;
+        audio_dev = 0;
+        renderer_info = { 0 };
+
+        screen_width = 0;
+        screen_height = 0;
+        fullscreen = 0;
+
+        screen_left = SDL_WINDOWPOS_CENTERED;
+        screen_top = SDL_WINDOWPOS_CENTERED;
+    }
+
+    ~Render()
+    {
+        safe_release();
+    }
+
+    void toggle_full_screen();
+    
+    int create_window(const char* title, int x, int y, int w, int h, Uint32 flags);
+
+    void init_show_window(const char * title, int w, int h, int left, int top, int fullscreen);
+
+    void clear_render();
+    void draw_render();
+
+    void close_audio();
+
+    void safe_release();
+
+    void fill_rectangle(int x, int y, int w, int h);
+    void set_default_window_size(int width, int height, AVRational sar);
+
+    int realloc_texture(SDL_Texture** texture, Uint32 new_format, int new_width, int new_height, SDL_BlendMode blendmode, int init_texture);
+
+    static void get_sdl_pix_fmt_and_blendmode(int format, Uint32* sdl_pix_fmt, SDL_BlendMode* sdl_blendmode);
+    static void set_sdl_yuv_conversion_mode(AVFrame* frame);
+};
+
+extern Render g_render;
 
 
-//     }}} decoder section 
-
-
-//     frame_queue section {{{
-//      }}} frame_queue section
-
-
-// render section {{{
-
-void fill_rectangle(int x, int y, int w, int h);
-
-int realloc_texture(SDL_Texture** texture, Uint32 new_format, int new_width, int new_height, SDL_BlendMode blendmode, int init_texture);
 void calculate_display_rect(SDL_Rect* rect,
     int scr_xleft, int scr_ytop, int scr_width, int scr_height,
     int pic_width, int pic_height, AVRational pic_sar);
-void get_sdl_pix_fmt_and_blendmode(int format, Uint32* sdl_pix_fmt, SDL_BlendMode* sdl_blendmode);
+
 
 int upload_texture(SDL_Texture** tex, AVFrame* frame, struct SwsContext** img_convert_ctx);
 
-void set_sdl_yuv_conversion_mode(AVFrame* frame);
+
 void video_image_display(VideoState* is);
 Frame*  get_current_subtitle_frame(VideoState* is, Frame* current_video_frame);
 
@@ -529,7 +562,7 @@ void stream_component_close(VideoState* is, int stream_index);
 void stream_close(VideoState* is);
 void do_exit(VideoState* is);
 void sigterm_handler(int sig);
-void set_default_window_size(int width, int height, AVRational sar);
+
 int video_open(VideoState* is);
 /* display the current picture, if any */
 void video_display(VideoState* is);
@@ -633,8 +666,6 @@ int read_thread(void* arg);
 VideoState* stream_open(const char* filename, AVInputFormat* iformat);
 
 void stream_cycle_channel(VideoState* is, int codec_type);
-
-void toggle_full_screen(VideoState* is);
 
 void toggle_audio_display(VideoState* is);
 

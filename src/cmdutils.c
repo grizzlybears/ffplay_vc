@@ -956,7 +956,7 @@ static void expand_filename_template(AVBPrint *bp, const char *template,
                 break;
             switch (c) {
             case 'p':
-                av_bprintf(bp, "%s", program_name);
+                av_bprintf(bp, "%s", g_program_name);
                 break;
             case 't':
                 av_bprintf(bp, "%04d%02d%02d-%02d%02d%02d",
@@ -1043,7 +1043,7 @@ static int init_report(const char *env)
            "%s started on %04d-%02d-%02d at %02d:%02d:%02d\n"
            "Report written to \"%s\"\n"
            "Log level: %d\n",
-           program_name,
+        g_program_name,
            tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
            tm->tm_hour, tm->tm_min, tm->tm_sec,
            filename.str, report_file_level);
@@ -1146,7 +1146,7 @@ static void print_program_info(int flags, int level)
 {
     const char *indent = flags & INDENT? "  " : "";
 
-    av_log(NULL, level, "%s version " FFMPEG_VERSION, program_name);
+    av_log(NULL, level, "%s version " FFMPEG_VERSION, g_program_name);
     if (flags & SHOW_COPYRIGHT)
         av_log(NULL, level, " Copyright (c) %d-%d the FFmpeg developers",
                program_birth_year, CONFIG_THIS_YEAR);
@@ -1216,7 +1216,7 @@ int show_license(void *optctx, const char *opt, const char *arg)
     printf(
     "This version of %s has nonfree parts compiled in.\n"
     "Therefore it is not legally redistributable.\n",
-    program_name );
+        g_program_name);
 #elif CONFIG_GPLV3
     printf(
     "%s is free software; you can redistribute it and/or modify\n"
@@ -1231,7 +1231,7 @@ int show_license(void *optctx, const char *opt, const char *arg)
     "\n"
     "You should have received a copy of the GNU General Public License\n"
     "along with %s.  If not, see <http://www.gnu.org/licenses/>.\n",
-    program_name, program_name, program_name );
+        g_program_name, g_program_name, g_program_name);
 #elif CONFIG_GPL
     printf(
     "%s is free software; you can redistribute it and/or modify\n"
@@ -1247,7 +1247,7 @@ int show_license(void *optctx, const char *opt, const char *arg)
     "You should have received a copy of the GNU General Public License\n"
     "along with %s; if not, write to the Free Software\n"
     "Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA\n",
-    program_name, program_name, program_name );
+        g_program_name, g_program_name, g_program_name);
 #elif CONFIG_LGPLV3
     printf(
     "%s is free software; you can redistribute it and/or modify\n"
@@ -1262,7 +1262,7 @@ int show_license(void *optctx, const char *opt, const char *arg)
     "\n"
     "You should have received a copy of the GNU Lesser General Public License\n"
     "along with %s.  If not, see <http://www.gnu.org/licenses/>.\n",
-    program_name, program_name, program_name );
+        g_program_name, g_program_name, g_program_name);
 #else
     printf(
     "%s is free software; you can redistribute it and/or\n"
@@ -1278,7 +1278,7 @@ int show_license(void *optctx, const char *opt, const char *arg)
     "You should have received a copy of the GNU Lesser General Public\n"
     "License along with %s; if not, write to the Free Software\n"
     "Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA\n",
-    program_name, program_name, program_name );
+        g_program_name, g_program_name, g_program_name);
 #endif
 
     return 0;

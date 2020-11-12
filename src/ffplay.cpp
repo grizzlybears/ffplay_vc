@@ -35,7 +35,7 @@ extern "C"
 
 #include "utils/utils.h"
 
-const char program_name[] = "ffplay";
+const char g_program_name[] = "ffplay";
 const int program_birth_year = 2003;
 
 
@@ -67,7 +67,7 @@ void event_loop(VideoState *cur_stream)
         refresh_loop_wait_event(cur_stream, &event);
         switch (event.type) {
         case SDL_KEYDOWN:
-            if (exit_on_keydown || event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_q) {
+            if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_q) {
                 do_exit(cur_stream);
                 break;
             }
@@ -76,7 +76,7 @@ void event_loop(VideoState *cur_stream)
                 continue;
             switch (event.key.keysym.sym) {
             case SDLK_f:
-                toggle_full_screen(cur_stream);
+                g_render.toggle_full_screen();
                 cur_stream->force_refresh = 1;
                 break;
             case SDLK_p:
@@ -179,14 +179,10 @@ void event_loop(VideoState *cur_stream)
             }
             break;
         case SDL_MOUSEBUTTONDOWN:
-            if (exit_on_mousedown) {
-                do_exit(cur_stream);
-                break;
-            }
             if (event.button.button == SDL_BUTTON_LEFT) {
                 static int64_t last_mouse_left_click = 0;
                 if (av_gettime_relative() - last_mouse_left_click <= 500000) {
-                    toggle_full_screen(cur_stream);
+                    g_render.toggle_full_screen();
                     cur_stream->force_refresh = 1;
                     last_mouse_left_click = 0;
                 } else {
@@ -236,8 +232,8 @@ void event_loop(VideoState *cur_stream)
         case SDL_WINDOWEVENT:
             switch (event.window.event) {
                 case SDL_WINDOWEVENT_SIZE_CHANGED:
-                    screen_width  = cur_stream->width  = event.window.data1;
-                    screen_height = cur_stream->height = event.window.data2;
+                    g_render.screen_width  = cur_stream->width  = event.window.data1;
+                    g_render.screen_height = cur_stream->height = event.window.data2;
                     if (cur_stream->vis_texture) {
                         SDL_DestroyTexture(cur_stream->vis_texture);
                         cur_stream->vis_texture = NULL;
@@ -264,13 +260,13 @@ int opt_frame_size(void *optctx, const char *opt, const char *arg)
 
 int opt_width(void *optctx, const char *opt, const char *arg)
 {
-    screen_width = parse_number_or_die(opt, arg, OPT_INT64, 1, INT_MAX);
+    g_render.screen_width = parse_number_or_die(opt, arg, OPT_INT64, 1, INT_MAX);
     return 0;
 }
 
 int opt_height(void *optctx, const char *opt, const char *arg)
 {
-    screen_height = parse_number_or_die(opt, arg, OPT_INT64, 1, INT_MAX);
+    g_render.screen_height = parse_number_or_die(opt, arg, OPT_INT64, 1, INT_MAX);
     return 0;
 }
 
@@ -368,7 +364,7 @@ static const OptionDef options[] = {
     { "x", HAS_ARG, { .func_arg = opt_width }, "force displayed width", "width" },
     { "y", HAS_ARG, { .func_arg = opt_height }, "force displayed height", "height" },
     { "s", HAS_ARG | OPT_VIDEO, { .func_arg = opt_frame_size }, "set frame size (WxH or abbreviation)", "size" },
-    { "fs", OPT_BOOL, { &is_full_screen }, "force full screen" },
+    { "fs", OPT_BOOL, { &opt_full_screen }, "force full screen" },
     { "an", OPT_BOOL, { &audio_disable }, "disable audio" },
     { "vn", OPT_BOOL, { &video_disable }, "disable video" },
     { "sn", OPT_BOOL, { &subtitle_disable }, "disable subtitling" },
@@ -385,21 +381,19 @@ static const OptionDef options[] = {
     { "volume", OPT_INT | HAS_ARG, { &startup_volume}, "set startup volume 0=min 100=max", "volume" },
     { "f", HAS_ARG, { .func_arg = opt_format }, "force format", "fmt" },
     { "pix_fmt", HAS_ARG | OPT_EXPERT | OPT_VIDEO, { .func_arg = opt_frame_pix_fmt }, "set pixel format", "format" },
-    { "stats", OPT_BOOL | OPT_EXPERT, { &g_show_status }, "show status", "" },
+    { "stats", OPT_BOOL | OPT_EXPERT, { &opt_show_status }, "show status", "" },
     { "fast", OPT_BOOL | OPT_EXPERT, { &fast }, "non spec compliant optimizations", "" },
     { "genpts", OPT_BOOL | OPT_EXPERT, { &genpts }, "generate pts", "" },
     { "drp", OPT_INT | HAS_ARG | OPT_EXPERT, { &decoder_reorder_pts }, "let decoder reorder pts 0=off 1=on -1=auto", ""},
     { "lowres", OPT_INT | HAS_ARG | OPT_EXPERT, { &lowres }, "", "" },
     { "sync", HAS_ARG | OPT_EXPERT, { .func_arg = opt_sync }, "set audio-video sync. type (type=audio/video/ext)", "type" },
     { "autoexit", OPT_BOOL | OPT_EXPERT, { &autoexit }, "exit at the end", "" },
-    { "exitonkeydown", OPT_BOOL | OPT_EXPERT, { &exit_on_keydown }, "exit on key down", "" },
-    { "exitonmousedown", OPT_BOOL | OPT_EXPERT, { &exit_on_mousedown }, "exit on mouse down", "" },
     { "loop", OPT_INT | HAS_ARG | OPT_EXPERT, { &loop }, "set number of times the playback shall be looped", "loop count" },
-    { "framedrop", OPT_BOOL | OPT_EXPERT, { &g_framedrop }, "drop frames when cpu is too slow", "" },
+    { "framedrop", OPT_BOOL | OPT_EXPERT, { &opt_framedrop }, "drop frames when cpu is too slow", "" },
     { "infbuf", OPT_BOOL | OPT_EXPERT, { &infinite_buffer }, "don't limit the input buffer size (useful with realtime streams)", "" },
     { "window_title", OPT_STRING | HAS_ARG, { &window_title }, "set window title", "window title" },
-    { "left", OPT_INT | HAS_ARG | OPT_EXPERT, { &screen_left }, "set the x position for the left of the window", "x pos" },
-    { "top", OPT_INT | HAS_ARG | OPT_EXPERT, { &screen_top }, "set the y position for the top of the window", "y pos" },
+    { "left", OPT_INT | HAS_ARG | OPT_EXPERT, { &g_render.screen_left }, "set the x position for the left of the window", "x pos" },
+    { "top", OPT_INT | HAS_ARG | OPT_EXPERT, { &g_render.screen_top }, "set the y position for the top of the window", "y pos" },
 #if CONFIG_AVFILTER
     { "vf", OPT_EXPERT | HAS_ARG, { .func_arg = opt_add_vfilter }, "set video filters", "filter_graph" },
     { "af", OPT_STRING | HAS_ARG, { &afilters }, "set audio filters", "filter_graph" },
@@ -422,7 +416,7 @@ static const OptionDef options[] = {
 static void show_usage(void)
 {
     av_log(NULL, AV_LOG_INFO, "Simple media player\n");
-    av_log(NULL, AV_LOG_INFO, "usage: %s [options] input_file\n", program_name);
+    av_log(NULL, AV_LOG_INFO, "usage: %s [options] input_file\n", g_program_name);
     av_log(NULL, AV_LOG_INFO, "\n");
 }
 
@@ -498,7 +492,7 @@ int main(int argc, char **argv)
         show_usage();
         av_log(NULL, AV_LOG_FATAL, "An input file must be specified\n");
         av_log(NULL, AV_LOG_FATAL,
-               "Use -h to get full help or, even better, run 'man %s'\n", program_name);
+               "Use -h to get full help or, even better, run 'man %s'\n", g_program_name);
         exit(1);
     }
 
@@ -540,21 +534,11 @@ int main(int argc, char **argv)
             flags |= SDL_WINDOW_BORDERLESS;
         else
             flags |= SDL_WINDOW_RESIZABLE;
-        window = SDL_CreateWindow(program_name, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, default_width, default_height, flags);
-        SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
-        if (window) {
-            renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-            if (!renderer) {
-                av_log(NULL, AV_LOG_WARNING, "Failed to initialize a hardware accelerated renderer: %s\n", SDL_GetError());
-                renderer = SDL_CreateRenderer(window, -1, 0);
-            }
-            if (renderer) {
-                if (!SDL_GetRendererInfo(renderer, &renderer_info))
-                    av_log(NULL, AV_LOG_VERBOSE, "Initialized %s renderer.\n", renderer_info.name);
-            }
-        }
-        if (!window || !renderer || !renderer_info.num_texture_formats) {
-            av_log(NULL, AV_LOG_FATAL, "Failed to create window or renderer: %s", SDL_GetError());
+
+        if (g_render.create_window(g_program_name
+            , SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, g_default_width, g_default_height
+            ,flags))
+        {
             do_exit(NULL);
         }
     }
