@@ -51,15 +51,6 @@ extern "C"
 #include "libswresample/swresample.h"
 }
 
-#if CONFIG_AVFILTER
-extern "C"
-{
-# include "libavfilter/avfilter.h"
-# include "libavfilter/buffersink.h"
-# include "libavfilter/buffersrc.h"
-}
-#endif
-
 #include <SDL.h>
 #include <SDL_thread.h>
 
@@ -371,9 +362,7 @@ public:
     int audio_volume;
     int muted;
     struct AudioParams audio_src;
-#if CONFIG_AVFILTER
-    struct AudioParams audio_filter_src;
-#endif
+
     struct AudioParams audio_tgt;
     struct SwrContext *swr_ctx;
     int frame_drops_early;
@@ -413,14 +402,6 @@ public:
     int width, height, xleft, ytop;
     int step;
 
-#if CONFIG_AVFILTER
-    int vfilter_idx;
-    AVFilterContext *in_video_filter;   // the first filter in the video chain
-    AVFilterContext *out_video_filter;  // the last filter in the video chain
-    AVFilterContext *in_audio_filter;   // the first filter in the audio chain
-    AVFilterContext *out_audio_filter;  // the last filter in the audio chain
-    AVFilterGraph *agraph;              // audio filter graph
-#endif
 
     int last_video_stream, last_audio_stream, last_subtitle_stream;
 
@@ -435,15 +416,12 @@ extern const char *window_title;
 extern int g_default_width  ;
 extern int g_default_height ;
 
-extern int audio_disable;
-extern int video_disable;
+extern int opt_audio_disable;
 extern int subtitle_disable;
 extern const char* wanted_stream_spec[AVMEDIA_TYPE_NB];
 extern int seek_by_bytes ;
 extern float seek_interval;
-extern int display_disable;
-extern int borderless;
-extern int alwaysontop;
+extern int opt_alwaysontop;
 extern int startup_volume ;
 extern int opt_show_status;
 extern int av_sync_type;
@@ -464,14 +442,9 @@ extern const char *video_codec_name;
 extern double rdftspeed ;
 extern int64_t cursor_last_shown;
 extern int cursor_hidden ;
-#if CONFIG_AVFILTER
-extern const char **vfilters_list ;
-extern int nb_vfilters ;
-extern char *afilters ;
-#endif
+
 extern int autorotate ;
 extern int find_stream_info ;
-extern int filter_nbthreads ;
 extern int opt_full_screen;
 
 /* current context */
@@ -486,9 +459,6 @@ extern const struct TextureFormatEntry {
     int texture_fmt;
 } sdl_texture_format_map[];
 
-#if CONFIG_AVFILTER
-int opt_add_vfilter(void* optctx, const char* opt, const char* arg);
-#endif
 
 inline int cmp_audio_fmts(enum AVSampleFormat fmt1, int64_t channel_count1,
                    enum AVSampleFormat fmt2, int64_t channel_count2)
@@ -541,11 +511,13 @@ public:
         safe_release();
     }
 
+    int init(int opt_audio_disable, int opt_alwaysontop);
+
     void toggle_full_screen();
     
     int create_window(const char* title, int x, int y, int w, int h, Uint32 flags);
 
-    void init_show_window(const char * title, int w, int h, int left, int top, int fullscreen);
+    void show_window(const char * title, int w, int h, int left, int top, int fullscreen);
 
     void clear_render();
     void draw_render();
@@ -631,17 +603,6 @@ void print_stream_status(VideoState* is);
 int queue_picture(VideoState* is, AVFrame* src_frame, double pts, double duration, int64_t pos, int serial);
 
 int get_video_frame(VideoState* is, AVFrame* frame);
-
-#if CONFIG_AVFILTER
-int configure_filtergraph(AVFilterGraph* graph, const char* filtergraph,
-    AVFilterContext* source_ctx, AVFilterContext* sink_ctx);
-
-int configure_video_filters(AVFilterGraph* graph, VideoState* is, const char* vfilters, AVFrame* frame);
-
-int configure_audio_filters(VideoState* is, const char* afilters, int force_output_format);
-#endif  /* CONFIG_AVFILTER */
-
-
 
 
 int audio_thread(void* arg);
