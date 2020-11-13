@@ -50,7 +50,7 @@ void refresh_loop_wait_event(VideoState *is, SDL_Event *event) {
         if (remaining_time > 0.0)
             av_usleep((int64_t)(remaining_time * 1000000.0));
         remaining_time = REFRESH_RATE;
-        if (is->show_mode != VideoState::SHOW_MODE_NONE && (!is->paused || is->force_refresh))
+        if ( !is->paused || is->force_refresh)
             video_refresh(is, &remaining_time);
         SDL_PumpEvents();
     }
@@ -110,9 +110,6 @@ void event_loop(VideoState *cur_stream)
                 break;
             case SDLK_t:
                 stream_cycle_channel(cur_stream, AVMEDIA_TYPE_SUBTITLE);
-                break;
-            case SDLK_w:
-                toggle_audio_display(cur_stream);
                 break;
             case SDLK_PAGEUP:
                 if (cur_stream->ic->nb_chapters <= 1) {
@@ -303,14 +300,6 @@ int opt_duration(void *optctx, const char *opt, const char *arg)
     return 0;
 }
 
-int opt_show_mode(void *optctx, const char *opt, const char *arg)
-{
-    show_mode = !strcmp(arg, "video") ? VideoState::SHOW_MODE_VIDEO :
-                !strcmp(arg, "waves") ? VideoState::SHOW_MODE_WAVES :
-                !strcmp(arg, "rdft" ) ? VideoState::SHOW_MODE_RDFT  :
-                (VideoState::ShowMode)(int)parse_number_or_die(opt, arg, OPT_INT, 0, VideoState::SHOW_MODE_NB - 1);
-    return 0;
-}
 
 void opt_input_file(void *optctx, const char *filename)
 {
@@ -382,7 +371,6 @@ static const OptionDef options[] = {
     { "left", OPT_INT | HAS_ARG | OPT_EXPERT, { &g_render.screen_left }, "set the x position for the left of the window", "x pos" },
     { "top", OPT_INT | HAS_ARG | OPT_EXPERT, { &g_render.screen_top }, "set the y position for the top of the window", "y pos" },
     { "rdftspeed", OPT_INT | HAS_ARG| OPT_AUDIO | OPT_EXPERT, { &rdftspeed }, "rdft speed", "msecs" },
-    { "showmode", HAS_ARG, { .func_arg = opt_show_mode}, "select show mode (0 = video, 1 = waves, 2 = RDFT)", "mode" },
     { "default", HAS_ARG | OPT_AUDIO | OPT_VIDEO | OPT_EXPERT, { .func_arg = opt_default }, "generic catch all option", "" },
     { "i", OPT_BOOL, { &dummy}, "read specified file", "input_file"},
     { "codec", HAS_ARG, { .func_arg = opt_codec}, "force decoder", "decoder_name" },

@@ -368,9 +368,6 @@ public:
     int frame_drops_early;
     int frame_drops_late;
 
-    enum ShowMode {
-        SHOW_MODE_NONE = -1, SHOW_MODE_VIDEO = 0, SHOW_MODE_WAVES, SHOW_MODE_RDFT, SHOW_MODE_NB
-    } show_mode;
     int16_t sample_array[SAMPLE_ARRAY_SIZE];
     int sample_array_index;
     int last_i_start;
@@ -435,7 +432,6 @@ extern int autoexit;
 extern int loop;
 extern int opt_framedrop;
 extern int infinite_buffer ;
-extern enum VideoState::ShowMode show_mode;
 extern const char *audio_codec_name;
 extern const char *subtitle_codec_name;
 extern const char *video_codec_name;
@@ -551,10 +547,7 @@ inline int compute_mod(int a, int b)
     return a < 0 ? a%b + b : a%b;
 }
 
-void video_audio_display(VideoState* s);
-
 //  }}} render section 
-
 
 void stream_component_close(VideoState* is, int stream_index);
 
@@ -648,9 +641,6 @@ int read_thread(void* arg);
 VideoState* stream_open(const char* filename, AVInputFormat* iformat);
 
 void stream_cycle_channel(VideoState* is, int codec_type);
-
-void toggle_audio_display(VideoState* is);
-
 void seek_chapter(VideoState* is, int incr);
 
 
