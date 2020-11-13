@@ -185,15 +185,35 @@ typedef struct AudioParams {
     int bytes_per_sec;
 } AudioParams;
 
-typedef struct Clock {
+class Clock {
+public:
+    double get_clock();
+    double get_last_set_point() const
+    {
+        return last_updated;
+    }
+
+    void set_clock_at(double pts, int serial, double time);
+    void set_clock(double pts, int serial);
+    void set_clock_speed(double speed);
+    double get_clock_speed() const
+    {
+        return speed;
+    }
+    void init_clock(int* queue_serial);
+    void sync_clock_to_slave( Clock* slave); // 把slave时钟同步到自己
+
     double pts;           /* clock base */
-    double pts_drift;     /* clock base minus time at which we updated the clock */
-    double last_updated;
-    double speed;
-    int serial;           /* clock is based on a packet with this serial */
     int paused;
+    int serial;           /* clock is based on a packet with this serial */
+
+protected:
+    double pts_drift;     // clock base minus time at which we updated the clock. pts相对于外界时钟的偏移。
+    double last_updated;  // 外界时钟的‘打点’
+    double speed;
+    
     int *queue_serial;    /* pointer to the current packet queue serial, used for obsolete clock detection */
-} Clock;
+} ;
 
 /* Common struct for handling all types of decoded data and allocated render buffers. */
 typedef struct Frame {
@@ -220,8 +240,8 @@ public:
 
     Frame* frame_queue_peek();          // 获得‘读头’，读完之后用 frame_queue_next 移动‘读头’。无并发保护
     Frame* frame_queue_peek_next();     // 无并发保护 
-    Frame* frame_queue_peek_readable(); // 有并发保护
     Frame* frame_queue_peek_last();     // 无并发保护
+    Frame* frame_queue_peek_readable(); // 有并发保护
 
     void frame_queue_next();        //  ‘出队列’
     
@@ -239,15 +259,26 @@ public:
 
     PacketQueue* pktq;
     SimpleConditionVar cond;
-    int rindex_shown;
 
+    int is_last_frame_shown() const
+    {
+        return rindex_shown;
+    }
+    
 protected:
     Frame queue[FRAME_QUEUE_SIZE];
-    int rindex;
+    int rindex;         // 最初的‘读头’
+    int rindex_shown;   // rindex指向的位置，是否曾经被 shown过
+                        // rindex + rindex_shown 构成逻辑上的‘读头’ 
+                        // 如果keeplast (重画最后一帧需要)，那么第一次‘移动读头’不能动rindex, 而是要 rindex_shown = 1。
+                        // 这样 rindex + rindex_shown 是‘读头’ , 用 frame_queue_peek() 看;
+                        // rindex 是‘刚刚画过的一帧’, 用 frame_queue_peek_last() 看;
+                        // rindex + rindex_shown 是‘读头’后面一帧, 用 frame_queue_peek_next() 看。
     int windex;
     int size;
     int max_size;
     int keep_last;
+    
 };
 
 enum {
@@ -359,9 +390,9 @@ public:
     FFTSample *rdft_data;
     int xpos;
     double last_vis_time;
-    SDL_Texture *vis_texture;
-    SDL_Texture *sub_texture;
-    SDL_Texture *vid_texture;
+    SDL_Texture *vis_texture;   // 仅显示音频时的图片      //todo: 这些应该移到Render中去
+    SDL_Texture *sub_texture;   // 字幕图片
+    SDL_Texture *vid_texture;   // 视频图片
 
     int subtitle_stream;
     AVStream *subtitle_st;
@@ -530,6 +561,7 @@ public:
 
     static void get_sdl_pix_fmt_and_blendmode(int format, Uint32* sdl_pix_fmt, SDL_BlendMode* sdl_blendmode);
     static void set_sdl_yuv_conversion_mode(AVFrame* frame);
+    static int upload_texture(SDL_Texture** tex, AVFrame* frame, struct SwsContext** img_convert_ctx);
 };
 
 extern Render g_render;
@@ -538,10 +570,6 @@ extern Render g_render;
 void calculate_display_rect(SDL_Rect* rect,
     int scr_xleft, int scr_ytop, int scr_width, int scr_height,
     int pic_width, int pic_height, AVRational pic_sar);
-
-
-int upload_texture(SDL_Texture** tex, AVFrame* frame, struct SwsContext** img_convert_ctx);
-
 
 void video_image_display(VideoState* is);
 Frame*  get_current_subtitle_frame(VideoState* is, Frame* current_video_frame);
@@ -568,13 +596,6 @@ int video_open(VideoState* is);
 void video_display(VideoState* is);
 
 
-
-double get_clock(Clock* c);
-void set_clock_at(Clock* c, double pts, int serial, double time);
-void set_clock(Clock* c, double pts, int serial);
-void set_clock_speed(Clock* c, double speed);
-void init_clock(Clock* c, int* queue_serial);
-void sync_clock_to_slave(Clock* c, Clock* slave);
 int get_master_sync_type(VideoState* is);
 /* get the current master clock value */
 double get_master_clock(VideoState* is);

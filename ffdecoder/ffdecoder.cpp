@@ -748,7 +748,7 @@ void Render::get_sdl_pix_fmt_and_blendmode(int format, Uint32 *sdl_pix_fmt, SDL_
     }
 }
 
-int upload_texture(SDL_Texture **tex, AVFrame *frame, struct SwsContext **img_convert_ctx) {
+int Render::upload_texture(SDL_Texture **tex, AVFrame *frame, struct SwsContext **img_convert_ctx) {
     int ret = 0;
     Uint32 sdl_pix_fmt;
     SDL_BlendMode sdl_blendmode;
@@ -896,7 +896,7 @@ void video_image_display(VideoState *is)
     calculate_display_rect(&rect, is->xleft, is->ytop, is->width, is->height, vp->width, vp->height, vp->sar);
 
     if (!vp->uploaded) {
-        if (upload_texture(&is->vid_texture, vp->frame, &is->img_convert_ctx) < 0)
+        if (Render::upload_texture(&is->vid_texture, vp->frame, &is->img_convert_ctx) < 0)
             return;
         vp->uploaded = 1;
         vp->flip_v = vp->frame->linesize[0] < 0;
@@ -1228,52 +1228,52 @@ void video_display(VideoState *is)
     
 }
 
-double get_clock(Clock *c)
+double Clock::get_clock()
 {
-    if (*c->queue_serial != c->serial)
+    if (*this->queue_serial != this->serial)
         return NAN;
-    if (c->paused) {
-        return c->pts;
+    if (this->paused) {
+        return this->pts;
     } else {
         double time = av_gettime_relative() / 1000000.0;
-        return c->pts_drift + time - (time - c->last_updated) * (1.0 - c->speed);
+        return this->pts_drift + time - (time - this->last_updated) * (1.0 - this->speed);
     }
 }
 
-void set_clock_at(Clock *c, double pts, int serial, double time)
+void Clock::set_clock_at( double pts, int serial, double time)
 {
-    c->pts = pts;
-    c->last_updated = time;
-    c->pts_drift = c->pts - time;
-    c->serial = serial;
+    this->pts = pts;
+    this->last_updated = time;
+    this->pts_drift = this->pts - time;
+    this->serial = serial;
 }
 
-void set_clock(Clock *c, double pts, int serial)
+void Clock::set_clock( double pts, int serial)
 {
     double time = av_gettime_relative() / 1000000.0;
-    set_clock_at(c, pts, serial, time);
+    set_clock_at(pts, serial, time);
 }
 
-void set_clock_speed(Clock *c, double speed)
+void Clock::set_clock_speed( double speed)
 {
-    set_clock(c, get_clock(c), c->serial);
-    c->speed = speed;
+    set_clock( get_clock(), this->serial);
+    this->speed = speed;
 }
 
-void init_clock(Clock *c, int *queue_serial)
+void Clock::init_clock( int *queue_serial)
 {
-    c->speed = 1.0;
-    c->paused = 0;
-    c->queue_serial = queue_serial;
-    set_clock(c, NAN, -1);
+    this->speed = 1.0;
+    this->paused = 0;
+    this->queue_serial = queue_serial;
+    set_clock( NAN, -1);
 }
 
-void sync_clock_to_slave(Clock *c, Clock *slave)
+void Clock::sync_clock_to_slave( Clock *slave)
 {
-    double clock = get_clock(c);
-    double slave_clock = get_clock(slave);
+    double clock = get_clock();
+    double slave_clock = slave->get_clock();
     if (!isnan(slave_clock) && (isnan(clock) || fabs(clock - slave_clock) > AV_NOSYNC_THRESHOLD))
-        set_clock(c, slave_clock, slave->serial);
+        this->set_clock(slave_clock, slave->serial);
 }
 
 int get_master_sync_type(VideoState *is) {
@@ -1299,13 +1299,13 @@ double get_master_clock(VideoState *is)
 
     switch (get_master_sync_type(is)) {
         case AV_SYNC_VIDEO_MASTER:
-            val = get_clock(&is->vidclk);
+            val = is->vidclk.get_clock();
             break;
         case AV_SYNC_AUDIO_MASTER:
-            val = get_clock(&is->audclk);
+            val = is->audclk.get_clock();
             break;
         default:
-            val = get_clock(&is->extclk);
+            val = is->extclk.get_clock();
             break;
     }
     return val;
@@ -1314,14 +1314,14 @@ double get_master_clock(VideoState *is)
 void check_external_clock_speed(VideoState *is) {
    if (is->video_stream >= 0 && is->videoq.nb_packets <= EXTERNAL_CLOCK_MIN_FRAMES ||
        is->audio_stream >= 0 && is->audioq.nb_packets <= EXTERNAL_CLOCK_MIN_FRAMES) {
-       set_clock_speed(&is->extclk, FFMAX(EXTERNAL_CLOCK_SPEED_MIN, is->extclk.speed - EXTERNAL_CLOCK_SPEED_STEP));
+       is->extclk.set_clock_speed( FFMAX(EXTERNAL_CLOCK_SPEED_MIN, is->extclk.get_clock_speed() - EXTERNAL_CLOCK_SPEED_STEP));
    } else if ((is->video_stream < 0 || is->videoq.nb_packets > EXTERNAL_CLOCK_MAX_FRAMES) &&
               (is->audio_stream < 0 || is->audioq.nb_packets > EXTERNAL_CLOCK_MAX_FRAMES)) {
-       set_clock_speed(&is->extclk, FFMIN(EXTERNAL_CLOCK_SPEED_MAX, is->extclk.speed + EXTERNAL_CLOCK_SPEED_STEP));
+       is->extclk.set_clock_speed( FFMIN(EXTERNAL_CLOCK_SPEED_MAX, is->extclk.get_clock_speed() + EXTERNAL_CLOCK_SPEED_STEP));
    } else {
-       double speed = is->extclk.speed;
+       double speed = is->extclk.get_clock_speed();
        if (speed != 1.0)
-           set_clock_speed(&is->extclk, speed + EXTERNAL_CLOCK_SPEED_STEP * (1.0 - speed) / fabs(1.0 - speed));
+           is->extclk.set_clock_speed( speed + EXTERNAL_CLOCK_SPEED_STEP * (1.0 - speed) / fabs(1.0 - speed));
    }
 }
 
@@ -1344,13 +1344,13 @@ void stream_seek(VideoState *is, int64_t pos, int64_t rel, int seek_by_bytes)
 void stream_toggle_pause(VideoState *is)
 {
     if (is->paused) {
-        is->frame_timer += av_gettime_relative() / 1000000.0 - is->vidclk.last_updated;
+        is->frame_timer += av_gettime_relative() / 1000000.0 - is->vidclk.get_last_set_point();
         if (is->read_pause_return != AVERROR(ENOSYS)) {
             is->vidclk.paused = 0;
         }
-        set_clock(&is->vidclk, get_clock(&is->vidclk), is->vidclk.serial);
+        is->vidclk.set_clock(is->vidclk.get_clock(), is->vidclk.serial);
     }
-    set_clock(&is->extclk, get_clock(&is->extclk), is->extclk.serial);
+    is->extclk.set_clock(is->extclk.get_clock(), is->extclk.serial);
     is->paused = is->audclk.paused = is->vidclk.paused = is->extclk.paused = !is->paused;
 }
 
@@ -1388,7 +1388,7 @@ double compute_target_delay(double delay, VideoState *is)
     if (get_master_sync_type(is) != AV_SYNC_VIDEO_MASTER) {
         /* if video is slave, we try to correct big delays by
            duplicating or deleting a frame */
-        diff = get_clock(&is->vidclk) - get_master_clock(is);
+        diff = is->vidclk.get_clock() - get_master_clock(is);
 
         /* skip or repeat frame. We take into account the
            delay to compute the threshold. I still don't know
@@ -1424,8 +1424,8 @@ double vp_duration(VideoState *is, Frame *vp, Frame *nextvp) {
 
 void update_video_pts(VideoState *is, double pts, int64_t pos, int serial) {
     /* update current video pts */
-    set_clock(&is->vidclk, pts, serial);
-    sync_clock_to_slave(&is->extclk, &is->vidclk);
+    is->vidclk.set_clock( pts, serial);
+    is->extclk.sync_clock_to_slave( &is->vidclk);
 }
 
 /* called to display each frame */
@@ -1543,7 +1543,7 @@ retry:
         }
 display:
         /* display picture */
-        if (!display_disable && is->force_refresh && is->show_mode == VideoState::SHOW_MODE_VIDEO && is->pictq.rindex_shown)
+        if (!display_disable && is->force_refresh && is->show_mode == VideoState::SHOW_MODE_VIDEO && is->pictq.is_last_frame_shown())
             video_display(is);
     }
     is->force_refresh = 0;
@@ -1578,11 +1578,11 @@ void print_stream_status(VideoState* is)
         sqsize = is->subtitleq.size;
     av_diff = 0;
     if (is->audio_st && is->video_st)
-        av_diff = get_clock(&is->audclk) - get_clock(&is->vidclk);
+        av_diff = is->audclk.get_clock() - is->vidclk.get_clock();
     else if (is->video_st)
-        av_diff = get_master_clock(is) - get_clock(&is->vidclk);
+        av_diff = get_master_clock(is) - is->vidclk.get_clock();
     else if (is->audio_st)
-        av_diff = get_master_clock(is) - get_clock(&is->audclk);
+        av_diff = get_master_clock(is) - is->audclk.get_clock();
 
     av_bprint_init(&buf, 0, AV_BPRINT_SIZE_AUTOMATIC);
     av_bprintf(&buf,
@@ -2183,7 +2183,7 @@ int synchronize_audio(VideoState *is, int nb_samples)
         double diff, avg_diff;
         int min_nb_samples, max_nb_samples;
 
-        diff = get_clock(&is->audclk) - get_master_clock(is);
+        diff = is->audclk.get_clock() - get_master_clock(is);
 
         if (!isnan(diff) && fabs(diff) < AV_NOSYNC_THRESHOLD) {
             is->audio_diff_cum = diff + is->audio_diff_avg_coef * is->audio_diff_cum;
@@ -2373,8 +2373,10 @@ void sdl_audio_callback(void *opaque, Uint8 *stream, int len)
     is->audio_write_buf_size = is->audio_buf_size - is->audio_buf_index;
     /* Let's assume the audio driver that is used by SDL has two periods. */
     if (!isnan(is->audio_clock)) {
-        set_clock_at(&is->audclk, is->audio_clock - (double)(2 * is->audio_hw_buf_size + is->audio_write_buf_size) / is->audio_tgt.bytes_per_sec, is->audio_clock_serial, audio_callback_time / 1000000.0);
-        sync_clock_to_slave(&is->extclk, &is->audclk);
+        is->audclk.set_clock_at( is->audio_clock - (double)(2 * is->audio_hw_buf_size + is->audio_write_buf_size) / is->audio_tgt.bytes_per_sec
+            , is->audio_clock_serial
+            , audio_callback_time / 1000000.0);
+        is->extclk.sync_clock_to_slave( &is->audclk);
     }
 }
 
@@ -2849,9 +2851,9 @@ int read_thread(void *arg)
                     is->videoq.packet_queue_put(&PacketQueue::flush_pkt);
                 }
                 if (is->seek_flags & AVSEEK_FLAG_BYTE) {
-                   set_clock(&is->extclk, NAN, 0);
+                    is->extclk.set_clock( NAN, 0);
                 } else {
-                   set_clock(&is->extclk, seek_target / (double)AV_TIME_BASE, 0);
+                    is->extclk.set_clock( seek_target / (double)AV_TIME_BASE, 0);
                 }
             }
             is->seek_req = 0;
@@ -2978,9 +2980,9 @@ VideoState *stream_open(const char *filename, AVInputFormat *iformat)
     if (is->sampq.frame_queue_init( &is->audioq, SAMPLE_QUEUE_SIZE, 1) < 0)
         goto fail;
 
-    init_clock(&is->vidclk, &is->videoq.serial);
-    init_clock(&is->audclk, &is->audioq.serial);
-    init_clock(&is->extclk, &is->extclk.serial);
+    is->vidclk.init_clock(&is->videoq.serial);
+    is->audclk.init_clock( &is->audioq.serial);
+    is->extclk.init_clock( &is->extclk.serial);
     is->audio_clock_serial = -1;
     if (startup_volume < 0)
         av_log(NULL, AV_LOG_WARNING, "-volume=%d < 0, setting to 0\n", startup_volume);
