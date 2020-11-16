@@ -311,7 +311,9 @@ protected:
     BaseThread  decoder_thread;
 };
 
-class VideoState {
+class VideoState
+    :public BaseThread //  stream reader thread 
+{
 public:
     int open(const char* filename, AVInputFormat* iformat);
     // 关闭VS，释放内部资源
@@ -407,35 +409,35 @@ public:
     int last_video_stream, last_audio_stream, last_subtitle_stream;
 
     SimpleConditionVar continue_read_thread;
-    SDL_Thread* read_tid;
+    virtual unsigned run();  //  stream reader thread 
+
+    static int decode_interrupt_cb(void* ctx);
 };
 
 /* options specified by the user */
-extern AVInputFormat *file_iformat;
-extern const char *input_filename;
-extern const char *window_title;
+extern AVInputFormat * opt_file_iformat;
+extern const char * opt_input_filename;
+extern const char * g_window_title;
 extern int g_default_width  ;
 extern int g_default_height ;
 
 extern int opt_audio_disable;
 extern int subtitle_disable;
-extern const char* wanted_stream_spec[AVMEDIA_TYPE_NB];
 extern int seek_by_bytes ;
 extern float seek_interval;
 extern int opt_alwaysontop;
 extern int opt_startup_volume ;
 extern int opt_show_status;
 extern int opt_av_sync_type;
-extern int64_t start_time;
-extern int64_t duration ;
+extern int64_t opt_start_time;
+extern int64_t opt_duration;
 extern int fast ;
 extern int genpts ;
 extern int lowres ;
 extern int decoder_reorder_pts ;
 extern int autoexit;
-extern int loop;
 extern int opt_framedrop;
-extern int infinite_buffer ;
+extern int opt_infinite_buffer;
 extern const char *audio_codec_name;
 extern const char *subtitle_codec_name;
 extern const char *video_codec_name;
@@ -444,7 +446,6 @@ extern int64_t cursor_last_shown;
 extern int cursor_hidden ;
 
 extern int autorotate ;
-extern int find_stream_info ;
 extern int opt_full_screen;
 
 /* current context */
@@ -630,7 +631,6 @@ int audio_open(void* opaque, int64_t wanted_channel_layout, int wanted_nb_channe
 /* open a given stream. Return 0 if OK */
 int stream_component_open(VideoState* is, int stream_index);
 
-int decode_interrupt_cb(void* ctx);
 
 int stream_has_enough_packets(AVStream* st, int stream_id, PacketQueue* queue);
 

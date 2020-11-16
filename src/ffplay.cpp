@@ -137,21 +137,7 @@ void event_loop(VideoState *cur_stream)
             case SDLK_DOWN:
                 incr = -60.0;
             do_seek:
-                    if (seek_by_bytes) {
-                        pos = -1;
-                        if (pos < 0 && cur_stream->video_stream >= 0)
-                            pos = cur_stream->pictq.frame_queue_last_pos();
-                        if (pos < 0 && cur_stream->audio_stream >= 0)
-                            pos = cur_stream->sampq.frame_queue_last_pos();
-                        if (pos < 0)
-                            pos = avio_tell(cur_stream->ic->pb);
-                        if (cur_stream->ic->bit_rate)
-                            incr *= cur_stream->ic->bit_rate / 8.0;
-                        else
-                            incr *= 180000.0;
-                        pos += incr;
-                        stream_seek(cur_stream, pos, incr, 1);
-                    } else {
+                    {
                         pos = get_master_clock(cur_stream);
                         if (isnan(pos))
                             pos = (double)cur_stream->seek_pos / AV_TIME_BASE;
@@ -191,7 +177,7 @@ void event_loop(VideoState *cur_stream)
                     break;
                 x = event.motion.x;
             }
-                if (seek_by_bytes || cur_stream->ic->duration <= 0) {
+                if (cur_stream->ic->duration <= 0) {
                     uint64_t size =  avio_size(cur_stream->ic->pb);
                     stream_seek(cur_stream, size*x/cur_stream->width, 0, 1);
                 } else {
@@ -256,8 +242,8 @@ int opt_height(void *optctx, const char *opt, const char *arg)
 
 int opt_format(void *optctx, const char *opt, const char *arg)
 {
-    file_iformat = av_find_input_format(arg);
-    if (!file_iformat) {
+    opt_file_iformat = av_find_input_format(arg);
+    if (!opt_file_iformat) {
         av_log(NULL, AV_LOG_FATAL, "Unknown input format: %s\n", arg);
         return AVERROR(EINVAL);
     }
@@ -287,28 +273,28 @@ int opt_sync(void *optctx, const char *opt, const char *arg)
 
 int opt_seek(void *optctx, const char *opt, const char *arg)
 {
-    start_time = parse_time_or_die(opt, arg, 1);
+    opt_start_time = parse_time_or_die(opt, arg, 1);
     return 0;
 }
 
-int opt_duration(void *optctx, const char *opt, const char *arg)
+int parse_opt_duration(void *optctx, const char *opt, const char *arg)
 {
-    duration = parse_time_or_die(opt, arg, 1);
+    opt_duration = parse_time_or_die(opt, arg, 1);
     return 0;
 }
 
 
 void opt_input_file(void *optctx, const char *filename)
 {
-    if (input_filename) {
+    if (opt_input_filename) {
         av_log(NULL, AV_LOG_FATAL,
                "Argument '%s' provided as input filename, but '%s' was already specified.\n",
-                filename, input_filename);
+                filename, opt_input_filename);
         exit(1);
     }
     if (!strcmp(filename, "-"))
         filename = "pipe:";
-    input_filename = filename;
+    opt_input_filename = filename;
 }
 
 int opt_codec(void *optctx, const char *opt, const char *arg)
@@ -343,12 +329,8 @@ static const OptionDef options[] = {
     { "fs", OPT_BOOL, { &opt_full_screen }, "force full screen" },
     { "an", OPT_BOOL, { &opt_audio_disable }, "disable audio" },
     { "sn", OPT_BOOL, { &subtitle_disable }, "disable subtitling" },
-    { "ast", OPT_STRING | HAS_ARG | OPT_EXPERT, { &wanted_stream_spec[AVMEDIA_TYPE_AUDIO] }, "select desired audio stream", "stream_specifier" },
-    { "vst", OPT_STRING | HAS_ARG | OPT_EXPERT, { &wanted_stream_spec[AVMEDIA_TYPE_VIDEO] }, "select desired video stream", "stream_specifier" },
-    { "sst", OPT_STRING | HAS_ARG | OPT_EXPERT, { &wanted_stream_spec[AVMEDIA_TYPE_SUBTITLE] }, "select desired subtitle stream", "stream_specifier" },
     { "ss", HAS_ARG, { .func_arg = opt_seek }, "seek to a given position in seconds", "pos" },
-    { "t", HAS_ARG, { .func_arg = opt_duration }, "play  \"duration\" seconds of audio/video", "duration" },
-    { "bytes", OPT_INT | HAS_ARG, { &seek_by_bytes }, "seek by bytes 0=off 1=on -1=auto", "val" },
+    { "t", HAS_ARG, { .func_arg = parse_opt_duration }, "play  \"duration\" seconds of audio/video", "duration" },
     { "seek_interval", OPT_FLOAT | HAS_ARG, { &seek_interval }, "set seek interval for left/right keys, in seconds", "seconds" },
     { "alwaysontop", OPT_BOOL, { &opt_alwaysontop }, "window always on top" },
     { "volume", OPT_INT | HAS_ARG, { &opt_startup_volume}, "set startup volume 0=min 100=max", "volume" },
@@ -361,10 +343,9 @@ static const OptionDef options[] = {
     { "lowres", OPT_INT | HAS_ARG | OPT_EXPERT, { &lowres }, "", "" },
     { "sync", HAS_ARG | OPT_EXPERT, { .func_arg = opt_sync }, "set audio-video sync. type (type=audio/video/ext)", "type" },
     { "autoexit", OPT_BOOL | OPT_EXPERT, { &autoexit }, "exit at the end", "" },
-    { "loop", OPT_INT | HAS_ARG | OPT_EXPERT, { &loop }, "set number of times the playback shall be looped", "loop count" },
     { "framedrop", OPT_BOOL | OPT_EXPERT, { &opt_framedrop }, "drop frames when cpu is too slow", "" },
-    { "infbuf", OPT_BOOL | OPT_EXPERT, { &infinite_buffer }, "don't limit the input buffer size (useful with realtime streams)", "" },
-    { "window_title", OPT_STRING | HAS_ARG, { &window_title }, "set window title", "window title" },
+    { "infbuf", OPT_BOOL | OPT_EXPERT, { &opt_infinite_buffer }, "don't limit the input buffer size (useful with realtime streams)", "" },
+    { "window_title", OPT_STRING | HAS_ARG, { &g_window_title }, "set window title", "window title" },
     { "left", OPT_INT | HAS_ARG | OPT_EXPERT, { &g_render.screen_left }, "set the x position for the left of the window", "x pos" },
     { "top", OPT_INT | HAS_ARG | OPT_EXPERT, { &g_render.screen_top }, "set the y position for the top of the window", "y pos" },
     { "rdftspeed", OPT_INT | HAS_ARG| OPT_AUDIO | OPT_EXPERT, { &rdftspeed }, "rdft speed", "msecs" },
@@ -375,8 +356,6 @@ static const OptionDef options[] = {
     { "scodec", HAS_ARG | OPT_STRING | OPT_EXPERT, { &subtitle_codec_name }, "force subtitle decoder", "decoder_name" },
     { "vcodec", HAS_ARG | OPT_STRING | OPT_EXPERT, {    &video_codec_name }, "force video decoder",    "decoder_name" },
     { "autorotate", OPT_BOOL, { &autorotate }, "automatically rotate video", "" },
-    { "find_stream_info", OPT_BOOL | OPT_INPUT | OPT_EXPERT, { &find_stream_info },
-        "read and decode the streams to fill missing information with heuristics" },
     { NULL, },
 };
 
@@ -446,7 +425,7 @@ int main(int argc, char **argv)
 
     parse_options(NULL, argc, argv, options, opt_input_file);
 
-    if (!input_filename) {
+    if (!opt_input_filename) {
         show_usage();
         av_log(NULL, AV_LOG_FATAL, "An input file must be specified\n");
         av_log(NULL, AV_LOG_FATAL,
@@ -469,7 +448,7 @@ int main(int argc, char **argv)
         do_exit(NULL);
     }
     
-    if (is->open(input_filename, file_iformat)) {
+    if (is->open(opt_input_filename, opt_file_iformat)) {
         av_log(NULL, AV_LOG_FATAL, "Failed to initialize VideoState!\n");
         do_exit(is);
     }
