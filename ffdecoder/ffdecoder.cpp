@@ -42,9 +42,9 @@ const char *input_filename;
  int seek_by_bytes = -1;
  float seek_interval = 10;
  int opt_alwaysontop = 0;
- int startup_volume = 100;
+ int opt_startup_volume = 100;
  int opt_show_status = -1;
- int av_sync_type = AV_SYNC_AUDIO_MASTER;
+ int opt_av_sync_type = AV_SYNC_AUDIO_MASTER;
  int64_t start_time = AV_NOPTS_VALUE;
  int64_t duration = AV_NOPTS_VALUE;
  int fast = 0;
@@ -1011,50 +1011,65 @@ void stream_component_close(VideoState *is, int stream_index)
 }
 
 // 关闭并释放 'is'
-void stream_close(VideoState *is)
+void VideoState::close()
 {
     /* XXX: use a special url_shutdown call to abort parse cleanly */
-    is->abort_request = 1;
-    SDL_WaitThread(is->read_tid, NULL);
+    this->abort_request = 1;
+    SDL_WaitThread(this->read_tid, NULL);
 
     /* close each stream */
-    if (is->audio_stream >= 0)
-        stream_component_close(is, is->audio_stream);
-    if (is->video_stream >= 0)
-        stream_component_close(is, is->video_stream);
-    if (is->subtitle_stream >= 0)
-        stream_component_close(is, is->subtitle_stream);
+    if (this->audio_stream >= 0)
+        stream_component_close(this, this->audio_stream);
+    if (this->video_stream >= 0)
+        stream_component_close(this, this->video_stream);
+    if (this->subtitle_stream >= 0)
+        stream_component_close(this, this->subtitle_stream);
 
-    avformat_close_input(&is->ic);
+    avformat_close_input(&this->ic);
 
-    is->videoq.packet_queue_destroy();
-    is->audioq.packet_queue_destroy();
-    is->subtitleq.packet_queue_destroy();
+    this->videoq.packet_queue_destroy();
+    this->audioq.packet_queue_destroy();
+    this->subtitleq.packet_queue_destroy();
 
     /* free all pictures */    
-    is->pictq.frame_queue_destory();
-    is->sampq.frame_queue_destory();
-    is->subpq.frame_queue_destory();
+    this->pictq.frame_queue_destory();
+    this->sampq.frame_queue_destory();
+    this->subpq.frame_queue_destory();
 
     //SDL_DestroyCond(is->continue_read_thread);
-    sws_freeContext(is->img_convert_ctx);
-    sws_freeContext(is->sub_convert_ctx);
-    av_free(is->filename);
-    if (is->vis_texture)
-        SDL_DestroyTexture(is->vis_texture);
-    if (is->vid_texture)
-        SDL_DestroyTexture(is->vid_texture);
-    if (is->sub_texture)
-        SDL_DestroyTexture(is->sub_texture);
-    
-    //av_free(is);
-    delete is;
+    if (this->img_convert_ctx)
+    {
+        sws_freeContext(this->img_convert_ctx);
+        this->img_convert_ctx = NULL;
+    }
+    if (this->sub_convert_ctx)
+    {
+        sws_freeContext(this->sub_convert_ctx);
+        this->sub_convert_ctx = NULL;
+    }
+    av_free(this->filename);
+    this->filename = NULL;
+        
+    if (this->vid_texture)
+    {
+        SDL_DestroyTexture(this->vid_texture);
+        this->vid_texture = NULL;
+    }
+
+    if (this->sub_texture)
+    {
+        SDL_DestroyTexture(this->sub_texture);
+        this->sub_texture = NULL;
+    } 
 }
+
+
 
 void do_exit(VideoState *is)
 {
     if (is) {
-        stream_close(is);
+        is->close();
+        delete is;
     }
 
     g_render.safe_release();
@@ -2458,54 +2473,62 @@ int read_thread(void *arg)
     return 0;
 }
 
-VideoState *stream_open(const char *filename, AVInputFormat *iformat)
+void AutoReleasePtr<VideoState>::release()
 {
-    VideoState *is;
+    if (!me)
+        return;
+    me->close();
+    //外界会delete
+}
 
-    //is = (VideoState*)av_mallocz(sizeof(VideoState));
-    is = new VideoState();
-    if (!is)
-        return NULL;
+int VideoState::open(const char *filename, AVInputFormat *iformat)
+{
+    AutoReleasePtr<VideoState> close_if_failed(this);
 
-    is->last_video_stream = is->video_stream = -1;
-    is->last_audio_stream = is->audio_stream = -1;
-    is->last_subtitle_stream = is->subtitle_stream = -1;
-    is->filename = av_strdup(filename);
-    if (!is->filename)
-        goto fail;
-    is->iformat = iformat;
-    is->ytop    = 0;
-    is->xleft   = 0;
+    this->last_video_stream = this->video_stream = -1;
+    this->last_audio_stream = this->audio_stream = -1;
+    this->last_subtitle_stream = this->subtitle_stream = -1;
+    this->filename = av_strdup(filename);
+    if (!this->filename)
+        return 1;
 
-    /* start video display */
-    if (is->pictq.frame_queue_init( &is->videoq, VIDEO_PICTURE_QUEUE_SIZE, 1) < 0)
-        goto fail;
-    if (is->subpq.frame_queue_init( &is->subtitleq, SUBPICTURE_QUEUE_SIZE, 0) < 0)
-        goto fail;
-    if (is->sampq.frame_queue_init( &is->audioq, SAMPLE_QUEUE_SIZE, 1) < 0)
-        goto fail;
+    this->iformat = iformat;
+    this->ytop    = 0;
+    this->xleft   = 0;
 
-    is->vidclk.init_clock(&is->videoq.serial);
-    is->audclk.init_clock( &is->audioq.serial);
-    is->extclk.init_clock( &is->extclk.serial);
-    is->audio_clock_serial = -1;
-    if (startup_volume < 0)
-        av_log(NULL, AV_LOG_WARNING, "-volume=%d < 0, setting to 0\n", startup_volume);
-    if (startup_volume > 100)
-        av_log(NULL, AV_LOG_WARNING, "-volume=%d > 100, setting to 100\n", startup_volume);
-    startup_volume = av_clip(startup_volume, 0, 100);
-    startup_volume = av_clip(SDL_MIX_MAXVOLUME * startup_volume / 100, 0, SDL_MIX_MAXVOLUME);
-    is->audio_volume = startup_volume;
-    is->muted = 0;
-    is->av_sync_type = av_sync_type;
-    is->read_tid     = SDL_CreateThread(read_thread, "read_thread", is);
-    if (!is->read_tid) {
+    // prepare packet queues and frame queues 
+    if (this->pictq.frame_queue_init( &this->videoq, VIDEO_PICTURE_QUEUE_SIZE, 1) < 0)
+        return 2;
+    if (this->subpq.frame_queue_init( &this->subtitleq, SUBPICTURE_QUEUE_SIZE, 0) < 0)
+        return 3;
+    if (this->sampq.frame_queue_init( &this->audioq, SAMPLE_QUEUE_SIZE, 1) < 0)
+        return 4;
+
+    // init clocks 
+    this->vidclk.init_clock(&this->videoq.serial);
+    this->audclk.init_clock( &this->audioq.serial);
+    this->extclk.init_clock( &this->extclk.serial);
+    this->audio_clock_serial = -1;
+
+    if (opt_startup_volume < 0)
+        av_log(NULL, AV_LOG_WARNING, "-volume=%d < 0, setting to 0\n", opt_startup_volume);
+    if (opt_startup_volume > 100)
+        av_log(NULL, AV_LOG_WARNING, "-volume=%d > 100, setting to 100\n", opt_startup_volume);
+    this->audio_volume = opt_startup_volume;
+
+    this->audio_volume = av_clip(this->audio_volume, 0, 100);
+    this->audio_volume = av_clip(SDL_MIX_MAXVOLUME * this->audio_volume / 100, 0, SDL_MIX_MAXVOLUME);
+    
+    this->muted = 0;
+    this->av_sync_type = opt_av_sync_type;
+    this->read_tid     = SDL_CreateThread(read_thread, "read_thread", this);
+    if (!this->read_tid) {
         av_log(NULL, AV_LOG_FATAL, "SDL_CreateThread(): %s\n", SDL_GetError());
-fail:
-        stream_close(is);
-        return NULL;
+        return 10;
     }
-    return is;
+
+    close_if_failed.dismiss();
+    return 0;
 }
 
 void stream_cycle_channel(VideoState *is, int codec_type)

@@ -216,7 +216,6 @@ private:
 	}
 public:
 	AutoReleasePtr&  operator= ( T* p)
-	//void assign (T* p)
 	{
 		if (p == me)
 		{
@@ -238,6 +237,11 @@ public:
 	T* operator->() const 
 	{
 		return me;
+	}
+
+	void dismiss()
+	{
+		me = NULL;
 	}
 
 	virtual ~AutoReleasePtr()

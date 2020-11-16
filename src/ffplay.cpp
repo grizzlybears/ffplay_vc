@@ -221,10 +221,7 @@ void event_loop(VideoState *cur_stream)
                 case SDL_WINDOWEVENT_SIZE_CHANGED:
                     g_render.screen_width  = cur_stream->width  = event.window.data1;
                     g_render.screen_height = cur_stream->height = event.window.data2;
-                    if (cur_stream->vis_texture) {
-                        SDL_DestroyTexture(cur_stream->vis_texture);
-                        cur_stream->vis_texture = NULL;
-                    }
+                    
                 case SDL_WINDOWEVENT_EXPOSED:
                     cur_stream->force_refresh = 1;
             }
@@ -276,11 +273,11 @@ int opt_frame_pix_fmt(void *optctx, const char *opt, const char *arg)
 int opt_sync(void *optctx, const char *opt, const char *arg)
 {
     if (!strcmp(arg, "audio"))
-        av_sync_type = AV_SYNC_AUDIO_MASTER;
+        opt_av_sync_type = AV_SYNC_AUDIO_MASTER;
     else if (!strcmp(arg, "video"))
-        av_sync_type = AV_SYNC_VIDEO_MASTER;
+        opt_av_sync_type = AV_SYNC_VIDEO_MASTER;
     else if (!strcmp(arg, "ext"))
-        av_sync_type = AV_SYNC_EXTERNAL_CLOCK;
+        opt_av_sync_type = AV_SYNC_EXTERNAL_CLOCK;
     else {
         av_log(NULL, AV_LOG_ERROR, "Unknown value for %s: %s\n", opt, arg);
         exit(1);
@@ -354,7 +351,7 @@ static const OptionDef options[] = {
     { "bytes", OPT_INT | HAS_ARG, { &seek_by_bytes }, "seek by bytes 0=off 1=on -1=auto", "val" },
     { "seek_interval", OPT_FLOAT | HAS_ARG, { &seek_interval }, "set seek interval for left/right keys, in seconds", "seconds" },
     { "alwaysontop", OPT_BOOL, { &opt_alwaysontop }, "window always on top" },
-    { "volume", OPT_INT | HAS_ARG, { &startup_volume}, "set startup volume 0=min 100=max", "volume" },
+    { "volume", OPT_INT | HAS_ARG, { &opt_startup_volume}, "set startup volume 0=min 100=max", "volume" },
     { "f", HAS_ARG, { .func_arg = opt_format }, "force format", "fmt" },
     { "pix_fmt", HAS_ARG | OPT_EXPERT | OPT_VIDEO, { .func_arg = opt_frame_pix_fmt }, "set pixel format", "format" },
     { "stats", OPT_BOOL | OPT_EXPERT, { &opt_show_status }, "show status", "" },
@@ -428,8 +425,6 @@ void show_help_default(const char *opt, const char *arg)
 /* Called from the main */
 int main(int argc, char **argv)
 {
-    VideoState *is;
-
     //printf_as_default_logger();
     init_default_logger(GetModuleHandle(NULL), "ffplay.log");
     
@@ -467,10 +462,16 @@ int main(int argc, char **argv)
     av_init_packet(&PacketQueue::flush_pkt);
     PacketQueue::flush_pkt.data = (uint8_t*)&PacketQueue::flush_pkt;
 
-    is = stream_open(input_filename, file_iformat);
-    if (!is) {
-        av_log(NULL, AV_LOG_FATAL, "Failed to initialize VideoState!\n");
+    VideoState* is = new VideoState();
+    if (!is)
+    {
+        av_log(NULL, AV_LOG_FATAL, "Failed to create VideoState.\n");
         do_exit(NULL);
+    }
+    
+    if (is->open(input_filename, file_iformat)) {
+        av_log(NULL, AV_LOG_FATAL, "Failed to initialize VideoState!\n");
+        do_exit(is);
     }
 
     event_loop(is);

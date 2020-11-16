@@ -313,7 +313,11 @@ protected:
 
 class VideoState {
 public:
-    SDL_Thread *read_tid;
+    int open(const char* filename, AVInputFormat* iformat);
+    // 关闭VS，释放内部资源
+    void close();
+
+public:
     AVInputFormat *iformat;
     int abort_request;
     int force_refresh;
@@ -375,10 +379,10 @@ public:
     int rdft_bits;
     FFTSample *rdft_data;
     int xpos;
-    double last_vis_time;
-    SDL_Texture *vis_texture;   // 仅显示音频时的图片      //todo: 这些应该移到Render中去
+
+    
     SDL_Texture *sub_texture;   // 字幕图片
-    SDL_Texture *vid_texture;   // 视频图片
+    SDL_Texture *vid_texture;   // 视频图片 //todo: 这些应该移到Render中去
 
     int subtitle_stream;
     AVStream *subtitle_st;
@@ -403,7 +407,7 @@ public:
     int last_video_stream, last_audio_stream, last_subtitle_stream;
 
     SimpleConditionVar continue_read_thread;
-
+    SDL_Thread* read_tid;
 };
 
 /* options specified by the user */
@@ -419,9 +423,9 @@ extern const char* wanted_stream_spec[AVMEDIA_TYPE_NB];
 extern int seek_by_bytes ;
 extern float seek_interval;
 extern int opt_alwaysontop;
-extern int startup_volume ;
+extern int opt_startup_volume ;
 extern int opt_show_status;
-extern int av_sync_type;
+extern int opt_av_sync_type;
 extern int64_t start_time;
 extern int64_t duration ;
 extern int fast ;
@@ -551,8 +555,7 @@ inline int compute_mod(int a, int b)
 
 void stream_component_close(VideoState* is, int stream_index);
 
-// 关闭并释放 'is'
-void stream_close(VideoState* is);
+
 void do_exit(VideoState* is);
 void sigterm_handler(int sig);
 
@@ -565,7 +568,6 @@ int get_master_sync_type(VideoState* is);
 /* get the current master clock value */
 double get_master_clock(VideoState* is);
 void check_external_clock_speed(VideoState* is);
-
 
 
 /* seek in the stream */
@@ -638,7 +640,6 @@ int is_realtime(AVFormatContext* s);
 /* this thread gets the stream from the disk or the network */
 int read_thread(void* arg);
 
-VideoState* stream_open(const char* filename, AVInputFormat* iformat);
 
 void stream_cycle_channel(VideoState* is, int codec_type);
 void seek_chapter(VideoState* is, int incr);
