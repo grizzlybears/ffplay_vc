@@ -51,7 +51,7 @@ void refresh_loop_wait_event(VideoState *is, SDL_Event *event) {
             av_usleep((int64_t)(remaining_time * 1000000.0));
         remaining_time = REFRESH_RATE;
         if ( !is->paused || is->force_refresh)
-            video_refresh(is, &remaining_time);
+            is->video_refresh( &remaining_time);
         SDL_PumpEvents();
     }
 }
@@ -98,28 +98,28 @@ void event_loop(VideoState *cur_stream)
                 step_to_next_frame(cur_stream);
                 break;
             case SDLK_a:
-                stream_cycle_channel(cur_stream, AVMEDIA_TYPE_AUDIO);
+                cur_stream->stream_cycle_channel( AVMEDIA_TYPE_AUDIO);
                 break;
             case SDLK_v:
-                stream_cycle_channel(cur_stream, AVMEDIA_TYPE_VIDEO);
+                cur_stream->stream_cycle_channel( AVMEDIA_TYPE_VIDEO);
                 break;
             case SDLK_c:
-                stream_cycle_channel(cur_stream, AVMEDIA_TYPE_VIDEO);
-                stream_cycle_channel(cur_stream, AVMEDIA_TYPE_AUDIO);
-                stream_cycle_channel(cur_stream, AVMEDIA_TYPE_SUBTITLE);
+                cur_stream->stream_cycle_channel(AVMEDIA_TYPE_VIDEO);
+                cur_stream->stream_cycle_channel(AVMEDIA_TYPE_AUDIO);
+                cur_stream->stream_cycle_channel(AVMEDIA_TYPE_SUBTITLE);
                 break;
             case SDLK_t:
-                stream_cycle_channel(cur_stream, AVMEDIA_TYPE_SUBTITLE);
+                cur_stream->stream_cycle_channel( AVMEDIA_TYPE_SUBTITLE);
                 break;
             case SDLK_PAGEUP:
-                if (cur_stream->ic->nb_chapters <= 1) {
+                if (cur_stream->format_context->nb_chapters <= 1) {
                     incr = 600.0;
                     goto do_seek;
                 }
                 seek_chapter(cur_stream, 1);
                 break;
             case SDLK_PAGEDOWN:
-                if (cur_stream->ic->nb_chapters <= 1) {
+                if (cur_stream->format_context->nb_chapters <= 1) {
                     incr = -600.0;
                     goto do_seek;
                 }
@@ -142,8 +142,8 @@ void event_loop(VideoState *cur_stream)
                         if (isnan(pos))
                             pos = (double)cur_stream->seek_pos / AV_TIME_BASE;
                         pos += incr;
-                        if (cur_stream->ic->start_time != AV_NOPTS_VALUE && pos < cur_stream->ic->start_time / (double)AV_TIME_BASE)
-                            pos = cur_stream->ic->start_time / (double)AV_TIME_BASE;
+                        if (cur_stream->format_context->start_time != AV_NOPTS_VALUE && pos < cur_stream->format_context->start_time / (double)AV_TIME_BASE)
+                            pos = cur_stream->format_context->start_time / (double)AV_TIME_BASE;
                         stream_seek(cur_stream, (int64_t)(pos * AV_TIME_BASE), (int64_t)(incr * AV_TIME_BASE), 0);
                     }
                 break;
@@ -177,14 +177,14 @@ void event_loop(VideoState *cur_stream)
                     break;
                 x = event.motion.x;
             }
-                if (cur_stream->ic->duration <= 0) {
-                    uint64_t size =  avio_size(cur_stream->ic->pb);
+                if (cur_stream->format_context->duration <= 0) {
+                    uint64_t size =  avio_size(cur_stream->format_context->pb);
                     stream_seek(cur_stream, size*x/cur_stream->width, 0, 1);
                 } else {
                     int64_t ts;
                     int ns, hh, mm, ss;
                     int tns, thh, tmm, tss;
-                    tns  = cur_stream->ic->duration / 1000000LL;
+                    tns  = cur_stream->format_context->duration / 1000000LL;
                     thh  = tns / 3600;
                     tmm  = (tns % 3600) / 60;
                     tss  = (tns % 60);
@@ -196,9 +196,9 @@ void event_loop(VideoState *cur_stream)
                     av_log(NULL, AV_LOG_INFO,
                            "Seek to %2.0f%% (%2d:%02d:%02d) of total duration (%2d:%02d:%02d)       \n", frac*100,
                             hh, mm, ss, thh, tmm, tss);
-                    ts = frac * cur_stream->ic->duration;
-                    if (cur_stream->ic->start_time != AV_NOPTS_VALUE)
-                        ts += cur_stream->ic->start_time;
+                    ts = frac * cur_stream->format_context->duration;
+                    if (cur_stream->format_context->start_time != AV_NOPTS_VALUE)
+                        ts += cur_stream->format_context->start_time;
                     stream_seek(cur_stream, ts, 0, 0);
                 }
             break;
@@ -308,9 +308,9 @@ int opt_codec(void *optctx, const char *opt, const char *arg)
    }
    spec++;
    switch (spec[0]) {
-   case 'a' :    audio_codec_name = arg; break;
-   case 's' : subtitle_codec_name = arg; break;
-   case 'v' :    video_codec_name = arg; break;
+   case 'a' :    opt_audio_codec_name = arg; break;
+   case 's' : opt_subtitle_codec_name = arg; break;
+   case 'v' :    opt_video_codec_name = arg; break;
    default:
        av_log(NULL, AV_LOG_ERROR,
               "Invalid media specifier '%s' in option '%s'\n", spec, opt);
@@ -328,7 +328,7 @@ static const OptionDef options[] = {
     { "s", HAS_ARG | OPT_VIDEO, { .func_arg = opt_frame_size }, "set frame size (WxH or abbreviation)", "size" },
     { "fs", OPT_BOOL, { &opt_full_screen }, "force full screen" },
     { "an", OPT_BOOL, { &opt_audio_disable }, "disable audio" },
-    { "sn", OPT_BOOL, { &subtitle_disable }, "disable subtitling" },
+    { "sn", OPT_BOOL, { &opt_subtitle_disable }, "disable subtitling" },
     { "ss", HAS_ARG, { .func_arg = opt_seek }, "seek to a given position in seconds", "pos" },
     { "t", HAS_ARG, { .func_arg = parse_opt_duration }, "play  \"duration\" seconds of audio/video", "duration" },
     { "seek_interval", OPT_FLOAT | HAS_ARG, { &seek_interval }, "set seek interval for left/right keys, in seconds", "seconds" },
@@ -337,7 +337,6 @@ static const OptionDef options[] = {
     { "f", HAS_ARG, { .func_arg = opt_format }, "force format", "fmt" },
     { "pix_fmt", HAS_ARG | OPT_EXPERT | OPT_VIDEO, { .func_arg = opt_frame_pix_fmt }, "set pixel format", "format" },
     { "stats", OPT_BOOL | OPT_EXPERT, { &opt_show_status }, "show status", "" },
-    { "fast", OPT_BOOL | OPT_EXPERT, { &fast }, "non spec compliant optimizations", "" },
     { "genpts", OPT_BOOL | OPT_EXPERT, { &genpts }, "generate pts", "" },
     { "drp", OPT_INT | HAS_ARG | OPT_EXPERT, { &decoder_reorder_pts }, "let decoder reorder pts 0=off 1=on -1=auto", ""},
     { "lowres", OPT_INT | HAS_ARG | OPT_EXPERT, { &lowres }, "", "" },
@@ -352,9 +351,9 @@ static const OptionDef options[] = {
     { "default", HAS_ARG | OPT_AUDIO | OPT_VIDEO | OPT_EXPERT, { .func_arg = opt_default }, "generic catch all option", "" },
     { "i", OPT_BOOL, { &dummy}, "read specified file", "input_file"},
     { "codec", HAS_ARG, { .func_arg = opt_codec}, "force decoder", "decoder_name" },
-    { "acodec", HAS_ARG | OPT_STRING | OPT_EXPERT, {    &audio_codec_name }, "force audio decoder",    "decoder_name" },
-    { "scodec", HAS_ARG | OPT_STRING | OPT_EXPERT, { &subtitle_codec_name }, "force subtitle decoder", "decoder_name" },
-    { "vcodec", HAS_ARG | OPT_STRING | OPT_EXPERT, {    &video_codec_name }, "force video decoder",    "decoder_name" },
+    { "acodec", HAS_ARG | OPT_STRING | OPT_EXPERT, {    &opt_audio_codec_name }, "force audio decoder",    "decoder_name" },
+    { "scodec", HAS_ARG | OPT_STRING | OPT_EXPERT, { &opt_subtitle_codec_name }, "force subtitle decoder", "decoder_name" },
+    { "vcodec", HAS_ARG | OPT_STRING | OPT_EXPERT, {    &opt_video_codec_name }, "force video decoder",    "decoder_name" },
     { "autorotate", OPT_BOOL, { &autorotate }, "automatically rotate video", "" },
     { NULL, },
 };

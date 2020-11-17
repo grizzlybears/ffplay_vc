@@ -318,21 +318,23 @@ public:
     int open(const char* filename, AVInputFormat* iformat);
     // 关闭VS，释放内部资源
     void close();
+    
+    // called to display each frame 
+    void video_refresh(double* remaining_time);
 
+    void stream_cycle_channel(int codec_type);
 public:
-    AVInputFormat *iformat;
     int abort_request;
     int force_refresh;
     int paused;
-    int last_paused;
-    int queue_attachments_req;
+
+    int queue_attachments_req; //某些流带有一个‘包含封面帧的包’，在初始load以及seek的时候，就先扔一个‘包含封面帧的包’进队
     int seek_req;
     int seek_flags;
     int64_t seek_pos;
     int64_t seek_rel;
-    int read_pause_return;
-    AVFormatContext *ic;
-    int realtime;
+    int read_pause_return;  // 'reader loop'中， 遇到'pause' req, av_read_pause 这个API的返回值
+    AVFormatContext * format_context;
 
     Clock audclk;
     Clock vidclk;
@@ -368,11 +370,8 @@ public:
     int audio_volume;
     int muted;
     struct AudioParams audio_src;
-
-    struct AudioParams audio_tgt;
+    struct AudioParams audio_tgt;  // audio_open 返回，环境要求的audio params
     struct SwrContext *swr_ctx;
-    int frame_drops_early;
-    int frame_drops_late;
 
     int16_t sample_array[SAMPLE_ARRAY_SIZE];
     int sample_array_index;
@@ -380,9 +379,10 @@ public:
     RDFTContext *rdft;
     int rdft_bits;
     FFTSample *rdft_data;
-    int xpos;
 
-    
+
+    int frame_drops_early;
+    int frame_drops_late;
     SDL_Texture *sub_texture;   // 字幕图片
     SDL_Texture *vid_texture;   // 视频图片 //todo: 这些应该移到Render中去
 
@@ -400,18 +400,38 @@ public:
     struct SwsContext *img_convert_ctx;
     struct SwsContext *sub_convert_ctx;
     int eof;
-
-    char *filename;
+        
     int width, height, xleft, ytop;
-    int step;
+    int step; // 单帧模式
 
 
     int last_video_stream, last_audio_stream, last_subtitle_stream;
 
     SimpleConditionVar continue_read_thread;
-    virtual unsigned run();  //  stream reader thread 
 
+protected:    
+    virtual unsigned run();  //  stream reader thread 
     static int decode_interrupt_cb(void* ctx);
+
+    AVInputFormat* iformat;   // 指定容器格式，ref only
+    char* filename; // 播放的文件 or url
+    int realtime;   // 是否是实时流
+    
+    int last_paused; // 之前一次reader loop的时候，是否是paused
+
+
+    // open a given stream. Return 0 if OK 
+    int stream_component_open( int stream_index);
+    void stream_component_close( int stream_index);
+
+
+    // 'reader thread' section {{{
+    int open_stream_file();
+    int open_streams();
+
+    int  read_loop_check_pause(); // return: > 0 -- shoud 'continue', 0 -- go on current iteration, < 0 -- error exit loop
+    int  read_loop_check_seek();  // return: > 0 -- shoud 'continue', 0 -- go on current iteration, < 0 -- error exit loop
+    // }}} 'reader thread' section
 };
 
 /* options specified by the user */
@@ -422,7 +442,7 @@ extern int g_default_width  ;
 extern int g_default_height ;
 
 extern int opt_audio_disable;
-extern int subtitle_disable;
+extern int opt_subtitle_disable;
 extern int seek_by_bytes ;
 extern float seek_interval;
 extern int opt_alwaysontop;
@@ -431,16 +451,15 @@ extern int opt_show_status;
 extern int opt_av_sync_type;
 extern int64_t opt_start_time;
 extern int64_t opt_duration;
-extern int fast ;
 extern int genpts ;
 extern int lowres ;
 extern int decoder_reorder_pts ;
 extern int autoexit;
 extern int opt_framedrop;
 extern int opt_infinite_buffer;
-extern const char *audio_codec_name;
-extern const char *subtitle_codec_name;
-extern const char *video_codec_name;
+extern const char * opt_audio_codec_name;
+extern const char * opt_subtitle_codec_name;
+extern const char * opt_video_codec_name;
 extern double rdftspeed ;
 extern int64_t cursor_last_shown;
 extern int cursor_hidden ;
@@ -554,7 +573,6 @@ inline int compute_mod(int a, int b)
 
 //  }}} render section 
 
-void stream_component_close(VideoState* is, int stream_index);
 
 
 void do_exit(VideoState* is);
@@ -591,9 +609,6 @@ double vp_duration(VideoState* is, Frame* vp, Frame* nextvp);
 
 void update_video_pts(VideoState* is, double pts, int64_t pos, int serial);
 
-/* called to display each frame */
-void video_refresh(void* opaque, double* remaining_time);
-
 void print_stream_status(VideoState* is);
 
 int queue_picture(VideoState* is, AVFrame* src_frame, double pts, double duration, int64_t pos, int serial);
@@ -628,8 +643,6 @@ void sdl_audio_callback(void* opaque, Uint8* stream, int len);
 
 int audio_open(void* opaque, int64_t wanted_channel_layout, int wanted_nb_channels, int wanted_sample_rate, struct AudioParams* audio_hw_params);
 
-/* open a given stream. Return 0 if OK */
-int stream_component_open(VideoState* is, int stream_index);
 
 
 int stream_has_enough_packets(AVStream* st, int stream_id, PacketQueue* queue);
@@ -640,8 +653,6 @@ int is_realtime(AVFormatContext* s);
 /* this thread gets the stream from the disk or the network */
 int read_thread(void* arg);
 
-
-void stream_cycle_channel(VideoState* is, int codec_type);
 void seek_chapter(VideoState* is, int incr);
 
 
