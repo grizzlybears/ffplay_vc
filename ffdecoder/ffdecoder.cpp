@@ -46,7 +46,6 @@ const char * opt_input_filename;
  int64_t opt_start_time = AV_NOPTS_VALUE;
  int64_t opt_duration = AV_NOPTS_VALUE;
  int genpts = 0;
- int lowres = 0;
  int decoder_reorder_pts = -1;
  int autoexit = 0;
   int opt_framedrop = -1;
@@ -1996,7 +1995,6 @@ int VideoState::stream_component_open(int stream_index)
     int sample_rate, nb_channels;
     int64_t channel_layout;
     int ret = 0;
-    int stream_lowres = lowres;
 
     if (stream_index < 0 || stream_index >= (int)format_context->nb_streams)
         return -1;
@@ -2029,20 +2027,10 @@ int VideoState::stream_component_open(int stream_index)
     }
 
     avctx->codec_id = codec->id;
-    if (stream_lowres > codec->max_lowres) {
-        av_log(avctx, AV_LOG_WARNING, "The maximum value for lowres supported by the decoder is %d\n",
-                codec->max_lowres);
-        stream_lowres = codec->max_lowres;
-    }
-    avctx->lowres = stream_lowres;
-
-    //avctx->flags2 |= AV_CODEC_FLAG2_FAST;   // 原ffplay有一个 cmd opt 可以点亮这个 flag
 
     opts = filter_codec_opts(codec_opts, avctx->codec_id, format_context, format_context->streams[stream_index], codec);
     if (!av_dict_get(opts, "threads", NULL, 0))
         av_dict_set(&opts, "threads", "auto", 0);
-    if (stream_lowres)
-        av_dict_set_int(&opts, "lowres", stream_lowres, 0);
     if (avctx->codec_type == AVMEDIA_TYPE_VIDEO || avctx->codec_type == AVMEDIA_TYPE_AUDIO)
         av_dict_set(&opts, "refcounted_frames", "1", 0);
     if ((ret = avcodec_open2(avctx, codec, &opts)) < 0) {

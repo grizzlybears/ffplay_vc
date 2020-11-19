@@ -456,7 +456,6 @@ extern int opt_av_sync_type;
 extern int64_t opt_start_time;  // 命令行 -ss ，由 av_parse_time 解析为 microseconds
 extern int64_t opt_duration;    // 命令行 -t  ，由 av_parse_time 解析为 microseconds
 extern int genpts ;
-extern int lowres ;
 extern int decoder_reorder_pts ;
 extern int autoexit;
 extern int opt_framedrop;
