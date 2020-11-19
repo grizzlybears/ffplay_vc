@@ -431,6 +431,10 @@ protected:
 
     int  read_loop_check_pause(); // return: > 0 -- shoud 'continue', 0 -- go on current iteration, < 0 -- error exit loop
     int  read_loop_check_seek();  // return: > 0 -- shoud 'continue', 0 -- go on current iteration, < 0 -- error exit loop
+
+    int is_pkt_in_play_range( AVPacket* pkt);
+    double stream_ts_to_second(int64_t ts, int stream_index);
+
     // }}} 'reader thread' section
 };
 
@@ -449,8 +453,8 @@ extern int opt_alwaysontop;
 extern int opt_startup_volume ;
 extern int opt_show_status;
 extern int opt_av_sync_type;
-extern int64_t opt_start_time;
-extern int64_t opt_duration;
+extern int64_t opt_start_time;  // 命令行 -ss ，由 av_parse_time 解析为 microseconds
+extern int64_t opt_duration;    // 命令行 -t  ，由 av_parse_time 解析为 microseconds
 extern int genpts ;
 extern int lowres ;
 extern int decoder_reorder_pts ;
@@ -587,6 +591,7 @@ int get_master_sync_type(VideoState* is);
 /* get the current master clock value */
 double get_master_clock(VideoState* is);
 void check_external_clock_speed(VideoState* is);
+
 
 
 /* seek in the stream */

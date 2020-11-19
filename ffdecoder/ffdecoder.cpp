@@ -41,7 +41,7 @@ const char * opt_input_filename;
  float seek_interval = 10;
  int opt_alwaysontop = 0;
  int opt_startup_volume = 100;
- int opt_show_status = -1;
+ int opt_show_status = 0; //原来是 -1;
  int opt_av_sync_type = AV_SYNC_AUDIO_MASTER;
  int64_t opt_start_time = AV_NOPTS_VALUE;
  int64_t opt_duration = AV_NOPTS_VALUE;
@@ -1856,7 +1856,7 @@ int audio_decode_frame(VideoState *is)
     else
         is->audio_clock = NAN;
     is->audio_clock_serial = af->serial;
-#ifdef DEBUG
+#ifdef DEBUG_SYNC
     {
         static double last_clock;
         printf("audio: delay=%0.3f clock=%0.3f clock0=%0.3f\n",
@@ -2408,11 +2408,6 @@ unsigned VideoState::run()
 {
     unsigned ret = 1;
     AVPacket pkt1, *pkt = &pkt1;
-    int64_t stream_start_time;
-    int pkt_in_play_range = 0;
-
-    int64_t pkt_ts;
-
     this->eof = 0;
 
     // 1. 打开文件，酌情seek
@@ -2476,21 +2471,22 @@ unsigned VideoState::run()
         } else {
             this->eof = 0;
         }
-        /* check if packet is in play range specified by user, then queue, otherwise discard */
-        stream_start_time = format_context->streams[pkt->stream_index]->start_time;
-        pkt_ts = pkt->pts == AV_NOPTS_VALUE ? pkt->dts : pkt->pts;
-        pkt_in_play_range = opt_duration == AV_NOPTS_VALUE ||
-                (pkt_ts - (stream_start_time != AV_NOPTS_VALUE ? stream_start_time : 0)) *
-                av_q2d(format_context->streams[pkt->stream_index]->time_base) -
-                (double)(opt_start_time != AV_NOPTS_VALUE ? opt_start_time : 0) / 1000000 <= ((double)opt_duration / 1000000);
-        if (pkt->stream_index == this->audio_stream && pkt_in_play_range) {
+        /* check if packet is in play range specified by user, then queue, otherwise discard */        
+        if (!is_pkt_in_play_range(pkt)) { 
+            av_packet_unref(pkt); // todo: 不到 start_point，还是超过duration，应该有不同处理
+            continue;
+        }
+
+        if (pkt->stream_index == this->audio_stream ) {
             this->audioq.packet_queue_put( pkt);
-        } else if (pkt->stream_index == this->video_stream && pkt_in_play_range
-                   && !(this->video_st->disposition & AV_DISPOSITION_ATTACHED_PIC)) {
+        }
+        else if (pkt->stream_index == this->video_stream  && !(this->video_st->disposition & AV_DISPOSITION_ATTACHED_PIC)) {
             this->videoq.packet_queue_put( pkt);
-        } else if (pkt->stream_index == this->subtitle_stream && pkt_in_play_range) {
+        }
+        else if (pkt->stream_index == this->subtitle_stream ) {
             this->subtitleq.packet_queue_put( pkt);
-        } else {
+        }
+        else {
             av_packet_unref(pkt);
         }
     }
@@ -2507,6 +2503,30 @@ unsigned VideoState::run()
     }
 
     return 0;
+}
+
+int VideoState::is_pkt_in_play_range( AVPacket* pkt)
+{
+    if (opt_duration == AV_NOPTS_VALUE)
+        return 1;
+    //todo: 如果是‘实况转播’，来包就放，也应该无条件返回1。
+
+    int64_t stream_start_time = format_context->streams[pkt->stream_index]->start_time;
+    if (AV_NOPTS_VALUE == stream_start_time)
+        stream_start_time = 0;
+
+    int64_t pkt_ts = ( pkt->pts == AV_NOPTS_VALUE) ? pkt->dts : pkt->pts;
+    double ts_relative_to_stream = stream_ts_to_second( pkt_ts - stream_start_time, pkt->stream_index);
+    //printf("stream %d, ts_relative_to_stream = %f\n", pkt->stream_index, ts_relative_to_stream);
+    double start_point = (opt_start_time != AV_NOPTS_VALUE ? opt_start_time : 0) / 1000000; // opt_start_time is in unit of microsecond
+    double duration = opt_duration / 1000000;
+
+    return (ts_relative_to_stream - start_point) <= duration;
+}
+
+double VideoState::stream_ts_to_second(int64_t ts,  int stream_index)
+{
+    return ts * av_q2d(format_context->streams[stream_index]->time_base);
 }
 
 void AutoReleasePtr<VideoState>::release()
