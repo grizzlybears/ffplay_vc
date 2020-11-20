@@ -278,20 +278,30 @@ enum {
     AV_SYNC_EXTERNAL_CLOCK, /* synchronize to an external clock */
 };
 
+class VideoState;
+
 class Decoder 
-    :public BaseThread
+    :public BaseThread  //decoder thread
 {
 public:
-    virtual void decoder_init( AVCodecContext* avctx, PacketQueue* queue, SimpleConditionVar* empty_queue_cond);
+    Decoder()
+    {
+        stream_id = -1;
+        stream = NULL;
+        avctx = NULL;
+    }
+    virtual ~Decoder() {}
+    virtual void decoder_init( AVCodecContext* avctx, PacketQueue* queue, SimpleConditionVar* empty_queue_cond); //todo:  queue 已经搬进this
+    virtual void decoder_destroy();
+
+    virtual int decoder_start(int (*fn)(void*), const char* thread_name, void* arg); //启动decoder thread.  todo: thread func 应该用 BaseThread::run
+    virtual void decoder_abort(FrameQueue* fq);  // 指示decoder thread 退出，并等待其退出. todo:  fq 已经搬进this
+
     /// return: 
     //      negative    -- failed.
     //      0           -- EoF
     //      positive    -- got frame
     virtual int decoder_decode_frame(AVFrame* frame, AVSubtitle* sub);
-
-    virtual void decoder_destroy();
-    virtual void decoder_abort(FrameQueue* fq);
-    virtual int decoder_start( int (*fn)(void*), const char* thread_name, void* arg);
 
     AVCodecContext* avctx; // take owner ship
     int pkt_serial;
@@ -301,7 +311,7 @@ public:
     AVRational start_pts_tb;
 
 protected:    
-    PacketQueue* queue; 
+    PacketQueue* queue;  // todo: 改用 packet_q
 
     AVPacket pending_pkt;
     int is_packet_pending;
@@ -310,12 +320,51 @@ protected:
     AVRational next_pts_tb;
 
     SimpleConditionVar* empty_queue_cond;  // just ref, dont take owner ship
+public:
+    FrameQueue  frame_q;        // 原 VideoState:: pictq/sampq/subpq
+    PacketQueue packet_q;       // 原 VideoState:: videoq/audioq/subtitleq
+    int         stream_id;      // 原 VideoState:: video_stream/audio_stream/subtitle_stream 
+    AVStream*   stream;         // 原 VideoState:: video_st/audio_st/subtitle_st
+    Clock       stream_clock;   // 原  VideoState:: vidclk/audclk/(null)
+};
+
+class VideoDecoder
+    :public Decoder
+{
+public:
+    typedef Decoder MyBase;
+    VideoDecoder(VideoState* vs)
+    {
+        _vs = vs;
+        img_convert_ctx = NULL;
+    }
+
+    double frame_timer;
+    double frame_last_returned_time;
+
+    struct SwsContext* img_convert_ctx;
+
+    virtual void decoder_destroy();
+
+protected:
+    VideoState* _vs;
 };
 
 class VideoState
     :public BaseThread //  stream reader thread 
 {
 public:
+    VideoState()
+        :viddec(this)
+    {
+        format_context = NULL;
+        eof = 0;
+        abort_request = 0;
+        paused = 0;
+        queue_attachments_req = 0;
+        seek_req = 0;
+    }
+
     int open(const char* filename, AVInputFormat* iformat);
     // 关闭VS，释放内部资源
     void close();
@@ -338,16 +387,16 @@ public:
     AVFormatContext * format_context;
 
     Clock audclk;
-    Clock vidclk;
+
     Clock extclk;
 
-    FrameQueue pictq;
+
     FrameQueue subpq;
     FrameQueue sampq;
 
-    Decoder auddec;
-    Decoder viddec;
-    Decoder subdec;
+    Decoder      auddec;
+    VideoDecoder viddec;
+    Decoder      subdec;
        
 
     int av_sync_type;
@@ -391,15 +440,7 @@ public:
     int subtitle_stream;
     AVStream *subtitle_st;
     PacketQueue subtitleq;
-
-    double frame_timer;
-    double frame_last_returned_time;
-    double frame_last_filter_delay;
-    int video_stream;
-    AVStream *video_st;
-    PacketQueue videoq;    
-    struct SwsContext *img_convert_ctx;
-    struct SwsContext *sub_convert_ctx;
+    struct SwsContext* sub_convert_ctx;
         
     int width, height, xleft, ytop;
 
