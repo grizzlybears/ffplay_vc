@@ -386,8 +386,8 @@ void Decoder::decoder_abort( FrameQueue* fq)
     this->queue->packet_queue_abort();
     fq->frame_queue_signal();
 
-    this->decoder_thread.wait_thread_quit();
-    this->decoder_thread.safe_cleanup();
+    this->BaseThread::wait_thread_quit();  
+    this->BaseThread::safe_cleanup();
 
     this->queue->packet_queue_flush();
 }
@@ -1607,7 +1607,7 @@ int audio_thread(void *arg)
 int Decoder::decoder_start( int (*fn)(void *), const char *thread_name, void* arg)
 {
     this->queue->packet_queue_start();
-    int i = this->decoder_thread.create_thread_with_cb(fn, thread_name, arg);
+    int i = this->BaseThread::create_thread_with_cb(fn, thread_name, arg);
     if (i) {
         return AVERROR(ENOMEM); // µ×²ãÒÑ¾­log
     }

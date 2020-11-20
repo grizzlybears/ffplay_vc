@@ -278,18 +278,20 @@ enum {
     AV_SYNC_EXTERNAL_CLOCK, /* synchronize to an external clock */
 };
 
-class Decoder {
+class Decoder 
+    :public BaseThread
+{
 public:
-    void decoder_init( AVCodecContext* avctx, PacketQueue* queue, SimpleConditionVar* empty_queue_cond);
+    virtual void decoder_init( AVCodecContext* avctx, PacketQueue* queue, SimpleConditionVar* empty_queue_cond);
     /// return: 
     //      negative    -- failed.
     //      0           -- EoF
     //      positive    -- got frame
-    int decoder_decode_frame(AVFrame* frame, AVSubtitle* sub);
+    virtual int decoder_decode_frame(AVFrame* frame, AVSubtitle* sub);
 
-    void decoder_destroy();
-    void decoder_abort(FrameQueue* fq);
-    int decoder_start( int (*fn)(void*), const char* thread_name, void* arg);
+    virtual void decoder_destroy();
+    virtual void decoder_abort(FrameQueue* fq);
+    virtual int decoder_start( int (*fn)(void*), const char* thread_name, void* arg);
 
     AVCodecContext* avctx; // take owner ship
     int pkt_serial;
@@ -308,7 +310,6 @@ protected:
     AVRational next_pts_tb;
 
     SimpleConditionVar* empty_queue_cond;  // just ref, dont take owner ship
-    BaseThread  decoder_thread;
 };
 
 class VideoState
@@ -347,11 +348,12 @@ public:
     Decoder auddec;
     Decoder viddec;
     Decoder subdec;
-
-    int audio_stream;
+       
 
     int av_sync_type;
+    double max_frame_duration;      // maximum duration of a frame - above this, we consider the jump a timestamp discontinuity
 
+    int audio_stream;
     double audio_clock;
     int audio_clock_serial;
     double audio_diff_cum; /* used for AV difference average computation */
@@ -395,13 +397,13 @@ public:
     double frame_last_filter_delay;
     int video_stream;
     AVStream *video_st;
-    PacketQueue videoq;
-    double max_frame_duration;      // maximum duration of a frame - above this, we consider the jump a timestamp discontinuity
+    PacketQueue videoq;    
     struct SwsContext *img_convert_ctx;
     struct SwsContext *sub_convert_ctx;
-    int eof;
         
     int width, height, xleft, ytop;
+
+    int eof;
     int step; // µ¥Ö¡Ä£Ê½
 
 
