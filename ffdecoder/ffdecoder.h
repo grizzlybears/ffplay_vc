@@ -511,10 +511,10 @@ extern int opt_infinite_buffer;
 extern const char * opt_audio_codec_name;
 extern const char * opt_subtitle_codec_name;
 extern const char * opt_video_codec_name;
-extern int64_t cursor_last_shown;
-extern int cursor_hidden ;
 
-extern int autorotate ;
+extern int64_t g_cursor_last_shown;  // todo: move to Render
+extern int g_cursor_hidden;
+
 extern int opt_full_screen;
 
 /* current context */
@@ -528,25 +528,6 @@ extern const struct TextureFormatEntry {
     enum AVPixelFormat format;
     int texture_fmt;
 } sdl_texture_format_map[];
-
-
-inline int cmp_audio_fmts(enum AVSampleFormat fmt1, int64_t channel_count1,
-                   enum AVSampleFormat fmt2, int64_t channel_count2)
-{
-    /* If channel count == 1, planar and non-planar formats are the same */
-    if (channel_count1 == 1 && channel_count2 == 1)
-        return av_get_packed_sample_fmt(fmt1) != av_get_packed_sample_fmt(fmt2);
-    else
-        return channel_count1 != channel_count2 || fmt1 != fmt2;
-}
-
-inline int64_t get_valid_channel_layout(int64_t channel_layout, int channels)
-{
-    if (channel_layout && av_get_channel_layout_nb_channels(channel_layout) == channels)
-        return channel_layout;
-    else
-        return 0;
-}
 
 
 class Render
@@ -695,9 +676,6 @@ int audio_open(void* opaque, int64_t wanted_channel_layout, int wanted_nb_channe
 int stream_has_enough_packets(AVStream* st, int stream_id, PacketQueue* queue); // todo: move to decoder
 
 int is_realtime(AVFormatContext* s);
-
-/* this thread gets the stream from the disk or the network */
-int read_thread(void* arg);
 
 void seek_chapter(VideoState* is, int incr);
 

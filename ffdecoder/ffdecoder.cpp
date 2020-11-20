@@ -53,10 +53,9 @@ const char * opt_input_filename;
  const char *opt_audio_codec_name;
  const char *opt_subtitle_codec_name;
  const char *opt_video_codec_name;
- int64_t cursor_last_shown;
- int cursor_hidden = 0;
-
- int autorotate = 1;
+ int64_t g_cursor_last_shown;
+ int g_cursor_hidden = 0;
+ 
  int opt_full_screen = 0;
 
 /* current context */
