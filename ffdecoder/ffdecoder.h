@@ -284,8 +284,9 @@ class Decoder
     :public BaseThread  //decoder thread
 {
 public:
-    Decoder()
+    Decoder(VideoState* vs)
     {
+        _vs = vs;
         stream_id = -1;
         stream = NULL;
         avctx = NULL;
@@ -311,6 +312,8 @@ public:
     AVRational start_pts_tb;
 
 protected:    
+    VideoState* _vs;
+
     PacketQueue* queue;  // todo: 改用 packet_q
 
     AVPacket pending_pkt;
@@ -325,7 +328,7 @@ public:
     PacketQueue packet_q;       // 原 VideoState:: videoq/audioq/subtitleq
     int         stream_id;      // 原 VideoState:: video_stream/audio_stream/subtitle_stream 
     AVStream*   stream;         // 原 VideoState:: video_st/audio_st/subtitle_st
-    Clock       stream_clock;   // 原  VideoState:: vidclk/audclk/(null)
+    Clock       stream_clock;   // 原 VideoState:: vidclk/audclk/(null)
 };
 
 class VideoDecoder
@@ -333,21 +336,30 @@ class VideoDecoder
 {
 public:
     typedef Decoder MyBase;
-    VideoDecoder(VideoState* vs)
+    VideoDecoder(VideoState* vs):MyBase(vs)
     {
-        _vs = vs;
         img_convert_ctx = NULL;
     }
 
     double frame_timer;
-    double frame_last_returned_time;
-
     struct SwsContext* img_convert_ctx;
 
     virtual void decoder_destroy();
+};
 
-protected:
-    VideoState* _vs;
+class SubtitleDecoder
+    :public Decoder
+{
+public:
+    typedef Decoder MyBase;
+    SubtitleDecoder(VideoState* vs) :MyBase(vs)
+    {
+        sub_convert_ctx = NULL;
+    }
+
+    struct SwsContext* sub_convert_ctx;
+    
+    virtual void decoder_destroy();
 };
 
 class VideoState
@@ -355,7 +367,7 @@ class VideoState
 {
 public:
     VideoState()
-        :viddec(this)
+        :auddec(this),viddec(this), subdec(this)
     {
         format_context = NULL;
         eof = 0;
@@ -387,16 +399,13 @@ public:
     AVFormatContext * format_context;
 
     Clock audclk;
-
     Clock extclk;
 
-
-    FrameQueue subpq;
     FrameQueue sampq;
 
-    Decoder      auddec;
-    VideoDecoder viddec;
-    Decoder      subdec;
+    Decoder         auddec;
+    VideoDecoder    viddec;
+    SubtitleDecoder subdec;
        
 
     int av_sync_type;
@@ -436,11 +445,6 @@ public:
     int frame_drops_late;
     SDL_Texture *sub_texture;   // 字幕图片
     SDL_Texture *vid_texture;   // 视频图片 //todo: 这些应该移到Render中去
-
-    int subtitle_stream;
-    AVStream *subtitle_st;
-    PacketQueue subtitleq;
-    struct SwsContext* sub_convert_ctx;
         
     int width, height, xleft, ytop;
 
