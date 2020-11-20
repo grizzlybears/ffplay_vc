@@ -24,8 +24,8 @@
  */
 
 #include "ffdecoder.h"
-extern "C"
-{
+
+extern "C" {
 #include "src/cmdutils.h"
 }
 
@@ -38,17 +38,16 @@ const char * opt_input_filename;
   
  int opt_audio_disable = 0;
  int opt_subtitle_disable = 0;
- float seek_interval = 10;
+ float opt_seek_interval = 10;
  int opt_alwaysontop = 0;
  int opt_startup_volume = 100;
  int opt_show_status = 0; //原来是 -1;
  int opt_av_sync_type = AV_SYNC_AUDIO_MASTER;
  int64_t opt_start_time = AV_NOPTS_VALUE;
  int64_t opt_duration = AV_NOPTS_VALUE;
- int genpts = 0;
  int decoder_reorder_pts = -1;
  int autoexit = 0;
-  int opt_framedrop = -1;
+ int opt_framedrop = -1;
  int opt_infinite_buffer = -1;
  
  const char *opt_audio_codec_name;
@@ -1067,8 +1066,6 @@ void do_exit(VideoState *is)
 
     g_render.safe_release();
     
-    uninit_opts();
-
     avformat_network_deinit();
     if (opt_show_status)
         printf("\n");
@@ -1990,7 +1987,6 @@ int VideoState::stream_component_open(int stream_index)
     AVCodecContext *avctx;  // created here, if everything ok, will be taken by 'Decoder's
     AVCodec *codec;
     const char *forced_codec_name = NULL;
-    AVDictionary *opts = NULL;
     AVDictionaryEntry *t = NULL;
     int sample_rate, nb_channels;
     int64_t channel_layout;
@@ -2027,18 +2023,8 @@ int VideoState::stream_component_open(int stream_index)
     }
 
     avctx->codec_id = codec->id;
-
-    opts = filter_codec_opts(codec_opts, avctx->codec_id, format_context, format_context->streams[stream_index], codec);
-    if (!av_dict_get(opts, "threads", NULL, 0))
-        av_dict_set(&opts, "threads", "auto", 0);
-    if (avctx->codec_type == AVMEDIA_TYPE_VIDEO || avctx->codec_type == AVMEDIA_TYPE_AUDIO)
-        av_dict_set(&opts, "refcounted_frames", "1", 0);
-    if ((ret = avcodec_open2(avctx, codec, &opts)) < 0) {
-        goto fail;
-    }
-    if ((t = av_dict_get(opts, "", NULL, AV_DICT_IGNORE_SUFFIX))) {
-        av_log(NULL, AV_LOG_ERROR, "Option %s not found.\n", t->key);
-        ret =  AVERROR_OPTION_NOT_FOUND;
+        
+    if ((ret = avcodec_open2(avctx, codec, NULL)) < 0) {
         goto fail;
     }
 
@@ -2105,8 +2091,7 @@ int VideoState::stream_component_open(int stream_index)
 fail:
     avcodec_free_context(&avctx);
 out:
-    av_dict_free(&opts);
-
+    
     return ret;
 }
 
@@ -2163,44 +2148,21 @@ int VideoState::open_stream_file()
     format_context->interrupt_callback.callback = decode_interrupt_cb;
     format_context->interrupt_callback.opaque = this;
 
-    int scan_all_pmts_set = 0;
-    if (!av_dict_get(format_opts, "scan_all_pmts", NULL, AV_DICT_MATCH_CASE)) {  // 命令行上，如果用户指定了格式，还可以配一些参数
-        av_dict_set(&format_opts, "scan_all_pmts", "1", AV_DICT_DONT_OVERWRITE);
-        scan_all_pmts_set = 1;
-    }
-    err = avformat_open_input(&format_context, this->filename, this->iformat, &format_opts);
+    err = avformat_open_input(&format_context, this->filename, this->iformat, NULL);
     if (err < 0) {
         print_error(this->filename, err);
         return -1;
     }
 
-    if (scan_all_pmts_set)
-        av_dict_set(&format_opts, "scan_all_pmts", NULL, AV_DICT_MATCH_CASE);
-    
-    AVDictionaryEntry* t;
-    if ((t = av_dict_get(format_opts, "", NULL, AV_DICT_IGNORE_SUFFIX))) {
-        av_log(NULL, AV_LOG_ERROR, "Option %s not found.\n", t->key);
-        return  AVERROR_OPTION_NOT_FOUND;
-    }
     this->format_context = format_context;
     guard.dismiss();
-
-    if (genpts)
-        format_context->flags |= AVFMT_FLAG_GENPTS;
 
     av_format_inject_global_side_data(format_context);
 
     unsigned int i;
     {
-        AVDictionary** opts = setup_find_stream_info_opts(format_context, codec_opts); // 'codec_opts' 命令行中codec相关选项
         unsigned int orig_nb_streams = format_context->nb_streams;
-
-        err = avformat_find_stream_info(format_context, opts);
-
-        for (i = 0; i < orig_nb_streams; i++)
-            av_dict_free(&opts[i]);
-        av_freep(&opts);
-
+        err = avformat_find_stream_info(format_context, NULL);
         if (err < 0) {
             av_log(NULL, AV_LOG_WARNING,
                 "%s: could not find codec parameters\n", this->filename);
@@ -2213,8 +2175,8 @@ int VideoState::open_stream_file()
 
     this->max_frame_duration = (format_context->iformat->flags & AVFMT_TS_DISCONT) ? 10.0 : 3600.0;
 
-    if (!g_window_title && (t = av_dict_get(format_context->metadata, "title", NULL, 0)))
-        g_window_title = av_asprintf("%s - %s", t->value, opt_input_filename);
+    if (!g_window_title )
+        g_window_title = av_asprintf("%s", opt_input_filename);
 
     /* if seeking requested, we execute it */
     if (opt_start_time != AV_NOPTS_VALUE) {
@@ -2678,4 +2640,3 @@ void seek_chapter(VideoState *is, int incr)
     stream_seek(is, av_rescale_q(is->format_context->chapters[i]->start, is->format_context->chapters[i]->time_base,
         time_base_q), 0, 0);
 }
-

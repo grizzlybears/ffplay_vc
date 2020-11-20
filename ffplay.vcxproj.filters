@@ -21,9 +21,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\cmdutils.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\ffplay.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -36,6 +33,9 @@
     <ClCompile Include="ffdecoder\ffdecoder.cpp">
       <Filter>ffdecoder</Filter>
     </ClCompile>
+    <ClCompile Include="src\cmdutils.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="utils\thread_utils.h">
@@ -46,6 +46,9 @@
     </ClInclude>
     <ClInclude Include="ffdecoder\ffdecoder.h">
       <Filter>ffdecoder</Filter>
+    </ClInclude>
+    <ClInclude Include="src\cmdutils.h">
+      <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

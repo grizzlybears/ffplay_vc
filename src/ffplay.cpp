@@ -26,11 +26,9 @@
 
 #include "ffdecoder/ffdecoder.h"
 
-extern "C"
-{
+extern "C" {
 #include "cmdutils.h"
 }
-
 #include <assert.h>
 
 #include "utils/utils.h"
@@ -126,10 +124,10 @@ void event_loop(VideoState *cur_stream)
                 seek_chapter(cur_stream, -1);
                 break;
             case SDLK_LEFT:
-                incr = seek_interval ? -seek_interval : -10.0;
+                incr = opt_seek_interval ? -opt_seek_interval : -10.0;
                 goto do_seek;
             case SDLK_RIGHT:
-                incr = seek_interval ? seek_interval : 10.0;
+                incr = opt_seek_interval ? opt_seek_interval : 10.0;
                 goto do_seek;
             case SDLK_UP:
                 incr = 60.0;
@@ -331,13 +329,12 @@ static const OptionDef options[] = {
     { "sn", OPT_BOOL, { &opt_subtitle_disable }, "disable subtitling" },
     { "ss", HAS_ARG, { .func_arg = opt_seek }, "seek to a given position in seconds", "pos" },
     { "t", HAS_ARG, { .func_arg = parse_opt_duration }, "play  \"duration\" seconds of audio/video", "duration" },
-    { "seek_interval", OPT_FLOAT | HAS_ARG, { &seek_interval }, "set seek interval for left/right keys, in seconds", "seconds" },
+    { "seek_interval", OPT_FLOAT | HAS_ARG, { &opt_seek_interval }, "set seek interval for left/right keys, in seconds", "seconds" },
     { "alwaysontop", OPT_BOOL, { &opt_alwaysontop }, "window always on top" },
     { "volume", OPT_INT | HAS_ARG, { &opt_startup_volume}, "set startup volume 0=min 100=max", "volume" },
     { "f", HAS_ARG, { .func_arg = opt_format }, "force format", "fmt" },
     { "pix_fmt", HAS_ARG | OPT_EXPERT | OPT_VIDEO, { .func_arg = opt_frame_pix_fmt }, "set pixel format", "format" },
     { "stats", OPT_BOOL | OPT_EXPERT, { &opt_show_status }, "show status", "" },
-    { "genpts", OPT_BOOL | OPT_EXPERT, { &genpts }, "generate pts", "" },
     { "drp", OPT_INT | HAS_ARG | OPT_EXPERT, { &decoder_reorder_pts }, "let decoder reorder pts 0=off 1=on -1=auto", ""},
     { "sync", HAS_ARG | OPT_EXPERT, { .func_arg = opt_sync }, "set audio-video sync. type (type=audio/video/ext)", "type" },
     { "autoexit", OPT_BOOL | OPT_EXPERT, { &autoexit }, "exit at the end", "" },

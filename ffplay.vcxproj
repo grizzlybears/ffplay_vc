@@ -159,6 +159,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ffdecoder\ffdecoder.h" />
+    <ClInclude Include="src\cmdutils.h" />
     <ClInclude Include="utils\thread_utils.h" />
     <ClInclude Include="utils\utils.h" />
   </ItemGroup>

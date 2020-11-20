@@ -447,15 +447,13 @@ extern int g_default_height ;
 
 extern int opt_audio_disable;
 extern int opt_subtitle_disable;
-extern int seek_by_bytes ;
-extern float seek_interval;
+extern float opt_seek_interval;
 extern int opt_alwaysontop;
 extern int opt_startup_volume ;
 extern int opt_show_status;
 extern int opt_av_sync_type;
 extern int64_t opt_start_time;  // 命令行 -ss ，由 av_parse_time 解析为 microseconds
 extern int64_t opt_duration;    // 命令行 -t  ，由 av_parse_time 解析为 microseconds
-extern int genpts ;
 extern int decoder_reorder_pts ;
 extern int autoexit;
 extern int opt_framedrop;
@@ -658,5 +656,4 @@ int is_realtime(AVFormatContext* s);
 int read_thread(void* arg);
 
 void seek_chapter(VideoState* is, int incr);
-
 
