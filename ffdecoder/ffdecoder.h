@@ -362,6 +362,44 @@ public:
     virtual void decoder_destroy();
 };
 
+class AudioDecoder
+    :public Decoder
+{
+public:
+    typedef Decoder MyBase;
+    AudioDecoder(VideoState* vs) :MyBase(vs)
+    {
+        audio_buf = audio_buf1 = NULL;
+        swr_ctx = NULL;        
+    }
+
+    virtual void decoder_destroy();
+
+    double audio_clock;
+    int audio_clock_serial;
+    double audio_diff_cum; /* used for AV difference average computation */
+    double audio_diff_avg_coef;
+    double audio_diff_threshold;
+    int audio_diff_avg_count;
+    int audio_hw_buf_size;
+    uint8_t* audio_buf;
+    uint8_t* audio_buf1;
+    unsigned int audio_buf_size; /* in bytes */
+    unsigned int audio_buf1_size;
+    int audio_buf_index; /* in bytes */
+    int audio_write_buf_size;
+    int audio_volume;
+    int muted;
+    struct AudioParams audio_src;
+    struct AudioParams audio_tgt;  // audio_open 返回，环境要求的audio params
+    struct SwrContext* swr_ctx;
+
+    int16_t sample_array[SAMPLE_ARRAY_SIZE];
+    int sample_array_index;
+    int last_i_start;
+    
+};
+
 class VideoState
     :public BaseThread //  stream reader thread 
 {
@@ -383,8 +421,7 @@ public:
     
     // called to display each frame 
     void video_refresh(double* remaining_time);
-
-    void stream_cycle_channel(int codec_type);
+        
 public:
     int abort_request;
     int force_refresh;
@@ -398,48 +435,14 @@ public:
     int read_pause_return;  // 'reader loop'中， 遇到'pause' req, av_read_pause 这个API的返回值
     AVFormatContext * format_context;
 
-    Clock audclk;
     Clock extclk;
 
-    FrameQueue sampq;
-
-    Decoder         auddec;
+    AudioDecoder    auddec;
     VideoDecoder    viddec;
     SubtitleDecoder subdec;
-       
 
     int av_sync_type;
     double max_frame_duration;      // maximum duration of a frame - above this, we consider the jump a timestamp discontinuity
-
-    int audio_stream;
-    double audio_clock;
-    int audio_clock_serial;
-    double audio_diff_cum; /* used for AV difference average computation */
-    double audio_diff_avg_coef;
-    double audio_diff_threshold;
-    int audio_diff_avg_count;
-    AVStream *audio_st;
-    PacketQueue audioq;
-    int audio_hw_buf_size;
-    uint8_t *audio_buf;
-    uint8_t *audio_buf1;
-    unsigned int audio_buf_size; /* in bytes */
-    unsigned int audio_buf1_size;
-    int audio_buf_index; /* in bytes */
-    int audio_write_buf_size;
-    int audio_volume;
-    int muted;
-    struct AudioParams audio_src;
-    struct AudioParams audio_tgt;  // audio_open 返回，环境要求的audio params
-    struct SwrContext *swr_ctx;
-
-    int16_t sample_array[SAMPLE_ARRAY_SIZE];
-    int sample_array_index;
-    int last_i_start;
-    RDFTContext *rdft;
-    int rdft_bits;
-    FFTSample *rdft_data;
-
 
     int frame_drops_early;
     int frame_drops_late;
@@ -451,7 +454,7 @@ public:
     int eof;
     int step; // 单帧模式
 
-
+    void stream_cycle_channel(int codec_type);   // 切換流
     int last_video_stream, last_audio_stream, last_subtitle_stream;
 
     SimpleConditionVar continue_read_thread;
@@ -460,7 +463,7 @@ protected:
     virtual unsigned run();  //  stream reader thread 
     static int decode_interrupt_cb(void* ctx);
 
-    AVInputFormat* iformat;   // 指定容器格式，ref only
+    AVInputFormat* iformat;   // 命令行指定容器格式，ref only
     char* filename; // 播放的文件 or url
     int realtime;   // 是否是实时流
     
@@ -501,14 +504,13 @@ extern int opt_show_status;
 extern int opt_av_sync_type;
 extern int64_t opt_start_time;  // 命令行 -ss ，由 av_parse_time 解析为 microseconds
 extern int64_t opt_duration;    // 命令行 -t  ，由 av_parse_time 解析为 microseconds
-extern int decoder_reorder_pts ;
-extern int autoexit;
+extern int opt_decoder_reorder_pts ;
+extern int opt_autoexit;
 extern int opt_framedrop;
 extern int opt_infinite_buffer;
 extern const char * opt_audio_codec_name;
 extern const char * opt_subtitle_codec_name;
 extern const char * opt_video_codec_name;
-extern double rdftspeed ;
 extern int64_t cursor_last_shown;
 extern int cursor_hidden ;
 
@@ -671,8 +673,6 @@ int video_thread(void* arg);
 
 int subtitle_thread(void* arg);
 
-/* copy samples for viewing in editor window */
-void update_sample_display(VideoState* is, short* samples, int samples_size);
 
 /* return the wanted number of samples to get better sync if sync_type is video
  * or external master clock */
@@ -692,12 +692,9 @@ void sdl_audio_callback(void* opaque, Uint8* stream, int len);
 
 int audio_open(void* opaque, int64_t wanted_channel_layout, int wanted_nb_channels, int wanted_sample_rate, struct AudioParams* audio_hw_params);
 
-
-
-int stream_has_enough_packets(AVStream* st, int stream_id, PacketQueue* queue);
+int stream_has_enough_packets(AVStream* st, int stream_id, PacketQueue* queue); // todo: move to decoder
 
 int is_realtime(AVFormatContext* s);
-
 
 /* this thread gets the stream from the disk or the network */
 int read_thread(void* arg);
