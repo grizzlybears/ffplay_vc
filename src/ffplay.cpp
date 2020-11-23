@@ -41,9 +41,9 @@ void refresh_loop_wait_event(VideoState *is, SDL_Event *event) {
     double remaining_time = 0.0;
     SDL_PumpEvents();
     while (!SDL_PeepEvents(event, 1, SDL_GETEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT)) {
-        if (!g_cursor_hidden && av_gettime_relative() - g_cursor_last_shown > CURSOR_HIDE_DELAY) {
+        if (!g_render.cursor_hidden && av_gettime_relative() - g_render.cursor_last_shown > CURSOR_HIDE_DELAY) {
             SDL_ShowCursor(0);
-            g_cursor_hidden = 1;
+            g_render.cursor_hidden = 1;
         }
         if (remaining_time > 0.0)
             av_usleep((int64_t)(remaining_time * 1000000.0));
@@ -161,11 +161,11 @@ void event_loop(VideoState *cur_stream)
                 }
             }
         case SDL_MOUSEMOTION:
-            if (g_cursor_hidden) {
+            if (g_render.cursor_hidden) {
                 SDL_ShowCursor(1);
-                g_cursor_hidden = 0;
+                g_render.cursor_hidden = 0;
             }
-            g_cursor_last_shown = av_gettime_relative();
+            g_render.cursor_last_shown = av_gettime_relative();
             if (event.type == SDL_MOUSEBUTTONDOWN) {
                 if (event.button.button != SDL_BUTTON_RIGHT)
                     break;
@@ -340,7 +340,6 @@ static const OptionDef options[] = {
     { "autoexit", OPT_BOOL | OPT_EXPERT, { &opt_autoexit }, "exit at the end", "" },
     { "framedrop", OPT_BOOL | OPT_EXPERT, { &opt_framedrop }, "drop frames when cpu is too slow", "" },
     { "infbuf", OPT_BOOL | OPT_EXPERT, { &opt_infinite_buffer }, "don't limit the input buffer size (useful with realtime streams)", "" },
-    { "window_title", OPT_STRING | HAS_ARG, { &g_window_title }, "set window title", "window title" },
     { "left", OPT_INT | HAS_ARG | OPT_EXPERT, { &g_render.screen_left }, "set the x position for the left of the window", "x pos" },
     { "top", OPT_INT | HAS_ARG | OPT_EXPERT, { &g_render.screen_top }, "set the y position for the top of the window", "y pos" },
     { "default", HAS_ARG | OPT_AUDIO | OPT_VIDEO | OPT_EXPERT, { .func_arg = opt_default }, "generic catch all option", "" },

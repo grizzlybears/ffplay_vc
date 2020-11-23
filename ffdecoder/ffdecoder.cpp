@@ -32,9 +32,6 @@ extern "C" {
 /* options specified by the user */
 AVInputFormat * opt_file_iformat;
 const char * opt_input_filename;
- const char * g_window_title;
- int g_default_width  = 640;
- int g_default_height = 480;
   
  int opt_audio_disable = 0;
  int opt_subtitle_disable = 0;
@@ -53,10 +50,7 @@ const char * opt_input_filename;
  const char *opt_audio_codec_name;
  const char *opt_subtitle_codec_name;
  const char *opt_video_codec_name;
- int64_t g_cursor_last_shown;
- int g_cursor_hidden = 0;
- 
- int opt_full_screen = 0;
+  int opt_full_screen = 0;
 
 /* current context */
  
@@ -606,10 +600,23 @@ int Render::init(int audio_disable, int alwaysontop)
     cw_flags |= SDL_WINDOW_RESIZABLE;
 
     if (this->create_window(g_program_name
-        , SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, g_default_width, g_default_height
+        , SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, this->screen_width, this->screen_height
         , cw_flags))
     {
         return 3;
+    }
+
+    int default_display = 0;
+    SDL_DisplayMode dm;
+    if (SDL_GetDesktopDisplayMode(default_display, &dm))
+    {
+        av_log(NULL, AV_LOG_WARNING, "Failed in SDL_GetDesktopDisplayMode . LE = %s\n", SDL_GetError());
+    }
+    else
+    {
+        this->screen_width = dm.w;
+        this->screen_height =dm.h;
+
     }
 
     return 0;
@@ -726,8 +733,8 @@ void Render::set_default_window_size(int width, int height, AVRational sar)
     
     calculate_display_rect(&rect, 0, 0, max_width, max_height, width, height, sar);
     
-    g_default_width = rect.w;
-    g_default_height = rect.h;
+    g_render.screen_width  = rect.w;
+    g_render.screen_height = rect.h;
 }
 
 int Render::realloc_texture(SDL_Texture **texture, Uint32 new_format, int new_width, int new_height, SDL_BlendMode blendmode, int init_texture)
@@ -762,18 +769,28 @@ void calculate_display_rect(SDL_Rect *rect,
     AVRational aspect_ratio = pic_sar;
     int64_t width, height, x, y;
 
-    if (av_cmp_q(aspect_ratio, av_make_q(0, 1)) <= 0)
-        aspect_ratio = av_make_q(1, 1);
-
-    aspect_ratio = av_mul_q(aspect_ratio, av_make_q(pic_width, pic_height));
-
-    /* XXX: we suppose the screen has a 1.0 pixel ratio */
-    height = scr_height;
-    width = av_rescale(height, aspect_ratio.num, aspect_ratio.den) & ~1;
-    if (width > scr_width) {
-        width = scr_width;
-        height = av_rescale(width, aspect_ratio.den, aspect_ratio.num) & ~1;
+    if (scr_width >= pic_width && scr_height >= pic_height)
+    {
+        // don't enlarge
+        width = pic_width;
+        height = pic_height;
     }
+    else
+    {
+        if (av_cmp_q(aspect_ratio, av_make_q(0, 1)) <= 0)
+            aspect_ratio = av_make_q(1, 1);
+
+        aspect_ratio = av_mul_q(aspect_ratio, av_make_q(pic_width, pic_height));
+
+        /* XXX: we suppose the screen has a 1.0 pixel ratio */
+        height = scr_height;
+        width = av_rescale(height, aspect_ratio.num, aspect_ratio.den) & ~1;
+        if (width > scr_width) {
+            width = scr_width;
+            height = av_rescale(width, aspect_ratio.den, aspect_ratio.num) & ~1;
+        }
+    }
+
     x = (scr_width - width) / 2;
     y = (scr_height - height) / 2;
     rect->x = (int)(scr_xleft + x);
@@ -1085,18 +1102,15 @@ void sigterm_handler(int sig)
 
 int video_open(VideoState *is)
 {
-    int w,h;
+    if ("" == g_render.window_title)
+    {
+        g_render.window_title = opt_input_filename;
+    }
 
-    w = g_render.screen_width ? g_render.screen_width : g_default_width;
-    h = g_render.screen_height ? g_render.screen_height : g_default_height;
-
-    if (!g_window_title)
-        g_window_title = opt_input_filename;
-
-    g_render.show_window(g_window_title, w, h, g_render.screen_left, g_render.screen_top, opt_full_screen);
+    g_render.show_window(g_render.window_title.GetString(), g_render.screen_width, g_render.screen_height, g_render.screen_left, g_render.screen_top, opt_full_screen);
     
-    is->width  = w;
-    is->height = h;
+    is->width  = g_render.screen_width;
+    is->height = g_render.screen_height;
 
     return 0;
 }
@@ -2160,9 +2174,6 @@ int VideoState::open_stream_file()
         format_context->pb->eof_reached = 0; // FIXME hack, ffplay maybe should not use avio_feof() to test for the end
 
     this->max_frame_duration = (format_context->iformat->flags & AVFMT_TS_DISCONT) ? 10.0 : 3600.0;
-
-    if (!g_window_title )
-        g_window_title = av_asprintf("%s", opt_input_filename);
 
     /* if seeking requested, we execute it */
     if (opt_start_time != AV_NOPTS_VALUE) {

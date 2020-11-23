@@ -491,10 +491,6 @@ protected:
 /* options specified by the user */
 extern AVInputFormat * opt_file_iformat;
 extern const char * opt_input_filename;
-extern const char * g_window_title;
-extern int g_default_width  ;
-extern int g_default_height ;
-
 extern int opt_audio_disable;
 extern int opt_subtitle_disable;
 extern float opt_seek_interval;
@@ -512,8 +508,7 @@ extern const char * opt_audio_codec_name;
 extern const char * opt_subtitle_codec_name;
 extern const char * opt_video_codec_name;
 
-extern int64_t g_cursor_last_shown;  // todo: move to Render
-extern int g_cursor_hidden;
+
 
 extern int opt_full_screen;
 
@@ -542,6 +537,11 @@ public:
     int screen_height;
     int screen_left;
     int screen_top;
+    
+    int64_t cursor_last_shown; 
+    int cursor_hidden;
+
+    CString window_title;
     Render()
     {
         window = NULL;
@@ -549,12 +549,13 @@ public:
         audio_dev = 0;
         renderer_info = { 0 };
 
-        screen_width = 0;
-        screen_height = 0;
-        fullscreen = 0;
-
+        screen_width = 640; //default value
+        screen_height = 480;//default value
         screen_left = SDL_WINDOWPOS_CENTERED;
         screen_top = SDL_WINDOWPOS_CENTERED;
+
+        fullscreen = 0;
+        cursor_hidden = 0;
     }
 
     ~Render()
