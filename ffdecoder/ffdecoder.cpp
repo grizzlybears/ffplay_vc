@@ -242,11 +242,14 @@ int PacketQueue::packet_queue_get( AVPacket *pkt, int block, /*out*/ int *serial
 
 
 //     decoder section {{{
-void Decoder::decoder_init( AVCodecContext *avctx, PacketQueue *queue, SimpleConditionVar* empty_queue_cond)
+void Decoder::decoder_init( AVCodecContext *avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond)
 {
     //memset(d, 0, sizeof(Decoder));
     this->avctx = avctx;
-    this->queue = queue;
+    this->stream_id = stream_id;
+    this->stream = stream;
+
+    this->queue = &packet_q;
     this->empty_queue_cond = empty_queue_cond;
     this->start_pts = AV_NOPTS_VALUE;
     this->pkt_serial = -1;
@@ -377,6 +380,13 @@ void Decoder::decoder_abort( FrameQueue* fq)
     this->BaseThread::safe_cleanup();
 
     this->queue->packet_queue_flush();
+}
+
+void VideoDecoder::decoder_init(AVCodecContext* avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond)
+{
+    MyBase::decoder_init(avctx, stream_id,  stream, empty_queue_cond);
+    packet_q.packet_queue_start();
+    create_thread();
 }
 
 void VideoDecoder::decoder_destroy() {
@@ -1505,7 +1515,7 @@ void print_stream_status(VideoState* is)
     last_time = cur_time;    
 }
 
-int queue_picture(VideoState *is, AVFrame *src_frame, double pts, double duration, int64_t pos, int serial)
+int VideoDecoder::queue_picture( AVFrame *src_frame, double pts, double duration, int64_t pos, int serial)
 {
     Frame *vp;
 
@@ -1514,7 +1524,7 @@ int queue_picture(VideoState *is, AVFrame *src_frame, double pts, double duratio
            av_get_picture_type_char(src_frame->pict_type), pts);
 #endif
 
-    if (!(vp = is->viddec.frame_q.frame_queue_peek_writable()))
+    if (!(vp = frame_q.frame_queue_peek_writable()))
         return -1;
 
     vp->sar = src_frame->sample_aspect_ratio;
@@ -1532,15 +1542,15 @@ int queue_picture(VideoState *is, AVFrame *src_frame, double pts, double duratio
     g_render.set_default_window_size(vp->width, vp->height, vp->sar);
 
     av_frame_move_ref(vp->frame, src_frame);
-    is->viddec.frame_q.frame_queue_push();
+    frame_q.frame_queue_push();
     return 0;
 }
 
-int get_video_frame(VideoState *is, AVFrame *frame)
+int VideoDecoder::get_video_frame( AVFrame *frame)
 {
     int got_picture;
 
-    if ((got_picture = is->viddec.decoder_decode_frame( frame, NULL)) < 0)
+    if ((got_picture = decoder_decode_frame( frame, NULL)) < 0)
         return -1;
 
     if (!got_picture)
@@ -1548,25 +1558,24 @@ int get_video_frame(VideoState *is, AVFrame *frame)
         return 0;
     }
     
-    
     double dpts = NAN;
 
     if (frame->pts != AV_NOPTS_VALUE)
-        dpts = av_q2d(is->viddec.stream->time_base) * frame->pts;
+        dpts = av_q2d(stream->time_base) * frame->pts;
 
-    frame->sample_aspect_ratio = av_guess_sample_aspect_ratio(is->format_context, is->viddec.stream, frame);
+    frame->sample_aspect_ratio = av_guess_sample_aspect_ratio(this->_vs->format_context, stream, frame);
 
-    if (opt_framedrop >0 || (opt_framedrop && get_master_sync_type(is) != AV_SYNC_VIDEO_MASTER)) {
+    if (opt_framedrop >0 || (opt_framedrop && get_master_sync_type(this->_vs) != AV_SYNC_VIDEO_MASTER)) {
         // 看看是否有必要抛弃帧
         if (frame->pts != AV_NOPTS_VALUE) {
-            double diff = dpts - get_master_clock(is);
+            double diff = dpts - get_master_clock(this->_vs);
             if (!isnan(diff) && fabs(diff) < AV_NOSYNC_THRESHOLD &&
                 diff < 0 &&
-                is->viddec.pkt_serial == is->viddec.stream_clock.serial &&
-                is->viddec.packet_q.nb_packets) 
+                pkt_serial == stream_clock.serial &&
+                packet_q.nb_packets) 
             {
                 // 抛弃帧
-                is->frame_drops_early++;
+                this->_vs->frame_drops_early++;
                 av_frame_unref(frame);
                 got_picture = 0;
             }
@@ -1635,22 +1644,28 @@ int Decoder::decoder_start( int (*fn)(void *), const char *thread_name, void* ar
     return 0;
 }
 
-int video_thread(void *arg)
+int Decoder::stream_has_enough_packets() {
+    return stream_id < 0 ||
+        packet_q.abort_request ||
+        (stream->disposition & AV_DISPOSITION_ATTACHED_PIC) ||
+        packet_q.nb_packets > MIN_FRAMES && (!packet_q.duration || av_q2d(stream->time_base) * packet_q.duration > 1.0
+            );
+}
+
+unsigned int VideoDecoder::run()
 {
-    VideoState *is = (VideoState*)arg;
     AVFrame *frame = av_frame_alloc();
     double pts;
     double duration;
     int ret;
-    AVRational tb = is->viddec.stream->time_base;
-    AVRational frame_rate = av_guess_frame_rate(is->format_context, is->viddec.stream, NULL);
-
+    AVRational tb = this->stream->time_base;
+    AVRational frame_rate = av_guess_frame_rate(this->_vs->format_context, this->stream, NULL);
 
     if (!frame)
         return AVERROR(ENOMEM);
 
     for (;;) {
-        ret = get_video_frame(is, frame);
+        ret = get_video_frame( frame);
         if (ret < 0)
             goto the_end;
         if (!ret)
@@ -1659,7 +1674,7 @@ int video_thread(void *arg)
             AVRational szr_dur = { frame_rate.den, frame_rate.num };
             duration = (frame_rate.num && frame_rate.den ? av_q2d(szr_dur) : 0);
             pts = (frame->pts == AV_NOPTS_VALUE) ? NAN : frame->pts * av_q2d(tb);
-            ret = queue_picture(is, frame, pts, duration, frame->pkt_pos, is->viddec.pkt_serial);
+            ret = queue_picture( frame, pts, duration, frame->pkt_pos, pkt_serial);
             av_frame_unref(frame);
 
         if (ret < 0)
@@ -1912,7 +1927,7 @@ void sdl_audio_callback(void *opaque, Uint8 *stream, int len)
     }
 }
 
-int audio_open(void *opaque, int64_t wanted_channel_layout, int wanted_nb_channels, int wanted_sample_rate, struct AudioParams *audio_hw_params)
+int AudioDecoder::audio_open(void *opaque, int64_t wanted_channel_layout, int wanted_nb_channels, int wanted_sample_rate, struct AudioParams *audio_hw_params)
 {
     SDL_AudioSpec wanted_spec, spec;
     const char *env;
@@ -2041,7 +2056,7 @@ int VideoState::stream_component_open(int stream_index)
         channel_layout = avctx->channel_layout;
 
         /* prepare audio output */
-        if ((ret = audio_open(this, channel_layout, nb_channels, sample_rate, &this->auddec.audio_tgt)) < 0)
+        if ((ret = AudioDecoder::audio_open(this, channel_layout, nb_channels, sample_rate, &this->auddec.audio_tgt)) < 0)
             goto fail;
         this->auddec.audio_hw_buf_size = ret;
         this->auddec.audio_src = this->auddec.audio_tgt;
@@ -2054,11 +2069,8 @@ int VideoState::stream_component_open(int stream_index)
         /* since we do not have a precise anough audio FIFO fullness,
            we correct audio sync only if larger than this threshold */
         this->auddec.audio_diff_threshold = (double)(this->auddec.audio_hw_buf_size) / this->auddec.audio_tgt.bytes_per_sec;
-
-        this->auddec.stream_id = stream_index;
-        this->auddec.stream = format_context->streams[stream_index];
-
-        this->auddec.decoder_init(avctx, &this->auddec.packet_q, &this->continue_read_thread);
+                
+        this->auddec.decoder_init(avctx, stream_index , format_context->streams[stream_index], &this->continue_read_thread);
         if ((this->format_context->iformat->flags & (AVFMT_NOBINSEARCH | AVFMT_NOGENSEARCH | AVFMT_NO_BYTE_SEEK)) 
             && !this->format_context->iformat->read_seek)
         {
@@ -2070,19 +2082,12 @@ int VideoState::stream_component_open(int stream_index)
         SDL_PauseAudioDevice(g_render.audio_dev, 0);
         break;
     case AVMEDIA_TYPE_VIDEO:  // todo: move to VideoDecoder
-        this->viddec.stream_id = stream_index;
-        this->viddec.stream = this->format_context->streams[stream_index];
-
-        this->viddec.decoder_init( avctx, &this->viddec.packet_q , &this->continue_read_thread);
-        if ((ret = this->viddec.decoder_start(video_thread, "video_decoder", this)) < 0)
-            goto out;
+        this->viddec.decoder_init( avctx, stream_index, format_context->streams[stream_index], &this->continue_read_thread);        
         this->queue_attachments_req = 1;
         break;
     case AVMEDIA_TYPE_SUBTITLE: // todo: move to SubtitleDecoder
-        this->subdec.stream_id = stream_index;
-        this->subdec.stream = this->format_context->streams[stream_index];
 
-        this->subdec.decoder_init( avctx, &this->subdec.packet_q, &this->continue_read_thread);
+        this->subdec.decoder_init( avctx, stream_index, format_context->streams[stream_index], &this->continue_read_thread);
         if ((ret = this->subdec.decoder_start(subtitle_thread, "subtitle_decoder", this)) < 0)
             goto out;
         break;
@@ -2102,13 +2107,6 @@ int VideoState::decode_interrupt_cb(void *ctx)
 {
     VideoState *is = (VideoState*)ctx;
     return is->abort_request;
-}
-
-int stream_has_enough_packets(AVStream *st, int stream_id, PacketQueue *queue) {
-    return stream_id < 0 ||
-           queue->abort_request ||
-           (st->disposition & AV_DISPOSITION_ATTACHED_PIC) ||
-           queue->nb_packets > MIN_FRAMES && (!queue->duration || av_q2d(st->time_base) * queue->duration > 1.0);
 }
 
 int is_realtime(AVFormatContext *s)
@@ -2386,9 +2384,9 @@ unsigned VideoState::run()
         /* if the queue are full, no need to read more */
         if (opt_infinite_buffer <1 &&
               (this->auddec.packet_q.size + this->viddec.packet_q.size + this->subdec.packet_q.size > MAX_QUEUE_SIZE
-            || (stream_has_enough_packets(this->auddec.stream, this->auddec.stream_id, &this->auddec.packet_q) &&
-                stream_has_enough_packets(this->viddec.stream, this->viddec.stream_id, &this->viddec.packet_q) &&
-                stream_has_enough_packets(this->subdec.stream, this->subdec.stream_id, &this->subdec.packet_q))))
+            || (this->auddec.stream_has_enough_packets() &&
+                this->viddec.stream_has_enough_packets() &&
+                this->subdec.stream_has_enough_packets())))
         {
             /* wait 10 ms */
             this->continue_read_thread.timed_wait(10);

@@ -292,11 +292,14 @@ public:
         avctx = NULL;
     }
     virtual ~Decoder() {}
-    virtual void decoder_init( AVCodecContext* avctx, PacketQueue* queue, SimpleConditionVar* empty_queue_cond); //todo:  queue 已经搬进this
+    virtual void decoder_init( AVCodecContext* avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond);
     virtual void decoder_destroy();
 
     virtual int decoder_start(int (*fn)(void*), const char* thread_name, void* arg); //启动decoder thread.  todo: thread func 应该用 BaseThread::run
     virtual void decoder_abort(FrameQueue* fq);  // 指示decoder thread 退出，并等待其退出. todo:  fq 已经搬进this
+
+
+    int stream_has_enough_packets(); 
 
     /// return: 
     //      negative    -- failed.
@@ -343,8 +346,14 @@ public:
 
     double frame_timer;
     struct SwsContext* img_convert_ctx;
-
+    virtual void decoder_init(AVCodecContext* avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond);
     virtual void decoder_destroy();
+
+    virtual unsigned run();  // BaseThread method 
+
+    int get_video_frame( AVFrame* frame);
+    int queue_picture(AVFrame* src_frame, double pts, double duration, int64_t pos, int serial);
+
 };
 
 class SubtitleDecoder
@@ -397,7 +406,9 @@ public:
     int16_t sample_array[SAMPLE_ARRAY_SIZE];
     int sample_array_index;
     int last_i_start;
-    
+
+    static int audio_open(void* opaque, int64_t wanted_channel_layout, int wanted_nb_channels, int wanted_sample_rate, struct AudioParams* audio_hw_params);
+
 };
 
 class VideoState
@@ -507,17 +518,12 @@ extern int opt_infinite_buffer;
 extern const char * opt_audio_codec_name;
 extern const char * opt_subtitle_codec_name;
 extern const char * opt_video_codec_name;
-
-
-
 extern int opt_full_screen;
 
 /* current context */
 extern int64_t audio_callback_time;
 
-
 #define FF_QUIT_EVENT    (SDL_USEREVENT + 2)
-
 
 extern const struct TextureFormatEntry {
     enum AVPixelFormat format;
@@ -606,7 +612,6 @@ inline int compute_mod(int a, int b)
 //  }}} render section 
 
 
-
 void do_exit(VideoState* is);
 void sigterm_handler(int sig);
 
@@ -619,8 +624,6 @@ int get_master_sync_type(VideoState* is);
 /* get the current master clock value */
 double get_master_clock(VideoState* is);
 void check_external_clock_speed(VideoState* is);
-
-
 
 /* seek in the stream */
 void stream_seek(VideoState* is, int64_t pos, int64_t rel, int seek_by_bytes);
@@ -644,14 +647,8 @@ void update_video_pts(VideoState* is, double pts, int64_t pos, int serial);
 
 void print_stream_status(VideoState* is);
 
-int queue_picture(VideoState* is, AVFrame* src_frame, double pts, double duration, int64_t pos, int serial);
-
-int get_video_frame(VideoState* is, AVFrame* frame);
-
 
 int audio_thread(void* arg);
-
-int video_thread(void* arg);
 
 int subtitle_thread(void* arg);
 
@@ -671,10 +668,6 @@ int audio_decode_frame(VideoState* is);
 
 /* prepare a new audio buffer */
 void sdl_audio_callback(void* opaque, Uint8* stream, int len);
-
-int audio_open(void* opaque, int64_t wanted_channel_layout, int wanted_nb_channels, int wanted_sample_rate, struct AudioParams* audio_hw_params);
-
-int stream_has_enough_packets(AVStream* st, int stream_id, PacketQueue* queue); // todo: move to decoder
 
 int is_realtime(AVFormatContext* s);
 
