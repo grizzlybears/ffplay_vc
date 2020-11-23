@@ -295,7 +295,7 @@ public:
     virtual void decoder_init( AVCodecContext* avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond);
     virtual void decoder_destroy();
 
-    virtual int decoder_start(int (*fn)(void*), const char* thread_name, void* arg); //启动decoder thread.  todo: thread func 应该用 BaseThread::run
+    virtual int decoder_start(); //启动decoder thread. 
     virtual void decoder_abort(FrameQueue* fq);  // 指示decoder thread 退出，并等待其退出. todo:  fq 已经搬进this
 
 
@@ -367,7 +367,9 @@ public:
     }
 
     struct SwsContext* sub_convert_ctx;
-    
+    virtual void decoder_init(AVCodecContext* avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond);
+    virtual unsigned run();  // BaseThread method 
+
     virtual void decoder_destroy();
 };
 
@@ -379,9 +381,11 @@ public:
     AudioDecoder(VideoState* vs) :MyBase(vs)
     {
         audio_buf = audio_buf1 = NULL;
-        swr_ctx = NULL;        
+        swr_ctx = NULL;   
+        audio_callback_time = 0;
     }
-
+    virtual void decoder_init(AVCodecContext* avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond);
+    virtual unsigned run();  // BaseThread method 
     virtual void decoder_destroy();
 
     double audio_clock;
@@ -407,7 +411,24 @@ public:
     int sample_array_index;
     int last_i_start;
 
+    /* current context */
+    int64_t audio_callback_time;
+
     static int audio_open(void* opaque, int64_t wanted_channel_layout, int wanted_nb_channels, int wanted_sample_rate, struct AudioParams* audio_hw_params);
+    /* prepare a new audio buffer */
+    static void sdl_audio_callback(void* opaque, Uint8* stream, int len);
+
+    void handle_sdl_audio_cb(Uint8* stream, int len);
+    
+    /**
+     * Decode one audio frame and return its uncompressed size.
+     *
+     * The processed audio frame is decoded, converted if required, and
+     * stored in this->audio_buf, with size in bytes given by the return
+     * value.
+     */
+    int audio_decode_frame();
+
 
 };
 
@@ -520,8 +541,7 @@ extern const char * opt_subtitle_codec_name;
 extern const char * opt_video_codec_name;
 extern int opt_full_screen;
 
-/* current context */
-extern int64_t audio_callback_time;
+
 
 #define FF_QUIT_EVENT    (SDL_USEREVENT + 2)
 
@@ -648,26 +668,11 @@ void update_video_pts(VideoState* is, double pts, int64_t pos, int serial);
 void print_stream_status(VideoState* is);
 
 
-int audio_thread(void* arg);
-
-int subtitle_thread(void* arg);
-
-
 /* return the wanted number of samples to get better sync if sync_type is video
  * or external master clock */
 int synchronize_audio(VideoState* is, int nb_samples);
 
-/**
- * Decode one audio frame and return its uncompressed size.
- *
- * The processed audio frame is decoded, converted if required, and
- * stored in is->audio_buf, with size in bytes given by the return
- * value.
- */
-int audio_decode_frame(VideoState* is);
 
-/* prepare a new audio buffer */
-void sdl_audio_callback(void* opaque, Uint8* stream, int len);
 
 int is_realtime(AVFormatContext* s);
 
