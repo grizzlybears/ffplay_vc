@@ -46,10 +46,8 @@ const char * opt_input_filename;
  int opt_autoexit = 0;
  int opt_framedrop = -1;
  int opt_infinite_buffer = -1;
- 
- const char *opt_audio_codec_name;
- const char *opt_subtitle_codec_name;
- const char *opt_video_codec_name;
+
+
   int opt_full_screen = 0;
 
 
@@ -236,20 +234,56 @@ int PacketQueue::packet_queue_get( AVPacket *pkt, int block, /*out*/ int *serial
 
 ///////////// }}} packet_queue section
 
+void AutoReleasePtr<AVCodecContext>::release()
+{
+    if (!me)
+        return;
 
+    avcodec_free_context(&me);
+    me = NULL;
+}
 
 //     decoder section {{{
-void Decoder::decoder_init( AVCodecContext *avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond)
+AVCodecContext* Decoder::create_codec(AVFormatContext* format_context, int stream_id)
 {
-    //memset(d, 0, sizeof(Decoder));
+    AVCodecContext* avctx = avcodec_alloc_context3(NULL);
+    if (!avctx)
+        return NULL;
+
+    AutoReleasePtr<AVCodecContext> guard(avctx);
+
+    int ret = avcodec_parameters_to_context(avctx, format_context->streams[stream_id]->codecpar);
+    if (ret < 0)
+        return NULL;
+    avctx->pkt_timebase = format_context->streams[stream_id]->time_base;
+
+    AVCodec* codec = avcodec_find_decoder(avctx->codec_id);
+    if (!codec) {
+        av_log(NULL, AV_LOG_WARNING,
+            "No decoder could be found for codec %s\n", avcodec_get_name(avctx->codec_id));
+        return NULL;
+    }
+    avctx->codec_id = codec->id;
+    if ((ret = avcodec_open2(avctx, codec, NULL)) < 0) {
+        av_log(NULL, AV_LOG_WARNING, "Failed to open  codec %d(%s), LE = %d\n", codec->id, avcodec_get_name(codec->id), ret);
+        return NULL;
+    }
+
+    guard.dismiss();
+    return avctx;
+}
+
+int Decoder::decoder_init( AVCodecContext *avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond)
+{
     this->avctx = avctx;
     this->stream_id = stream_id;
     this->stream = stream;
-
-    this->queue = &packet_q;
+    
     this->empty_queue_cond = empty_queue_cond;
     this->start_pts = AV_NOPTS_VALUE;
     this->pkt_serial = -1;
+
+    return 0;
 }
 
 int Decoder::decoder_decode_frame(AVFrame *frame, AVSubtitle *sub) {
@@ -257,9 +291,9 @@ int Decoder::decoder_decode_frame(AVFrame *frame, AVSubtitle *sub) {
 
     for (;;) {
         
-        if (this->queue->serial == this->pkt_serial) {
+        if (this->packet_q.serial == this->pkt_serial) {
             do {
-                if (this->queue->abort_request)
+                if (this->packet_q.abort_request)
                     return -1;
 
                 // 在音视频流中顺序解码
@@ -303,17 +337,17 @@ int Decoder::decoder_decode_frame(AVFrame *frame, AVSubtitle *sub) {
 
         AVPacket pkt;
         do {
-            if (this->queue->nb_packets == 0)
+            if (this->packet_q.nb_packets == 0)
                 this->empty_queue_cond->wake();
                 
             if (this->is_packet_pending) {
                 av_packet_move_ref(&pkt, &this->pending_pkt);
                 this->is_packet_pending = 0;
             } else {
-                if (this->queue->packet_queue_get( &pkt, 1 /*block until get*/, &this->pkt_serial) < 0)
+                if (this->packet_q.packet_queue_get( &pkt, 1 /*block until get*/, &this->pkt_serial) < 0)
                     return -1;
             }
-            if (this->queue->serial == this->pkt_serial)
+            if (this->packet_q.serial == this->pkt_serial)
                 break;
             av_packet_unref(&pkt);
         } while (1);
@@ -370,19 +404,28 @@ void Decoder::decoder_destroy() {
 
 void Decoder::decoder_abort( FrameQueue* fq)
 {
-    this->queue->packet_queue_abort();
+    this->packet_q.packet_queue_abort();
     fq->frame_queue_signal();
 
     this->BaseThread::wait_thread_quit();  
     this->BaseThread::safe_cleanup();
 
-    this->queue->packet_queue_flush();
+    this->packet_q.packet_queue_flush();
 }
 
-void VideoDecoder::decoder_init(AVCodecContext* avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond)
+int VideoDecoder::decoder_init(AVCodecContext* avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond)
 {
-    MyBase::decoder_init(avctx, stream_id,  stream, empty_queue_cond);
-    decoder_start();
+    if (MyBase::decoder_init(avctx, stream_id, stream, empty_queue_cond))
+    {
+        return 1;
+    }
+    
+    if (decoder_start())
+    {
+        return 2;
+    }
+
+    return 0;
 }
 
 void VideoDecoder::decoder_destroy() {
@@ -395,9 +438,12 @@ void VideoDecoder::decoder_destroy() {
     }
 }
 
-void AudioDecoder::decoder_init(AVCodecContext* avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond)
+int AudioDecoder::decoder_init(AVCodecContext* avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond)
 {
-    MyBase::decoder_init(avctx, stream_id, stream, empty_queue_cond);
+    if (MyBase::decoder_init(avctx, stream_id, stream, empty_queue_cond))
+    {
+        return 1;
+    }
     int sample_rate, nb_channels;
     int64_t channel_layout;
 
@@ -407,7 +453,7 @@ void AudioDecoder::decoder_init(AVCodecContext* avctx, int stream_id, AVStream* 
     int ret;
     /* prepare audio output */
     if ((ret = AudioDecoder::audio_open(this, channel_layout, nb_channels, sample_rate, &this->audio_tgt)) < 0)
-        goto fail;  // todo: decoder_init 需要能返回失敗
+        return 3;  
 
     this->audio_hw_buf_size = ret;
     this->audio_src = this->audio_tgt;
@@ -430,9 +476,13 @@ void AudioDecoder::decoder_init(AVCodecContext* avctx, int stream_id, AVStream* 
 
     SDL_PauseAudioDevice(g_render.audio_dev, 0);
     
-    decoder_start();
-fail:
-    LOG_ERROR("failed.\n");
+    if (decoder_start())
+    {
+        return 2;
+    }
+
+    return 0;
+
 }
 
 void AudioDecoder::decoder_destroy() {
@@ -454,10 +504,17 @@ void AudioDecoder::decoder_destroy() {
         
     this->audio_buf = NULL;
 }
-void SubtitleDecoder::decoder_init(AVCodecContext* avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond)
+int SubtitleDecoder::decoder_init(AVCodecContext* avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond)
 {
-    MyBase::decoder_init(avctx, stream_id, stream, empty_queue_cond);
-    decoder_start();
+    if (MyBase::decoder_init(avctx, stream_id, stream, empty_queue_cond))
+    {
+        return 1;
+    }
+    if (decoder_start())
+    {
+        return 2;
+    }
+    return 0;
 }
 
 void SubtitleDecoder::decoder_destroy() {
@@ -1664,7 +1721,7 @@ unsigned int AudioDecoder::run()
 int Decoder::decoder_start()
 {
     packet_q.packet_queue_start();
-    create_thread();
+    create_thread(); // todo: 统一 error report 机制
     return 0;
 }
 
@@ -2032,73 +2089,33 @@ int AudioDecoder::audio_open(void *opaque, int64_t wanted_channel_layout, int wa
 /* open a given stream. Return 0 if OK */
 int VideoState::stream_component_open(int stream_index)
 {
-    AVCodecContext *avctx;  // created here, if everything ok, will be taken by 'Decoder's
-    AVCodec *codec;
-    const char *forced_codec_name = NULL;
-    AVDictionaryEntry *t = NULL;
-    
-    int ret = 0;
-
     if (stream_index < 0 || stream_index >= (int)format_context->nb_streams)
         return -1;
 
-    avctx = avcodec_alloc_context3(NULL);  // todo: move to Decoder::init
-    if (!avctx)
-        return AVERROR(ENOMEM);
-
-    ret = avcodec_parameters_to_context(avctx, format_context->streams[stream_index]->codecpar);
-    if (ret < 0)
-        goto fail;
-    avctx->pkt_timebase = format_context->streams[stream_index]->time_base;
-
-    codec = avcodec_find_decoder(avctx->codec_id);
-
-    switch(avctx->codec_type){
-        case AVMEDIA_TYPE_AUDIO   : this->last_audio_stream    = stream_index; forced_codec_name = opt_audio_codec_name; break;
-        case AVMEDIA_TYPE_SUBTITLE: this->last_subtitle_stream = stream_index; forced_codec_name = opt_subtitle_codec_name; break;
-        case AVMEDIA_TYPE_VIDEO   : this->last_video_stream    = stream_index; forced_codec_name = opt_video_codec_name; break;
-    }
-    if (forced_codec_name)
-        codec = avcodec_find_decoder_by_name(forced_codec_name);
-    if (!codec) {
-        if (forced_codec_name) av_log(NULL, AV_LOG_WARNING,
-                                      "No codec could be found with name '%s'\n", forced_codec_name);
-        else                   av_log(NULL, AV_LOG_WARNING,
-                                      "No decoder could be found for codec %s\n", avcodec_get_name(avctx->codec_id));
-        ret = AVERROR(EINVAL);
-        goto fail;
-    }
-
-    avctx->codec_id = codec->id;
-        
-    if ((ret = avcodec_open2(avctx, codec, NULL)) < 0) {
-        goto fail;
-    }
-
+    AVCodecContext* avctx = Decoder::create_codec(this->format_context, stream_index);
+    
     this->eof = 0; // 如果是‘切换流 stream_cycle_channel’来的，这里再清一下eof
-    format_context->streams[stream_index]->discard = AVDISCARD_DEFAULT;
+    this->format_context->streams[stream_index]->discard = AVDISCARD_DEFAULT;
+
     switch (avctx->codec_type) {
-    case AVMEDIA_TYPE_AUDIO:  // todo: move to AudioDecoder
-                
-        this->auddec.decoder_init(avctx, stream_index , format_context->streams[stream_index], &this->continue_read_thread);        
+    case AVMEDIA_TYPE_AUDIO:                  
+        this->auddec.decoder_init(avctx, stream_index , format_context->streams[stream_index], &this->continue_read_thread);
+        this->last_audio_stream = stream_index;
         break;
     case AVMEDIA_TYPE_VIDEO:  
         this->viddec.decoder_init( avctx, stream_index, format_context->streams[stream_index], &this->continue_read_thread); 
+        this->last_video_stream = stream_index;
         this->queue_attachments_req = 1;
         break;
     case AVMEDIA_TYPE_SUBTITLE: 
-        this->subdec.decoder_init( avctx, stream_index, format_context->streams[stream_index], &this->continue_read_thread);        
+        this->subdec.decoder_init( avctx, stream_index, format_context->streams[stream_index], &this->continue_read_thread);
+        this->last_subtitle_stream = stream_index;
         break;
     default:
         break;
     }
-    goto out;
-
-fail:
-    avcodec_free_context(&avctx);
-out:
     
-    return ret;
+    return 0;
 }
 
 int VideoState::decode_interrupt_cb(void *ctx)
@@ -2353,7 +2370,7 @@ unsigned VideoState::run()
     AVPacket pkt1, *pkt = &pkt1;
     this->eof = 0;
 
-    // 1. 打开文件，酌情seek
+    // 1. 打开文件，酌情seek   // todo: move step1,2 to VideoState::open
     if (open_stream_file())
     {
         goto fail;

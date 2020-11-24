@@ -292,7 +292,8 @@ public:
         avctx = NULL;
     }
     virtual ~Decoder() {}
-    virtual void decoder_init( AVCodecContext* avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond);
+    static AVCodecContext* create_codec(AVFormatContext* format_context, int stream_id);
+    virtual int decoder_init( AVCodecContext* avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond);
     virtual void decoder_destroy();
 
     virtual int decoder_start(); //Æô¶¯decoder thread. 
@@ -316,9 +317,7 @@ public:
 
 protected:    
     VideoState* _vs;
-
-    PacketQueue* queue;  // todo: ¸ÄÓÃ packet_q
-
+    
     AVPacket pending_pkt;
     int is_packet_pending;
     
@@ -346,7 +345,7 @@ public:
 
     double frame_timer;
     struct SwsContext* img_convert_ctx;
-    virtual void decoder_init(AVCodecContext* avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond);
+    virtual int decoder_init(AVCodecContext* avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond);
     virtual void decoder_destroy();
 
     virtual unsigned run();  // BaseThread method 
@@ -367,7 +366,7 @@ public:
     }
 
     struct SwsContext* sub_convert_ctx;
-    virtual void decoder_init(AVCodecContext* avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond);
+    virtual int decoder_init(AVCodecContext* avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond);
     virtual unsigned run();  // BaseThread method 
 
     virtual void decoder_destroy();
@@ -384,7 +383,7 @@ public:
         swr_ctx = NULL;   
         audio_callback_time = 0;
     }
-    virtual void decoder_init(AVCodecContext* avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond);
+    virtual int decoder_init(AVCodecContext* avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond);
     virtual unsigned run();  // BaseThread method 
     virtual void decoder_destroy();
 
@@ -536,9 +535,7 @@ extern int opt_decoder_reorder_pts ;
 extern int opt_autoexit;
 extern int opt_framedrop;
 extern int opt_infinite_buffer;
-extern const char * opt_audio_codec_name;
-extern const char * opt_subtitle_codec_name;
-extern const char * opt_video_codec_name;
+
 extern int opt_full_screen;
 
 
