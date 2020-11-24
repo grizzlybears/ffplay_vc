@@ -442,7 +442,6 @@ public:
         eof = 0;
         abort_request = 0;
         paused = 0;
-        queue_attachments_req = 0;
         seek_req = 0;
     }
 
@@ -458,7 +457,6 @@ public:
     int force_refresh;
     int paused;
 
-    int queue_attachments_req; //某些流带有一个‘包含封面帧的包’，在初始load以及seek的时候，就先扔一个‘包含封面帧的包’进队
     int seek_req;
     int seek_flags;
     int64_t seek_pos;

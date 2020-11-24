@@ -2105,7 +2105,6 @@ int VideoState::stream_component_open(int stream_index)
     case AVMEDIA_TYPE_VIDEO:  
         this->viddec.decoder_init( avctx, stream_index, format_context->streams[stream_index], &this->continue_read_thread); 
         this->last_video_stream = stream_index;
-        this->queue_attachments_req = 1;
         break;
     case AVMEDIA_TYPE_SUBTITLE: 
         this->subdec.decoder_init( avctx, stream_index, format_context->streams[stream_index], &this->continue_read_thread);
@@ -2337,21 +2336,10 @@ int  VideoState::read_loop_check_seek()   // return: > 0 -- shoud 'continue', 0 
     }
 
     this->seek_req = 0;
-    this->queue_attachments_req = 1;
     this->eof = 0;
     if (this->paused)
         step_to_next_frame(this);
 
-    if (this->queue_attachments_req) {
-        if (this->viddec.stream && this->viddec.stream->disposition & AV_DISPOSITION_ATTACHED_PIC) {
-            AVPacket copy;
-            if ((ret = av_packet_ref(&copy, &this->viddec.stream->attached_pic)) < 0)
-                return -1;
-            this->viddec.packet_q.packet_queue_put(&copy);
-            this->viddec.packet_q.packet_queue_put_nullpacket(this->viddec.stream_id);
-        }
-        this->queue_attachments_req = 0;
-    }
     return 0;
 }
 
