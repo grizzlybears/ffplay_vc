@@ -859,7 +859,7 @@ int Render::realloc_texture(SDL_Texture **texture, Uint32 new_format, int new_wi
 }
 // }}} render sectio 
 
-void calculate_display_rect(SDL_Rect *rect,
+void Render::calculate_display_rect(SDL_Rect *rect,
                                    int scr_xleft, int scr_ytop, int scr_width, int scr_height,
                                    int pic_width, int pic_height, AVRational pic_sar)
 {
@@ -1059,7 +1059,7 @@ void video_image_display(VideoState *is)
 
     sp = get_current_subtitle_frame(is, vp);
 
-    calculate_display_rect(&rect, is->xleft, is->ytop, is->width, is->height, vp->width, vp->height, vp->sar);
+    Render::calculate_display_rect(&rect, is->xleft, is->ytop, is->width, is->height, vp->width, vp->height, vp->sar);
 
     if (!vp->uploaded) {
         if (Render::upload_texture(&is->vid_texture, vp->frame, &is->viddec.img_convert_ctx) < 0)
@@ -1275,14 +1275,14 @@ void Clock::sync_clock_to_slave( Clock *slave)
         this->set_clock(slave_clock, slave->serial);
 }
 
-int get_master_sync_type(VideoState *is) {
-    if (is->av_sync_type == AV_SYNC_VIDEO_MASTER) {
-        if (is->viddec.stream)
+int VideoState::get_master_sync_type() {
+    if (this->av_sync_type == AV_SYNC_VIDEO_MASTER) {
+        if (this->viddec.stream)
             return AV_SYNC_VIDEO_MASTER;
         else
             return AV_SYNC_AUDIO_MASTER;
-    } else if (is->av_sync_type == AV_SYNC_AUDIO_MASTER) {
-        if (is->auddec.stream)
+    } else if (this->av_sync_type == AV_SYNC_AUDIO_MASTER) {
+        if (this->auddec.stream)
             return AV_SYNC_AUDIO_MASTER;
         else
             return AV_SYNC_EXTERNAL_CLOCK;
@@ -1292,40 +1292,42 @@ int get_master_sync_type(VideoState *is) {
 }
 
 /* get the current master clock value */
-double get_master_clock(VideoState *is)
+double VideoState::get_master_clock()
 {
     double val;
 
-    switch (get_master_sync_type(is)) {
+    switch (this->get_master_sync_type()) {
         case AV_SYNC_VIDEO_MASTER:
-            val = is->viddec.stream_clock.get_clock();
+            val = this->viddec.stream_clock.get_clock();
             break;
         case AV_SYNC_AUDIO_MASTER:
-            val = is->auddec.stream_clock.get_clock();
+            val = this->auddec.stream_clock.get_clock();
             break;
         default:
-            val = is->extclk.get_clock();
+            val = this->extclk.get_clock();
             break;
     }
     return val;
 }
 
-void check_external_clock_speed(VideoState *is) {
-   if (is->viddec.stream_id >= 0 && is->viddec.packet_q.nb_packets <= EXTERNAL_CLOCK_MIN_FRAMES ||
-       is->auddec.stream_id >= 0 && is->auddec.packet_q.nb_packets <= EXTERNAL_CLOCK_MIN_FRAMES) 
+void VideoState::check_external_clock_speed() {
+   if (this->viddec.stream_id >= 0 && this->viddec.packet_q.nb_packets <= EXTERNAL_CLOCK_MIN_FRAMES ||
+       this->auddec.stream_id >= 0 && this->auddec.packet_q.nb_packets <= EXTERNAL_CLOCK_MIN_FRAMES)
    {
-       is->extclk.set_clock_speed( FFMAX(EXTERNAL_CLOCK_SPEED_MIN, is->extclk.get_clock_speed() - EXTERNAL_CLOCK_SPEED_STEP));
+       // 降速一档
+       this->extclk.set_clock_speed( FFMAX(EXTERNAL_CLOCK_SPEED_MIN, this->extclk.get_clock_speed() - EXTERNAL_CLOCK_SPEED_STEP));  
    }
-   else if ((is->viddec.stream_id < 0 || is->viddec.packet_q.nb_packets > EXTERNAL_CLOCK_MAX_FRAMES) &&
-              (is->auddec.stream_id < 0 || is->auddec.packet_q.nb_packets > EXTERNAL_CLOCK_MAX_FRAMES))
+   else if ((this->viddec.stream_id < 0 || this->viddec.packet_q.nb_packets > EXTERNAL_CLOCK_MAX_FRAMES) &&
+              (this->auddec.stream_id < 0 || this->auddec.packet_q.nb_packets > EXTERNAL_CLOCK_MAX_FRAMES))
    {
-       is->extclk.set_clock_speed( FFMIN(EXTERNAL_CLOCK_SPEED_MAX, is->extclk.get_clock_speed() + EXTERNAL_CLOCK_SPEED_STEP));
+       // 加速一档
+       this->extclk.set_clock_speed( FFMIN(EXTERNAL_CLOCK_SPEED_MAX, this->extclk.get_clock_speed() + EXTERNAL_CLOCK_SPEED_STEP));
    } 
    else 
    {
-       double speed = is->extclk.get_clock_speed();
-       if (speed != 1.0)
-           is->extclk.set_clock_speed( speed + EXTERNAL_CLOCK_SPEED_STEP * (1.0 - speed) / fabs(1.0 - speed));
+       double speed = this->extclk.get_clock_speed();
+       if (speed != 1.0)  // 向‘原速’靠近一档
+           this->extclk.set_clock_speed( speed + EXTERNAL_CLOCK_SPEED_STEP * (1.0 - speed) / fabs(1.0 - speed));
    }
 }
 
@@ -1384,27 +1386,25 @@ void step_to_next_frame(VideoState *is)
     is->step = 1;
 }
 
-double compute_target_delay(double delay, VideoState *is)
+double VideoState::compute_target_delay(double delay)
 {
     double sync_threshold, diff = 0;
 
     /* update delay to follow master synchronisation source */
-    if (get_master_sync_type(is) != AV_SYNC_VIDEO_MASTER) {
-        /* if video is slave, we try to correct big delays by
-           duplicating or deleting a frame */
-        diff = is->viddec.stream_clock.get_clock() - get_master_clock(is);
+    if (AV_SYNC_VIDEO_MASTER == this->get_master_sync_type() ) {
+        /* if video is slave, we try to correct big delays by duplicating or deleting a frame */
+        diff = this->viddec.stream_clock.get_clock() - this->get_master_clock();
 
-        /* skip or repeat frame. We take into account the
-           delay to compute the threshold. I still don't know
-           if it is the best guess */
-        sync_threshold = FFMAX(AV_SYNC_THRESHOLD_MIN, FFMIN(AV_SYNC_THRESHOLD_MAX, delay));
-        if (!isnan(diff) && fabs(diff) < is->max_frame_duration) {
+        /* skip or repeat frame. We take into account the delay to compute the threshold. 
+        I still don't know if it is the best guess */
+        sync_threshold = FFMAX(AV_SYNC_THRESHOLD_MIN, FFMIN(AV_SYNC_THRESHOLD_MAX, delay));  // sync_threshold is in range [AV_SYNC_THRESHOLD_MIN, AV_SYNC_THRESHOLD_MAX]
+        if (!isnan(diff) && fabs(diff) < this->max_frame_duration) { // diff 如果在 [-sync_threshold, +sync_threshold] 范围内，就不调整了
             if (diff <= -sync_threshold)
-                delay = FFMAX(0, delay + diff);
+                delay = FFMAX(0, delay + diff);   // V钟慢了(-diff) ，因此从‘应显示时间’里扣掉 (-diff))，即 +diff
             else if (diff >= sync_threshold && delay > AV_SYNC_FRAMEDUP_THRESHOLD)
-                delay = delay + diff;
-            else if (diff >= sync_threshold)
-                delay = 2 * delay;
+                delay = delay + diff; // V钟快得很多，超过了AV_SYNC_FRAMEDUP_THRESHOLD，则一次性补足，即 +diff
+            else if (diff >= sync_threshold) 
+                delay = 2 * delay; // V钟快了(diff)，但超过AV_SYNC_FRAMEDUP_THRESHOLD，则原时长翻倍
         }
     }
 
@@ -1414,11 +1414,11 @@ double compute_target_delay(double delay, VideoState *is)
     return delay;
 }
 
-double vp_duration(VideoState *is, Frame *vp, Frame *nextvp) {
+double VideoState::vp_duration(Frame *vp, Frame *nextvp) {
     if (vp->serial == nextvp->serial) {
         double duration = nextvp->pts - vp->pts;
-        if (isnan(duration) || duration <= 0 || duration > is->max_frame_duration)
-            return vp->duration;
+        if (isnan(duration) || duration <= 0 || duration > this->max_frame_duration)
+            return vp->duration; // 前後兩幀pts的距离不合理
         else
             return duration;
     } else {
@@ -1426,36 +1426,36 @@ double vp_duration(VideoState *is, Frame *vp, Frame *nextvp) {
     }
 }
 
-void update_video_pts(VideoState *is, double pts, int64_t pos, int serial) {
+void VideoState::update_video_pts(double pts, int64_t pos, int serial) {
     /* update current video pts */
-    is->viddec.stream_clock.set_clock( pts, serial);
-    is->extclk.sync_clock_to_slave( &is->viddec.stream_clock);
+    viddec.stream_clock.set_clock( pts, serial);
+    extclk.sync_clock_to_slave( &viddec.stream_clock);
 }
 
 /* called to display each frame */
 void VideoState::video_refresh(double *remaining_time)
 {
-    double time;
+    double time_now;
 
     Frame *sp, *sp2;
 
-    if (!this->paused && get_master_sync_type(this) == AV_SYNC_EXTERNAL_CLOCK && this->realtime)
-        check_external_clock_speed(this);
+    if (!this->paused && this->get_master_sync_type() == AV_SYNC_EXTERNAL_CLOCK && this->realtime)
+        this->check_external_clock_speed();
 
     if (this->viddec.stream) {
 retry:
         if (this->viddec.frame_q.frame_queue_nb_remaining() == 0) {
-            // nothing to do, no picture to display in the queue
+            // nothing to do, no picture to display in the frame queue
         } else {
             double last_duration, duration, delay;
             Frame *vp, *lastvp;
 
             /* dequeue the picture */
-            lastvp = this->viddec.frame_q.frame_queue_peek_last();
-            vp = this->viddec.frame_q.frame_queue_peek();
+            lastvp = this->viddec.frame_q.frame_queue_peek_last(); //‘已经上屏的帧’
+            vp = this->viddec.frame_q.frame_queue_peek(); //‘接下来要上屏的帧’
 
-            if (vp->serial != this->viddec.packet_q.serial) {
-                this->viddec.frame_q.frame_queue_next();
+            if (vp->serial != this->viddec.packet_q.serial) { // 说明seek过，vp 是seek前cache的，已经不合时宜
+                this->viddec.frame_q.frame_queue_next();  
                 goto retry;
             }
 
@@ -1466,36 +1466,40 @@ retry:
                 goto display;
 
             /* compute nominal last_duration */
-            last_duration = vp_duration(this, lastvp, vp);
-            delay = compute_target_delay(last_duration, this);
+            last_duration = this->vp_duration( lastvp, vp);      // 根据pts计算出名义上lastvp应该显示多久
+            delay = this->compute_target_delay(last_duration);   // 根据‘时钟同步’的要求，再调整‘last_duration’,得到delay = ‘lastvp应该显示多久’
 
-            time= av_gettime_relative()/1000000.0;
-            if (time < this->viddec.frame_timer + delay) {
-                *remaining_time = FFMIN(this->viddec.frame_timer + delay - time, *remaining_time);
+            time_now = av_gettime_relative()/1000000.0;
+            if (time_now < this->viddec.frame_timer + delay) {
+                *remaining_time = FFMIN(this->viddec.frame_timer + delay - time_now, *remaining_time);  //‘当前显示帧’还可以再坚持‘*remaining_time’之久
                 goto display;
             }
+            // 要显示下一帧了
 
             this->viddec.frame_timer += delay;
-            if (delay > 0 && time - this->viddec.frame_timer > AV_SYNC_THRESHOLD_MAX)
-                this->viddec.frame_timer = time;
+            if (delay > 0 && time_now - this->viddec.frame_timer > AV_SYNC_THRESHOLD_MAX)
+                this->viddec.frame_timer = time_now;
 
             {
-                AutoLocker yes_locked(this->viddec.frame_q.cond);  // todo: 为何要锁
+                AutoLocker yes_locked(this->viddec.frame_q.cond);  
                 if (!isnan(vp->pts))
-                    update_video_pts(this, vp->pts, vp->pos, vp->serial);
+                    this->update_video_pts( vp->pts, vp->pos, vp->serial);  // 其实是更新 vstream的clock，以及‘外部时钟’
             }
             
-            if (this->viddec.frame_q.frame_queue_nb_remaining() > 1) {
+            if (this->viddec.frame_q.frame_queue_nb_remaining() > 1) { // 考察一下是否需要跳帧
                 Frame *nextvp = this->viddec.frame_q.frame_queue_peek_next();
-                duration = vp_duration(this, vp, nextvp);
-                if(!this->step && (opt_framedrop >0 || (opt_framedrop && get_master_sync_type(this) != AV_SYNC_VIDEO_MASTER)) && time > this->viddec.frame_timer + duration){
+                duration = this->vp_duration(vp, nextvp);
+                if(!this->step && 
+                    (opt_framedrop >0 || (opt_framedrop && get_master_sync_type() != AV_SYNC_VIDEO_MASTER)) &&
+                    time_now > this->viddec.frame_timer + duration) // 没有时间留给'nextvp'显示，所以要跳过'nextvp'。 
+                {
                     this->frame_drops_late++;
-                    this->viddec.frame_q.frame_queue_next();
+                    this->viddec.frame_q.frame_queue_next();   // todo: 如果我们可以动态调节‘显示刷新’的间隔，那么不跳帧，而把‘间隔’调到最小，应该提高体验
                     goto retry;
                 }
             }
 
-            if (this->subdec.stream) {
+            if (this->subdec.stream) {  // 酌情叠加字幕
                 while (this->subdec.frame_q.frame_queue_nb_remaining() > 0) {
                     sp = this->subdec.frame_q.frame_queue_peek();
 
@@ -1574,14 +1578,14 @@ void print_stream_status(VideoState* is)
     if (is->auddec.stream && is->viddec.stream)
         av_diff = is->auddec.stream_clock.get_clock() - is->viddec.stream_clock.get_clock();
     else if (is->viddec.stream)
-        av_diff = get_master_clock(is) - is->viddec.stream_clock.get_clock();
+        av_diff = is->get_master_clock() - is->viddec.stream_clock.get_clock();
     else if (is->auddec.stream)
-        av_diff = get_master_clock(is) - is->auddec.stream_clock.get_clock();
+        av_diff = is->get_master_clock() - is->auddec.stream_clock.get_clock();
 
     av_bprint_init(&buf, 0, AV_BPRINT_SIZE_AUTOMATIC);
     av_bprintf(&buf,
         "clock:%7.2f %s:%7.3f framedrop=%4d aq=%5dKB vq=%5dKB sq=%5dB f=%" PRId64 "/%" PRId64 "   \r",
-        get_master_clock(is),
+        is->get_master_clock(),
         (is->auddec.stream && is->viddec.stream) ? "A-V" : (is->viddec.stream ? "M-V" : (is->auddec.stream ? "M-A" : "   ")),
         av_diff,
         is->frame_drops_early + is->frame_drops_late,
@@ -1652,10 +1656,10 @@ int VideoDecoder::get_video_frame( AVFrame *frame)
 
     frame->sample_aspect_ratio = av_guess_sample_aspect_ratio(this->_vs->format_context, stream, frame);
 
-    if (opt_framedrop >0 || (opt_framedrop && get_master_sync_type(this->_vs) != AV_SYNC_VIDEO_MASTER)) {
+    if (opt_framedrop >0 || (opt_framedrop && this->_vs->get_master_sync_type() != AV_SYNC_VIDEO_MASTER)) {
         // 看看是否有必要抛弃帧
         if (frame->pts != AV_NOPTS_VALUE) {
-            double diff = dpts - get_master_clock(this->_vs);
+            double diff = dpts - this->_vs->get_master_clock();
             if (!isnan(diff) && fabs(diff) < AV_NOSYNC_THRESHOLD &&
                 diff < 0 &&
                 pkt_serial == stream_clock.serial &&
@@ -1802,43 +1806,45 @@ unsigned int SubtitleDecoder::run()
 
 /* return the wanted number of samples to get better sync if sync_type is video
  * or external master clock */
-int synchronize_audio(VideoState *is, int nb_samples)
+int VideoState::synchronize_audio( int nb_samples)  // todo: move to AudioDecoder
 {
     int wanted_nb_samples = nb_samples;
 
+    if (AV_SYNC_AUDIO_MASTER == get_master_sync_type() ) 
+        return wanted_nb_samples;
+
     /* if not master, then we try to remove or add samples to correct the clock */
-    if (get_master_sync_type(is) != AV_SYNC_AUDIO_MASTER) {
-        double diff, avg_diff;
-        int min_nb_samples, max_nb_samples;
+    double diff, avg_diff;
+    int min_nb_samples, max_nb_samples;
 
-        diff = is->auddec.stream_clock.get_clock() - get_master_clock(is);
+    diff = auddec.stream_clock.get_clock() - get_master_clock();
 
-        if (!isnan(diff) && fabs(diff) < AV_NOSYNC_THRESHOLD) {
-            is->auddec.audio_diff_cum = diff + is->auddec.audio_diff_avg_coef * is->auddec.audio_diff_cum;
-            if (is->auddec.audio_diff_avg_count < AUDIO_DIFF_AVG_NB) {
-                /* not enough measures to have a correct estimate */
-                is->auddec.audio_diff_avg_count++;
-            } else {
-                /* estimate the A-V difference */
-                avg_diff = is->auddec.audio_diff_cum * (1.0 - is->auddec.audio_diff_avg_coef);
-
-                if (fabs(avg_diff) >= is->auddec.audio_diff_threshold) {
-                    wanted_nb_samples = nb_samples + (int)(diff * is->auddec.audio_src.freq);
-                    min_nb_samples = ((nb_samples * (100 - SAMPLE_CORRECTION_PERCENT_MAX) / 100));
-                    max_nb_samples = ((nb_samples * (100 + SAMPLE_CORRECTION_PERCENT_MAX) / 100));
-                    wanted_nb_samples = av_clip(wanted_nb_samples, min_nb_samples, max_nb_samples);
-                }
-                av_log(NULL, AV_LOG_TRACE, "diff=%f adiff=%f sample_diff=%d apts=%0.3f %f\n",
-                        diff, avg_diff, wanted_nb_samples - nb_samples,
-                        is->auddec.audio_clock, is->auddec.audio_diff_threshold);
-            }
+    if (!isnan(diff) && fabs(diff) < AV_NOSYNC_THRESHOLD) {
+        auddec.audio_diff_cum = diff + auddec.audio_diff_avg_coef * auddec.audio_diff_cum;
+        if (auddec.audio_diff_avg_count < AUDIO_DIFF_AVG_NB) {
+            /* not enough measures to have a correct estimate */
+            auddec.audio_diff_avg_count++;
         } else {
-            /* too big difference : may be initial PTS errors, so
-               reset A-V filter */
-            is->auddec.audio_diff_avg_count = 0;
-            is->auddec.audio_diff_cum       = 0;
+            /* estimate the A-V difference */
+            avg_diff = auddec.audio_diff_cum * (1.0 - auddec.audio_diff_avg_coef);
+
+            if (fabs(avg_diff) >= auddec.audio_diff_threshold) {
+                wanted_nb_samples = nb_samples + (int)(diff * auddec.audio_src.freq);
+                min_nb_samples = ((nb_samples * (100 - SAMPLE_CORRECTION_PERCENT_MAX) / 100));
+                max_nb_samples = ((nb_samples * (100 + SAMPLE_CORRECTION_PERCENT_MAX) / 100));
+                wanted_nb_samples = av_clip(wanted_nb_samples, min_nb_samples, max_nb_samples);
+            }
+            av_log(NULL, AV_LOG_TRACE, "diff=%f adiff=%f sample_diff=%d apts=%0.3f %f\n",
+                    diff, avg_diff, wanted_nb_samples - nb_samples,
+                    auddec.audio_clock, auddec.audio_diff_threshold);
         }
+    } else {
+        /* too big difference : may be initial PTS errors, so
+            reset A-V filter */
+        auddec.audio_diff_avg_count = 0;
+        auddec.audio_diff_cum       = 0;
     }
+
 
     return wanted_nb_samples;
 }
@@ -1881,7 +1887,7 @@ int AudioDecoder::audio_decode_frame()
     dec_channel_layout =
         (af->frame->channel_layout && af->frame->channels == av_get_channel_layout_nb_channels(af->frame->channel_layout)) ?
         af->frame->channel_layout : av_get_default_channel_layout(af->frame->channels);
-    wanted_nb_samples = synchronize_audio(this->_vs, af->frame->nb_samples);
+    wanted_nb_samples = this->_vs->synchronize_audio(af->frame->nb_samples);
 
     if (af->frame->format        != this->audio_src.fmt            ||
         dec_channel_layout       != this->audio_src.channel_layout ||
@@ -2612,7 +2618,7 @@ void VideoState::stream_cycle_channel( int codec_type)
 
 void seek_chapter(VideoState *is, int incr)
 {
-    int64_t pos = (int64_t) ( get_master_clock(is) * AV_TIME_BASE );
+    int64_t pos = (int64_t) ( is->get_master_clock() * AV_TIME_BASE );
     int i;
 
     if (!is->format_context->nb_chapters)

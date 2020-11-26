@@ -228,13 +228,14 @@ public:
     int frame_queue_init(PacketQueue* pktq, int max_size, int keep_last);
     void frame_queue_destory();
     void frame_queue_signal();
-
-    Frame* frame_queue_peek();          // 获得‘读头’，读完之后用 frame_queue_next 移动‘读头’。无并发保护
-    Frame* frame_queue_peek_next();     // 无并发保护 
-    Frame* frame_queue_peek_last();     // 无并发保护
+        
+    Frame* frame_queue_peek();          // 无并发保护，获得‘读头’,逻辑上‘接下来要上屏的帧’
+    Frame* frame_queue_peek_next();     // 无并发保护 ,‘接下来要上屏的帧’ 的‘后一帧’
+    Frame* frame_queue_peek_last();     // 无并发保护，逻辑上 ‘已经上屏的帧’
+    
     Frame* frame_queue_peek_readable(); // 有并发保护
 
-    void frame_queue_next();        //  ‘出队列’
+    void frame_queue_next();        //  移动‘读头’，aka ‘出队列’
     
     Frame* frame_queue_peek_writable();   // 获得‘写头’，写完之后用 frame_queue_push 移动‘写头’。有并发保护
     void frame_queue_push();              // ‘入队列’
@@ -343,7 +344,9 @@ public:
         img_convert_ctx = NULL;
     }
 
-    double frame_timer;
+    double frame_timer; // frame_timer 是‘当前显示帧’,理论上应该‘上屏’的时刻。 
+                        // 比如 根据pts, 当前帧应该在 00:05:38.04 显示，但实际上'刷新显示操作'发生在 00:05:38.045，即物理上该帧于00:05:38.045‘上屏’
+                        // 我们还是认为 frame_timer == 00:05:38.04
     struct SwsContext* img_convert_ctx;
     virtual int decoder_init(AVCodecContext* avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond);
     virtual void decoder_destroy();
@@ -488,6 +491,14 @@ public:
 
     SimpleConditionVar continue_read_thread;
 
+    int get_master_sync_type();
+
+    /* get the current master clock value */
+    double get_master_clock();
+
+    // return the wanted number of samples to get better sync if sync_type is video or external master clock
+    int synchronize_audio(int nb_samples);
+
 protected:    
     virtual unsigned run();  //  stream reader thread 
     static int decode_interrupt_cb(void* ctx);
@@ -515,6 +526,13 @@ protected:
     double stream_ts_to_second(int64_t ts, int stream_index);
 
     // }}} 'reader thread' section
+
+    
+    void check_external_clock_speed();
+
+    double vp_duration(Frame* vp, Frame* nextvp); //  refs 'max_frame_duration'
+    double compute_target_delay(double delay);
+    void update_video_pts(double pts, int64_t pos, int serial);
 };
 
 /* options specified by the user */
@@ -607,14 +625,15 @@ public:
     static void get_sdl_pix_fmt_and_blendmode(int format, Uint32* sdl_pix_fmt, SDL_BlendMode* sdl_blendmode);
     static void set_sdl_yuv_conversion_mode(AVFrame* frame);
     static int upload_texture(SDL_Texture** tex, AVFrame* frame, struct SwsContext** img_convert_ctx);
+    static void calculate_display_rect(SDL_Rect* rect,
+        int scr_xleft, int scr_ytop, int scr_width, int scr_height,
+        int pic_width, int pic_height, AVRational pic_sar);
 };
 
 extern Render g_render;
 
 
-void calculate_display_rect(SDL_Rect* rect,
-    int scr_xleft, int scr_ytop, int scr_width, int scr_height,
-    int pic_width, int pic_height, AVRational pic_sar);
+
 
 void video_image_display(VideoState* is);
 Frame*  get_current_subtitle_frame(VideoState* is, Frame* current_video_frame);
@@ -635,10 +654,6 @@ int video_open(VideoState* is);
 void video_display(VideoState* is);
 
 
-int get_master_sync_type(VideoState* is);
-/* get the current master clock value */
-double get_master_clock(VideoState* is);
-void check_external_clock_speed(VideoState* is);
 
 /* seek in the stream */
 void stream_seek(VideoState* is, int64_t pos, int64_t rel, int seek_by_bytes);
@@ -654,20 +669,7 @@ void update_volume(VideoState* is, int sign, double step);
 
 void step_to_next_frame(VideoState* is);
 
-double compute_target_delay(double delay, VideoState* is);
-
-double vp_duration(VideoState* is, Frame* vp, Frame* nextvp);
-
-void update_video_pts(VideoState* is, double pts, int64_t pos, int serial);
-
 void print_stream_status(VideoState* is);
-
-
-/* return the wanted number of samples to get better sync if sync_type is video
- * or external master clock */
-int synchronize_audio(VideoState* is, int nb_samples);
-
-
 
 int is_realtime(AVFormatContext* s);
 

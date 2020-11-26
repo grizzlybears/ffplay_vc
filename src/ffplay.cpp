@@ -136,7 +136,7 @@ void event_loop(VideoState *cur_stream)
                 incr = -60.0;
             do_seek:
                     {
-                        pos = get_master_clock(cur_stream);
+                        pos = cur_stream->get_master_clock();
                         if (isnan(pos))
                             pos = (double)cur_stream->seek_pos / AV_TIME_BASE;
                         pos += incr;
