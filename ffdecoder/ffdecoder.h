@@ -342,7 +342,10 @@ public:
     VideoDecoder(VideoState* vs):MyBase(vs)
     {
         img_convert_ctx = NULL;
+        width = height = xleft =  ytop = 0;
     }
+
+    int width, height, xleft, ytop;
 
     double frame_timer; // frame_timer 是‘当前显示帧’,理论上应该‘上屏’的时刻。 
                         // 比如 根据pts, 当前帧应该在 00:05:38.04 显示，但实际上'刷新显示操作'发生在 00:05:38.045，即物理上该帧于00:05:38.045‘上屏’
@@ -355,7 +358,13 @@ public:
 
     int get_video_frame( AVFrame* frame);
     int queue_picture(AVFrame* src_frame, double pts, double duration, int64_t pos, int serial);
+       
 
+    // display the current picture, if any 
+    void video_display();
+protected:
+    int video_open(); // open the window for showing video
+    void video_image_display();
 };
 
 class SubtitleDecoder
@@ -416,7 +425,7 @@ public:
     /* current context */
     int64_t audio_callback_time;
 
-    static int audio_open(void* opaque, int64_t wanted_channel_layout, int wanted_nb_channels, int wanted_sample_rate, struct AudioParams* audio_hw_params);
+    int audio_open(void* opaque, int64_t wanted_channel_layout, int wanted_nb_channels, int wanted_sample_rate, struct AudioParams* audio_hw_params);
     /* prepare a new audio buffer */
     static void sdl_audio_callback(void* opaque, Uint8* stream, int len);
 
@@ -431,7 +440,76 @@ public:
      */
     int audio_decode_frame();
 
+};
 
+class Render
+{
+public:
+    SDL_Window* window;
+    SDL_Renderer* renderer;
+    SDL_RendererInfo renderer_info;
+    SDL_AudioDeviceID audio_dev;
+    int fullscreen;
+    int screen_width;
+    int screen_height;
+    int screen_left;
+    int screen_top;
+
+    int64_t cursor_last_shown;
+    int cursor_hidden;
+
+    CString window_title;
+    SDL_Texture* sub_texture;   // 字幕画布
+    SDL_Texture* vid_texture;   // 视频画布
+
+    Render()
+    {
+        window = NULL;
+        renderer = NULL;
+        vid_texture = sub_texture = NULL;
+        audio_dev = 0;
+        renderer_info = { 0 };
+
+        screen_width = 640; //default value
+        screen_height = 480;//default value
+        screen_left = SDL_WINDOWPOS_CENTERED;
+        screen_top = SDL_WINDOWPOS_CENTERED;
+
+        fullscreen = 0;
+        cursor_hidden = 0;
+    }
+
+    ~Render()
+    {
+        safe_release();
+    }
+
+    int init(int opt_audio_disable, int opt_alwaysontop);
+
+    void toggle_full_screen();
+
+    int create_window(const char* title, int x, int y, int w, int h, Uint32 flags);
+
+    void show_window(const char* title, int w, int h, int left, int top, int fullscreen);
+
+    void clear_render();
+    void draw_render();
+
+    void close_audio();
+
+    void safe_release();
+
+    void fill_rectangle(int x, int y, int w, int h);
+    void set_default_window_size(int width, int height, AVRational sar);
+
+    int realloc_texture(SDL_Texture** texture, Uint32 new_format, int new_width, int new_height, SDL_BlendMode blendmode, int init_texture);
+
+    static void get_sdl_pix_fmt_and_blendmode(int format, Uint32* sdl_pix_fmt, SDL_BlendMode* sdl_blendmode);
+    static void set_sdl_yuv_conversion_mode(AVFrame* frame);
+    int upload_texture(SDL_Texture** tex, AVFrame* frame, struct SwsContext** img_convert_ctx);
+    static void calculate_display_rect(SDL_Rect* rect,
+        int scr_xleft, int scr_ytop, int scr_width, int scr_height,
+        int pic_width, int pic_height, AVRational pic_sar);
 };
 
 class VideoState
@@ -456,6 +534,9 @@ public:
     void video_refresh(double* remaining_time);
         
 public:
+
+    Render render;
+
     int abort_request;
     int force_refresh;
     int paused;
@@ -478,10 +559,7 @@ public:
 
     int frame_drops_early;
     int frame_drops_late;
-    SDL_Texture *sub_texture;   // 字幕图片
-    SDL_Texture *vid_texture;   // 视频图片 //todo: 这些应该移到Render中去
-        
-    int width, height, xleft, ytop;
+
 
     int eof;
     int step; // 单帧模式
@@ -498,6 +576,8 @@ public:
 
     // return the wanted number of samples to get better sync if sync_type is video or external master clock
     int synchronize_audio(int nb_samples);
+
+    Frame* get_current_subtitle_frame( Frame* current_video_frame);
 
 protected:    
     virtual unsigned run();  //  stream reader thread 
@@ -532,7 +612,7 @@ protected:
 
     double vp_duration(Frame* vp, Frame* nextvp); //  refs 'max_frame_duration'
     double compute_target_delay(double delay);
-    void update_video_pts(double pts, int64_t pos, int serial);
+    void update_video_clock(double pts, int64_t pos, int serial);
 };
 
 /* options specified by the user */
@@ -564,79 +644,6 @@ extern const struct TextureFormatEntry {
 } sdl_texture_format_map[];
 
 
-class Render
-{
-public:
-    SDL_Window* window;
-    SDL_Renderer* renderer;
-    SDL_RendererInfo renderer_info;
-    SDL_AudioDeviceID audio_dev;
-    int fullscreen;
-    int screen_width;
-    int screen_height;
-    int screen_left;
-    int screen_top;
-    
-    int64_t cursor_last_shown; 
-    int cursor_hidden;
-
-    CString window_title;
-    Render()
-    {
-        window = NULL;
-        renderer = NULL;
-        audio_dev = 0;
-        renderer_info = { 0 };
-
-        screen_width = 640; //default value
-        screen_height = 480;//default value
-        screen_left = SDL_WINDOWPOS_CENTERED;
-        screen_top = SDL_WINDOWPOS_CENTERED;
-
-        fullscreen = 0;
-        cursor_hidden = 0;
-    }
-
-    ~Render()
-    {
-        safe_release();
-    }
-
-    int init(int opt_audio_disable, int opt_alwaysontop);
-
-    void toggle_full_screen();
-    
-    int create_window(const char* title, int x, int y, int w, int h, Uint32 flags);
-
-    void show_window(const char * title, int w, int h, int left, int top, int fullscreen);
-
-    void clear_render();
-    void draw_render();
-
-    void close_audio();
-
-    void safe_release();
-
-    void fill_rectangle(int x, int y, int w, int h);
-    void set_default_window_size(int width, int height, AVRational sar);
-
-    int realloc_texture(SDL_Texture** texture, Uint32 new_format, int new_width, int new_height, SDL_BlendMode blendmode, int init_texture);
-
-    static void get_sdl_pix_fmt_and_blendmode(int format, Uint32* sdl_pix_fmt, SDL_BlendMode* sdl_blendmode);
-    static void set_sdl_yuv_conversion_mode(AVFrame* frame);
-    static int upload_texture(SDL_Texture** tex, AVFrame* frame, struct SwsContext** img_convert_ctx);
-    static void calculate_display_rect(SDL_Rect* rect,
-        int scr_xleft, int scr_ytop, int scr_width, int scr_height,
-        int pic_width, int pic_height, AVRational pic_sar);
-};
-
-extern Render g_render;
-
-
-
-
-void video_image_display(VideoState* is);
-Frame*  get_current_subtitle_frame(VideoState* is, Frame* current_video_frame);
 
 inline int compute_mod(int a, int b)
 {
@@ -648,12 +655,6 @@ inline int compute_mod(int a, int b)
 
 void do_exit(VideoState* is);
 void sigterm_handler(int sig);
-
-int video_open(VideoState* is);
-/* display the current picture, if any */
-void video_display(VideoState* is);
-
-
 
 /* seek in the stream */
 void stream_seek(VideoState* is, int64_t pos, int64_t rel, int seek_by_bytes);

@@ -41,9 +41,9 @@ void refresh_loop_wait_event(VideoState *is, SDL_Event *event) {
     double remaining_time = 0.0;
     SDL_PumpEvents();
     while (!SDL_PeepEvents(event, 1, SDL_GETEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT)) {
-        if (!g_render.cursor_hidden && av_gettime_relative() - g_render.cursor_last_shown > CURSOR_HIDE_DELAY) {
+        if (!is->render.cursor_hidden && av_gettime_relative() - is->render.cursor_last_shown > CURSOR_HIDE_DELAY) {
             SDL_ShowCursor(0);
-            g_render.cursor_hidden = 1;
+            is->render.cursor_hidden = 1;
         }
         if (remaining_time > 0.0)
             av_usleep((int64_t)(remaining_time * 1000000.0));
@@ -70,11 +70,11 @@ void event_loop(VideoState *cur_stream)
                 break;
             }
             // If we don't yet have a window, skip all key events, because read_thread might still be initializing...
-            if (!cur_stream->width)
+            if (!cur_stream->viddec.width)
                 continue;
             switch (event.key.keysym.sym) {
             case SDLK_f:
-                g_render.toggle_full_screen();
+                cur_stream->render.toggle_full_screen();
                 cur_stream->force_refresh = 1;
                 break;
             case SDLK_p:
@@ -153,7 +153,7 @@ void event_loop(VideoState *cur_stream)
             if (event.button.button == SDL_BUTTON_LEFT) {
                 static int64_t last_mouse_left_click = 0;
                 if (av_gettime_relative() - last_mouse_left_click <= 500000) {
-                    g_render.toggle_full_screen();
+                    cur_stream->render.toggle_full_screen();
                     cur_stream->force_refresh = 1;
                     last_mouse_left_click = 0;
                 } else {
@@ -161,11 +161,11 @@ void event_loop(VideoState *cur_stream)
                 }
             }
         case SDL_MOUSEMOTION:
-            if (g_render.cursor_hidden) {
+            if (cur_stream->render.cursor_hidden) {
                 SDL_ShowCursor(1);
-                g_render.cursor_hidden = 0;
+                cur_stream->render.cursor_hidden = 0;
             }
-            g_render.cursor_last_shown = av_gettime_relative();
+            cur_stream->render.cursor_last_shown = av_gettime_relative();
             if (event.type == SDL_MOUSEBUTTONDOWN) {
                 if (event.button.button != SDL_BUTTON_RIGHT)
                     break;
@@ -177,7 +177,7 @@ void event_loop(VideoState *cur_stream)
             }
                 if (cur_stream->format_context->duration <= 0) {
                     uint64_t size =  avio_size(cur_stream->format_context->pb);
-                    stream_seek(cur_stream, size*x/cur_stream->width, 0, 1);
+                    stream_seek(cur_stream, size*x/cur_stream->viddec.width, 0, 1);
                 } else {
                     int64_t ts;
                     int ns, hh, mm, ss;
@@ -186,7 +186,7 @@ void event_loop(VideoState *cur_stream)
                     thh  = tns / 3600;
                     tmm  = (tns % 3600) / 60;
                     tss  = (tns % 60);
-                    frac = x / cur_stream->width;
+                    frac = x / cur_stream->viddec.width;
                     ns   = frac * tns;
                     hh   = ns / 3600;
                     mm   = (ns % 3600) / 60;
@@ -203,8 +203,8 @@ void event_loop(VideoState *cur_stream)
         case SDL_WINDOWEVENT:
             switch (event.window.event) {
                 case SDL_WINDOWEVENT_SIZE_CHANGED:
-                    g_render.screen_width  = cur_stream->width  = event.window.data1;
-                    g_render.screen_height = cur_stream->height = event.window.data2;
+                    cur_stream->render.screen_width  = cur_stream->viddec.width  = event.window.data1;
+                    cur_stream->render.screen_height = cur_stream->viddec.height = event.window.data2;
                     
                 case SDL_WINDOWEVENT_EXPOSED:
                     cur_stream->force_refresh = 1;
@@ -224,18 +224,6 @@ int opt_frame_size(void *optctx, const char *opt, const char *arg)
 {
     av_log(NULL, AV_LOG_WARNING, "Option -s is deprecated, use -video_size.\n");
     return opt_default(NULL, "video_size", arg);
-}
-
-int opt_width(void *optctx, const char *opt, const char *arg)
-{
-    g_render.screen_width = parse_number_or_die(opt, arg, OPT_INT64, 1, INT_MAX);
-    return 0;
-}
-
-int opt_height(void *optctx, const char *opt, const char *arg)
-{
-    g_render.screen_height = parse_number_or_die(opt, arg, OPT_INT64, 1, INT_MAX);
-    return 0;
 }
 
 int opt_format(void *optctx, const char *opt, const char *arg)
@@ -299,8 +287,6 @@ static int dummy;
 
 static const OptionDef options[] = {
     CMDUTILS_COMMON_OPTIONS
-    { "x", HAS_ARG, { .func_arg = opt_width }, "force displayed width", "width" },
-    { "y", HAS_ARG, { .func_arg = opt_height }, "force displayed height", "height" },
     { "s", HAS_ARG | OPT_VIDEO, { .func_arg = opt_frame_size }, "set frame size (WxH or abbreviation)", "size" },
     { "fs", OPT_BOOL, { &opt_full_screen }, "force full screen" },
     { "an", OPT_BOOL, { &opt_audio_disable }, "disable audio" },
@@ -318,8 +304,6 @@ static const OptionDef options[] = {
     { "autoexit", OPT_BOOL | OPT_EXPERT, { &opt_autoexit }, "exit at the end", "" },
     { "framedrop", OPT_BOOL | OPT_EXPERT, { &opt_framedrop }, "drop frames when cpu is too slow", "" },
     { "infbuf", OPT_BOOL | OPT_EXPERT, { &opt_infinite_buffer }, "don't limit the input buffer size (useful with realtime streams)", "" },
-    { "left", OPT_INT | HAS_ARG | OPT_EXPERT, { &g_render.screen_left }, "set the x position for the left of the window", "x pos" },
-    { "top", OPT_INT | HAS_ARG | OPT_EXPERT, { &g_render.screen_top }, "set the y position for the top of the window", "y pos" },
     { "default", HAS_ARG | OPT_AUDIO | OPT_VIDEO | OPT_EXPERT, { .func_arg = opt_default }, "generic catch all option", "" },
     { "i", OPT_BOOL, { &dummy}, "read specified file", "input_file"},    
     { NULL, },
@@ -399,10 +383,7 @@ int main(int argc, char **argv)
         return (1);
     }
 
-    if (g_render.init(opt_audio_disable, opt_alwaysontop))
-    {
-        do_exit(NULL);
-    }
+
 
     av_init_packet(&PacketQueue::flush_pkt);
     PacketQueue::flush_pkt.data = (uint8_t*)&PacketQueue::flush_pkt;
@@ -412,6 +393,11 @@ int main(int argc, char **argv)
     {
         av_log(NULL, AV_LOG_FATAL, "Failed to create VideoState.\n");
         do_exit(NULL);
+    }
+
+    if (is->render.init(opt_audio_disable, opt_alwaysontop))
+    {
+        do_exit(is);
     }
     
     if (is->open(opt_input_filename, opt_file_iformat)) {
