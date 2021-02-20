@@ -78,21 +78,21 @@ void event_loop(VideoState *cur_stream)
                 break;
             case SDLK_p:
             case SDLK_SPACE:
-                toggle_pause(cur_stream);
+                cur_stream->toggle_pause();
                 break;
             case SDLK_m:
-                toggle_mute(cur_stream);
+                cur_stream->toggle_mute();
                 break;
             case SDLK_KP_MULTIPLY:
             case SDLK_0:
-                update_volume(cur_stream, 1, SDL_VOLUME_STEP);
+                cur_stream->update_volume( 1, SDL_VOLUME_STEP);
                 break;
             case SDLK_KP_DIVIDE:
             case SDLK_9:
-                update_volume(cur_stream, -1, SDL_VOLUME_STEP);
+                cur_stream->update_volume( -1, SDL_VOLUME_STEP);
                 break;
             case SDLK_s: // S: Step to next frame
-                step_to_next_frame(cur_stream);
+                cur_stream->step_to_next_frame();
                 break;
             case SDLK_a:
                 cur_stream->stream_cycle_channel( AVMEDIA_TYPE_AUDIO);
@@ -113,14 +113,14 @@ void event_loop(VideoState *cur_stream)
                     incr = 600.0;
                     goto do_seek;
                 }
-                seek_chapter(cur_stream, 1);
+                cur_stream->seek_chapter( 1);
                 break;
             case SDLK_PAGEDOWN:
                 if (cur_stream->format_context->nb_chapters <= 1) {
                     incr = -600.0;
                     goto do_seek;
                 }
-                seek_chapter(cur_stream, -1);
+                cur_stream->seek_chapter( -1);
                 break;
             case SDLK_LEFT:
                 incr = opt_seek_interval ? -opt_seek_interval : -10.0;
@@ -141,7 +141,7 @@ void event_loop(VideoState *cur_stream)
                         pos += incr;
                         if (cur_stream->format_context->start_time != AV_NOPTS_VALUE && pos < cur_stream->format_context->start_time / (double)AV_TIME_BASE)
                             pos = cur_stream->format_context->start_time / (double)AV_TIME_BASE;
-                        stream_seek(cur_stream, (int64_t)(pos * AV_TIME_BASE), (int64_t)(incr * AV_TIME_BASE), 0);
+                        cur_stream->stream_seek((int64_t)(pos * AV_TIME_BASE), (int64_t)(incr * AV_TIME_BASE), 0);
                     }
                 break;
             default:
@@ -176,7 +176,7 @@ void event_loop(VideoState *cur_stream)
             }
                 if (cur_stream->format_context->duration <= 0) {
                     uint64_t size =  avio_size(cur_stream->format_context->pb);
-                    stream_seek(cur_stream, size*x/cur_stream->viddec.width, 0, 1);
+                    cur_stream->stream_seek( size*x/cur_stream->viddec.width, 0, 1);
                 } else {
                     int64_t ts;
                     int ns, hh, mm, ss;
@@ -196,7 +196,7 @@ void event_loop(VideoState *cur_stream)
                     ts = frac * cur_stream->format_context->duration;
                     if (cur_stream->format_context->start_time != AV_NOPTS_VALUE)
                         ts += cur_stream->format_context->start_time;
-                    stream_seek(cur_stream, ts, 0, 0);
+                    cur_stream->stream_seek( ts, 0, 0);
                 }
             break;
         case SDL_WINDOWEVENT:

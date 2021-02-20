@@ -250,7 +250,7 @@ public:
 
 
     PacketQueue* pktq;
-    SimpleConditionVar cond;
+    SimpleConditionVar fq_signal;
 
     int is_last_frame_shown() const
     {
@@ -533,13 +533,28 @@ public:
     int open_input_stream(const char* filename, AVInputFormat* iformat);
     
     void close_input_stream(); 
+
+    // {{{ stream operation section
+    void stream_seek( int64_t pos, int64_t rel, int seek_by_bytes);
+
+    void toggle_pause();
+    void internal_toggle_pause();
+
+    void step_to_next_frame();
+
+    void toggle_mute();
+
+    void update_volume(int sign, double step);
+
+    void seek_chapter( int incr);
+
+    // }}} stream operation section
     
-    // called to display each frame 
+    // called to display each frame (from event loop )
     void video_refresh(double* remaining_time);
-        
 public:
 
-    Render render; // todo: move to decoder
+    Render render; // todo: move to ¡®simeple av decoder¡¯ 
 
     int abort_request;
     int force_refresh;
@@ -611,6 +626,7 @@ protected:
 
     // }}} 'reader thread' section
 
+    void print_stream_status();
     
     void check_external_clock_speed();
 
@@ -638,8 +654,6 @@ extern int opt_infinite_buffer;
 
 extern int opt_full_screen;
 
-
-
 #define FF_QUIT_EVENT    (SDL_USEREVENT + 2)
 
 extern const struct TextureFormatEntry {
@@ -648,33 +662,11 @@ extern const struct TextureFormatEntry {
 } sdl_texture_format_map[];
 
 
-
 inline int compute_mod(int a, int b)
 {
     return a < 0 ? a%b + b : a%b;
 }
 
-//  }}} render section 
-
 void sigterm_handler(int sig);
 
-/* seek in the stream */
-void stream_seek(VideoState* is, int64_t pos, int64_t rel, int seek_by_bytes);
-
-/* pause or resume the video */
-void stream_toggle_pause(VideoState* is);
-void toggle_pause(VideoState* is);
-
-
-void toggle_mute(VideoState* is);
-
-void update_volume(VideoState* is, int sign, double step);
-
-void step_to_next_frame(VideoState* is);
-
-void print_stream_status(VideoState* is);
-
 int is_realtime(AVFormatContext* s);
-
-void seek_chapter(VideoState* is, int incr);
-
