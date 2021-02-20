@@ -1390,7 +1390,7 @@ double VideoState::compute_target_delay(double delay)
     double sync_threshold, diff = 0;
 
     /* update delay to follow master synchronisation source */
-    if (AV_SYNC_VIDEO_MASTER == this->get_master_sync_type() ) {
+    if (AV_SYNC_VIDEO_MASTER != this->get_master_sync_type() ) {
         /* if video is slave, we try to correct big delays by duplicating or deleting a frame */
         diff = this->viddec.stream_clock.get_clock() - this->get_master_clock();
 
@@ -1442,103 +1442,8 @@ void VideoState::video_refresh(double *remaining_time)
         this->check_external_clock_speed();
 
     if (this->viddec.stream) {
-retry:
-        if (this->viddec.frame_q.frame_queue_nb_remaining() == 0) {
-            // nothing to do, no picture to display in the frame queue
-        } else {
-            double last_duration, duration, delay;
-            Frame *vp, *lastvp;
+        prepare_picture_for_display(remaining_time);
 
-            /* dequeue the picture */
-            lastvp = this->viddec.frame_q.frame_queue_peek_last(); //‘已经上屏的帧’
-            vp = this->viddec.frame_q.frame_queue_peek(); //‘接下来要上屏的帧’
-
-            if (vp->serial != this->viddec.packet_q.serial) { // 说明seek过，vp 是seek前cache的，已经不合时宜
-                this->viddec.frame_q.frame_queue_next();  
-                goto retry;
-            }
-
-            if (lastvp->serial != vp->serial)
-                this->viddec.frame_timer = av_gettime_relative() / 1000000.0;
-
-            if (this->paused)
-                goto display;
-
-            /* compute nominal last_duration */
-            last_duration = this->vp_duration( lastvp, vp);      // 根据pts计算出名义上lastvp应该显示多久
-            delay = this->compute_target_delay(last_duration);   // 根据‘时钟同步’的要求，再调整‘last_duration’,得到delay = ‘lastvp应该显示多久’
-
-            time_now = av_gettime_relative()/1000000.0;
-            if (time_now < this->viddec.frame_timer + delay) {
-                *remaining_time = FFMIN(this->viddec.frame_timer + delay - time_now, *remaining_time);  //‘当前显示帧’还可以再坚持‘*remaining_time’之久
-                goto display;
-            }
-            // 要显示下一帧了
-
-            this->viddec.frame_timer += delay;
-            if (delay > 0 && time_now - this->viddec.frame_timer > AV_SYNC_THRESHOLD_MAX)
-                this->viddec.frame_timer = time_now;
-
-            {
-                AutoLocker yes_locked(this->viddec.frame_q.fq_signal);
-                if (!isnan(vp->pts))
-                    this->update_video_clock( vp->pts, vp->pos, vp->serial);  // 其实是更新 vstream的clock，以及‘外部时钟’
-            }
-            
-            if (this->viddec.frame_q.frame_queue_nb_remaining() > 1) { // 考察一下是否需要跳帧
-                Frame *nextvp = this->viddec.frame_q.frame_queue_peek_next();
-                duration = this->vp_duration(vp, nextvp);
-                if(!this->step && 
-                    (opt_framedrop >0 || (opt_framedrop && get_master_sync_type() != AV_SYNC_VIDEO_MASTER)) &&
-                    time_now > this->viddec.frame_timer + duration) // 没有时间留给'nextvp'显示，所以要跳过'nextvp'。 
-                {
-                    this->frame_drops_late++;
-                    this->viddec.frame_q.frame_queue_next();   // todo: 如果我们可以动态调节‘显示刷新’的间隔，那么不跳帧，而把‘间隔’调到最小，应该提高体验
-                    goto retry;
-                }
-            }
-
-            if (this->subdec.stream) {  // 酌情叠加字幕
-                while (this->subdec.frame_q.frame_queue_nb_remaining() > 0) {
-                    sp = this->subdec.frame_q.frame_queue_peek();
-
-                    if (this->subdec.frame_q.frame_queue_nb_remaining() > 1)
-                        sp2 = this->subdec.frame_q.frame_queue_peek_next();
-                    else
-                        sp2 = NULL;
-
-                    if (sp->serial != this->subdec.packet_q.serial
-                            || (this->viddec.stream_clock.pts > (sp->pts + ((float) sp->sub.end_display_time / 1000)))
-                            || (sp2 && this->viddec.stream_clock.pts > (sp2->pts + ((float) sp2->sub.start_display_time / 1000))))
-                    {
-                        if (sp->uploaded) {
-                            unsigned int i;
-                            for (i = 0; i < sp->sub.num_rects; i++) {
-                                AVSubtitleRect *sub_rect = sp->sub.rects[i];
-                                uint8_t *pixels;
-                                int pitch, j;
-
-                                if (!SDL_LockTexture(this->render.sub_texture, (SDL_Rect *)sub_rect, (void **)&pixels, &pitch)) {
-                                    for (j = 0; j < sub_rect->h; j++, pixels += pitch)
-                                        memset(pixels, 0, sub_rect->w << 2);
-                                    SDL_UnlockTexture(this->render.sub_texture);
-                                }
-                            }
-                        }
-                        this->subdec.frame_q.frame_queue_next();
-                    } else {
-                        break;
-                    }
-                }
-            }
-
-            this->viddec.frame_q.frame_queue_next();
-            this->force_refresh = 1;
-
-            if (this->step && !this->paused)
-                internal_toggle_pause();
-        }
-display:
         /* display picture */
         if (this->force_refresh && this->viddec.frame_q.is_last_frame_shown())
             this->viddec.video_display();
@@ -1547,6 +1452,108 @@ display:
     if (opt_show_status) {
         this->print_stream_status();
     }
+}
+
+void VideoState::prepare_picture_for_display(double* remaining_time)
+{
+    Frame* vp, * lastvp;
+retry:    
+    if (this->viddec.frame_q.frame_queue_nb_remaining() == 0) {
+        // nothing to do, no picture to display in the frame queue
+        return;
+    }
+    /* dequeue the picture */
+    lastvp = this->viddec.frame_q.frame_queue_peek_last(); //‘已经上屏的帧’
+    vp = this->viddec.frame_q.frame_queue_peek(); //‘接下来要上屏的帧’
+
+    if (vp->serial != this->viddec.packet_q.serial) { // 说明seek过，vp 是seek前cache的，已经不合时宜
+        this->viddec.frame_q.frame_queue_next();
+        goto retry;
+    }
+    
+    if (lastvp->serial != vp->serial)
+        this->viddec.frame_timer = av_gettime_relative() / 1000000.0;
+
+    if (this->paused)
+        return;
+
+    double time_now, last_duration, duration, delay;
+    Frame* sp, * sp2;
+
+    /* compute nominal last_duration */
+    last_duration = this->vp_duration(lastvp, vp);      // 根据pts计算出名义上lastvp应该显示多久
+    delay = this->compute_target_delay(last_duration);   // 根据‘时钟同步’的要求，再调整‘last_duration’,得到delay = ‘lastvp应该显示多久’
+
+    time_now = av_gettime_relative() / 1000000.0;
+    if (time_now < this->viddec.frame_timer + delay) {
+        *remaining_time = FFMIN(this->viddec.frame_timer + delay - time_now, *remaining_time);  //‘当前显示帧’还可以再坚持‘*remaining_time’之久
+        return;
+    }
+
+    // 要显示下一帧了
+    this->viddec.frame_timer += delay;
+    if (delay > 0 && time_now - this->viddec.frame_timer > AV_SYNC_THRESHOLD_MAX)
+        this->viddec.frame_timer = time_now;
+
+    {
+        AutoLocker yes_locked(this->viddec.frame_q.fq_signal);
+        if (!isnan(vp->pts))
+            this->update_video_clock(vp->pts, vp->pos, vp->serial);  // 其实是更新 vstream的clock，以及‘外部时钟’
+    }
+
+    if (this->viddec.frame_q.frame_queue_nb_remaining() > 1) { // 考察一下是否需要跳帧
+        Frame* nextvp = this->viddec.frame_q.frame_queue_peek_next();
+        duration = this->vp_duration(vp, nextvp);
+        if (!this->step &&
+            (opt_framedrop > 0 || (opt_framedrop && get_master_sync_type() != AV_SYNC_VIDEO_MASTER)) &&
+            time_now > this->viddec.frame_timer + duration) // 没有时间留给'nextvp'显示，所以要跳过'nextvp'。 
+        {
+            this->frame_drops_late++;
+            this->viddec.frame_q.frame_queue_next();   // todo: 如果我们可以动态调节‘显示刷新’的间隔，那么不跳帧，而把‘间隔’调到最小，应该提高体验
+            goto retry;
+        }
+    }
+
+    if (this->subdec.stream) {  // 酌情叠加字幕
+        while (this->subdec.frame_q.frame_queue_nb_remaining() > 0) {
+            sp = this->subdec.frame_q.frame_queue_peek();
+
+            if (this->subdec.frame_q.frame_queue_nb_remaining() > 1)
+                sp2 = this->subdec.frame_q.frame_queue_peek_next();
+            else
+                sp2 = NULL;
+
+            if (sp->serial != this->subdec.packet_q.serial
+                || (this->viddec.stream_clock.pts > (sp->pts + ((float)sp->sub.end_display_time / 1000)))
+                || (sp2 && this->viddec.stream_clock.pts > (sp2->pts + ((float)sp2->sub.start_display_time / 1000))))
+            {
+                if (sp->uploaded) {
+                    unsigned int i;
+                    for (i = 0; i < sp->sub.num_rects; i++) {
+                        AVSubtitleRect* sub_rect = sp->sub.rects[i];
+                        uint8_t* pixels;
+                        int pitch, j;
+
+                        if (!SDL_LockTexture(this->render.sub_texture, (SDL_Rect*)sub_rect, (void**)&pixels, &pitch)) {
+                            for (j = 0; j < sub_rect->h; j++, pixels += pitch)
+                                memset(pixels, 0, sub_rect->w << 2);
+                            SDL_UnlockTexture(this->render.sub_texture);
+                        }
+                    }
+                }
+                this->subdec.frame_q.frame_queue_next();
+            }
+            else {
+                break;
+            }
+        }
+    }
+
+    this->viddec.frame_q.frame_queue_next();
+    this->force_refresh = 1;
+
+    if (this->step && !this->paused)
+        internal_toggle_pause();
 }
 
 void VideoState::print_stream_status()

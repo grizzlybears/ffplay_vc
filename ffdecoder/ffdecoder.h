@@ -549,13 +549,8 @@ public:
     void seek_chapter( int incr);
 
     // }}} stream operation section
-    
-    // called to display each frame (from event loop )
-    void video_refresh(double* remaining_time);
+        
 public:
-
-    Render render; // todo: move to ‘simeple av decoder’ 
-
     int abort_request;
     int force_refresh;
     int paused;
@@ -567,18 +562,37 @@ public:
     int read_pause_return;  // 'reader loop'中， 遇到'pause' req, av_read_pause 这个API的返回值
     AVFormatContext * format_context;
 
-    Clock extclk;
+    // {{{ 'simple av decoder' section 
 
+    Render render; 
+
+    Clock extclk;
     AudioDecoder    auddec;
     VideoDecoder    viddec;
     SubtitleDecoder subdec;
 
+    // called to display each frame (from event loop )
+    void video_refresh(double* remaining_time); 
+    void prepare_picture_for_display(double* remaining_time);
+
+
+    int get_master_sync_type();
     int av_sync_type;
+
+    /* get the current master clock value */
+    double get_master_clock();
+
+    // return the wanted number of samples to get better sync if sync_type is video or external master clock
+    int synchronize_audio(int nb_samples);
+
     double max_frame_duration;      // maximum duration of a frame - above this, we consider the jump a timestamp discontinuity
 
     int frame_drops_early;
     int frame_drops_late;
 
+    Frame* get_current_subtitle_frame(Frame* current_video_frame);
+
+    // }}} 'simple av decoder' section 
 
     int eof;
     int step; // 单帧模式
@@ -587,16 +601,6 @@ public:
     int last_video_stream, last_audio_stream, last_subtitle_stream;
 
     SimpleConditionVar continue_read_thread;
-
-    int get_master_sync_type();
-
-    /* get the current master clock value */
-    double get_master_clock();
-
-    // return the wanted number of samples to get better sync if sync_type is video or external master clock
-    int synchronize_audio(int nb_samples);
-
-    Frame* get_current_subtitle_frame( Frame* current_video_frame);
 
 protected:    
     virtual unsigned run();  //  stream reader thread 
