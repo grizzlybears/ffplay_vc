@@ -88,12 +88,12 @@ int PacketQueue::is_flush_pkt(const AVPacket& to_check)
 
 int PacketQueue::packet_queue_put_private( AVPacket *pkt)
 {
-    MyAVPacketList *pkt1;
+    MyAVPacketListNode* pkt1;
 
     if (this->abort_request)
        return -1;
 
-    pkt1 = (MyAVPacketList*) av_malloc(sizeof(MyAVPacketList));
+    pkt1 = (MyAVPacketListNode*) av_malloc(sizeof(MyAVPacketListNode));
     if (!pkt1)
         return -1;
 
@@ -114,7 +114,7 @@ int PacketQueue::packet_queue_put_private( AVPacket *pkt)
     this->nb_packets++;
     this->size += pkt1->pkt.size + sizeof(*pkt1);
 
-    this->duration += pkt1->pkt.duration;
+    this->total_duration += pkt1->pkt.duration;
     /* XXX: should duplicate packet data in DV case */
 
     this->cond.wake();
@@ -149,7 +149,7 @@ int PacketQueue::packet_queue_put_nullpacket( int stream_index)
 
 void PacketQueue::packet_queue_flush()
 {
-    MyAVPacketList *pkt, *pkt1;
+    MyAVPacketListNode *pkt, *pkt1;
 
     AutoLocker _yes_locked(this->cond);
     
@@ -162,7 +162,7 @@ void PacketQueue::packet_queue_flush()
     this->first_pkt = NULL;
     this->nb_packets = 0;
     this->size = 0;
-    this->duration = 0;
+    this->total_duration = 0;
 }
 
 void PacketQueue::packet_queue_destroy()
@@ -187,7 +187,7 @@ void PacketQueue::packet_queue_start()
 /* return < 0 if aborted, 0 if no packet and > 0 if packet.  */
 int PacketQueue::packet_queue_get( AVPacket *pkt, int block, /*out*/ int *serial)
 {
-    MyAVPacketList *pkt1;
+    MyAVPacketListNode *pkt1;
     int ret;
 
     AutoLocker _yes_locked(this->cond);
@@ -209,7 +209,7 @@ int PacketQueue::packet_queue_get( AVPacket *pkt, int block, /*out*/ int *serial
             // 调整 ‘queue统计’
             this->nb_packets--;
             this->size -= pkt1->pkt.size + sizeof(*pkt1);
-            this->duration -= pkt1->pkt.duration;
+            this->total_duration -= pkt1->pkt.duration;
             
             // output 节点
             *pkt = pkt1->pkt;
@@ -277,7 +277,7 @@ int Decoder::decoder_init( AVCodecContext *avctx, int stream_id, AVStream* strea
     this->stream_id = stream_id;
     this->stream = stream;
     
-    this->empty_queue_cond = empty_queue_cond;
+    this->empty_pkt_queue_cond = empty_queue_cond;
     this->start_pts = AV_NOPTS_VALUE;
     this->pkt_serial = -1;
 
@@ -335,8 +335,8 @@ int Decoder::decoder_decode_frame(AVFrame *frame, AVSubtitle *sub) {
 
         AVPacket pkt;
         do {
-            if (this->packet_q.nb_packets == 0)
-                this->empty_queue_cond->wake();
+            if (this->packet_q.nb_packets == 0) // todo: 为何要q里没包才wake()? reader thread是判断 decoder->stream_has_enough_packets() 决定是否继续读的
+                this->empty_pkt_queue_cond->wake();
                 
             if (this->is_packet_pending) {
                 av_packet_move_ref(&pkt, &this->pending_pkt);
@@ -400,10 +400,10 @@ void Decoder::decoder_destroy() {
     this->frame_q.frame_queue_destory();
 }
 
-void Decoder::decoder_abort( FrameQueue* fq)
+void Decoder::decoder_abort()
 {
     this->packet_q.packet_queue_abort();
-    fq->frame_queue_signal();
+    this->frame_q.frame_queue_signal();
 
     this->BaseThread::wait_thread_quit();  
     this->BaseThread::safe_cleanup();
@@ -1067,7 +1067,7 @@ void VideoDecoder::video_image_display()
 
     sp = this->_vs->get_current_subtitle_frame( vp);
 
-    Render::calculate_display_rect(&rect, this->xleft, this->ytop, this->width, this->height, vp->width, vp->height, vp->sar);
+    Render::calculate_display_rect(&rect, this->xleft, this->ytop, this->width, this->height, vp->width, vp->height, vp->sample_aspect_ratio);
 
     if (!vp->uploaded) {
         if (this->_vs->render.upload_texture(&this->_vs->render.vid_texture, vp->frame, &this->img_convert_ctx) < 0)
@@ -1103,16 +1103,16 @@ void VideoState::stream_component_close( int stream_index)
 
     switch (codecpar->codec_type) {
     case AVMEDIA_TYPE_AUDIO:
-        this->auddec.decoder_abort(&this->auddec.frame_q);        
+        this->auddec.decoder_abort();
         this->auddec.decoder_destroy();
 
         break;
     case AVMEDIA_TYPE_VIDEO:
-        this->viddec.decoder_abort( &this->viddec.frame_q);
+        this->viddec.decoder_abort();
         this->viddec.decoder_destroy();
         break;
     case AVMEDIA_TYPE_SUBTITLE:
-        this->subdec.decoder_abort( &this->subdec.frame_q);
+        this->subdec.decoder_abort();
         this->subdec.decoder_destroy();
         break;
     default:
@@ -1138,8 +1138,7 @@ void VideoState::stream_component_close( int stream_index)
     }
 }
 
-// 关闭并释放 'is'
-void VideoState::close()
+void VideoState::close_input_stream()
 {
     /* XXX: use a special url_shutdown call to abort parse cleanly */
     this->abort_request = 1;
@@ -1160,30 +1159,6 @@ void VideoState::close()
         
 
 }
-
-
-
-void do_exit(VideoState *is)
-{
-    if (is) {
-        is->render.safe_release();
-        is->close();
-        delete is;
-    }
-
-    avformat_network_deinit();
-    if (opt_show_status)
-        printf("\n");
-    SDL_Quit();
-    av_log(NULL, AV_LOG_QUIET, "%s", "");
-    exit(0);
-}
-
-void sigterm_handler(int sig)
-{
-    exit(123);
-}
-
 
 
 int VideoDecoder::video_open()
@@ -1609,7 +1584,7 @@ int VideoDecoder::queue_picture( AVFrame *src_frame, double pts, double duration
     if (!(vp = frame_q.frame_queue_peek_writable()))
         return -1;
 
-    vp->sar = src_frame->sample_aspect_ratio;
+    vp->sample_aspect_ratio = src_frame->sample_aspect_ratio;
     vp->uploaded = 0;
 
     vp->width = src_frame->width;
@@ -1621,7 +1596,7 @@ int VideoDecoder::queue_picture( AVFrame *src_frame, double pts, double duration
     vp->pos = pos;
     vp->serial = serial;
 
-    this->_vs->render.set_default_window_size(vp->width, vp->height, vp->sar);
+    this->_vs->render.set_default_window_size(vp->width, vp->height, vp->sample_aspect_ratio);
 
     av_frame_move_ref(vp->frame, src_frame);
     frame_q.frame_queue_push();
@@ -1724,7 +1699,8 @@ int Decoder::stream_has_enough_packets() {
     return stream_id < 0 ||
         packet_q.abort_request ||
         (stream->disposition & AV_DISPOSITION_ATTACHED_PIC) ||
-        packet_q.nb_packets > MIN_FRAMES && (!packet_q.duration || av_q2d(stream->time_base) * packet_q.duration > 1.0
+        packet_q.nb_packets > MIN_FRAMES && (!packet_q.total_duration    // 如果 total_duration 是0，说明pkt.duration无效，那就是只看包数量
+                                            || av_q2d(stream->time_base) * packet_q.total_duration > 1.0
             );
 }
 
@@ -2083,7 +2059,7 @@ int AudioDecoder::audio_open(void *opaque, int64_t wanted_channel_layout, int wa
     return spec.size;
 }
 
-/* open a given stream. Return 0 if OK */
+/* open a given stream, create decoder for it. Return 0 if OK */
 int VideoState::stream_component_open(int stream_index)
 {
     if (stream_index < 0 || stream_index >= (int)format_context->nb_streams)
@@ -2217,7 +2193,7 @@ int VideoState::open_streams()
     
     // 2.1 av_find_best_stream
     unsigned int i;
-    for (i = 0; i < format_context->nb_streams; i++) {
+    for (i = 0; i < this->format_context->nb_streams; i++) {
         st_index[i] = -1;
     }
 
@@ -2355,17 +2331,6 @@ unsigned VideoState::run()
     AVPacket pkt1, *pkt = &pkt1;
     this->eof = 0;
 
-    // 1. 打开文件，酌情seek   // todo: move step1,2 to VideoState::open
-    if (open_stream_file())
-    {
-        goto fail;
-    }
-
-    // 2. 逐个打开流
-    if (open_streams())
-    {
-        goto fail;
-    }
 
     // 3. real loop
     for (;;) {
@@ -2478,11 +2443,11 @@ void AutoReleasePtr<VideoState>::release()
 {
     if (!me)
         return;
-    me->close();
+    me->close_input_stream();
     //外界会delete
 }
 
-int VideoState::open(const char *filename, AVInputFormat *iformat)
+int VideoState::open_input_stream(const char *filename, AVInputFormat *iformat)
 {
     AutoReleasePtr<VideoState> close_if_failed(this);
 
@@ -2521,6 +2486,21 @@ int VideoState::open(const char *filename, AVInputFormat *iformat)
     
     this->auddec.muted = 0;
     this->av_sync_type = opt_av_sync_type;
+
+
+    // 打开文件，酌情seek   
+    if (open_stream_file())
+    {
+        return 5;
+    }
+
+    // 逐个打开流
+    if (open_streams())
+    {
+        return 6;
+    }
+
+
     this->create_thread();
     
     close_if_failed.dismiss();

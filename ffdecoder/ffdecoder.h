@@ -107,19 +107,19 @@ extern "C"
 static unsigned sws_flags = SWS_BICUBIC;
 
 
-typedef struct MyAVPacketList {  // 扩展了 AVPacket，增加serial， 将来可以考虑改成继承 AVPacke，再套一个std::list
+typedef struct MyAVPacketListNode {  // 扩展了 AVPacket，增加serial， 将来可以考虑改成继承 AVPacke，再套一个std::list
     AVPacket pkt;
-    struct MyAVPacketList *next;
+    struct MyAVPacketListNode*next;
     int serial;
-} MyAVPacketList;
+} MyAVPacketListNode;
 
 class PacketQueue 
 {
 public:
-    MyAVPacketList *first_pkt, *last_pkt;
+    MyAVPacketListNode *first_pkt, *last_pkt;
     int nb_packets;
     int size;
-    int64_t duration;
+    int64_t total_duration;  // sum of each packet's duration in q
     int abort_request;
     int serial;
     
@@ -135,7 +135,7 @@ public:
         last_pkt = NULL;
         nb_packets = 0;
         size = 0;
-        duration = 0;
+        total_duration = 0;
         serial = 0;
         abort_request = 1;
     }
@@ -217,7 +217,7 @@ typedef struct Frame {
     int width;
     int height;
     int format;
-    AVRational sar;
+    AVRational sample_aspect_ratio;
     int uploaded;
     int flip_v;
 } Frame;
@@ -298,7 +298,7 @@ public:
     virtual void decoder_destroy();
 
     virtual int decoder_start(); //启动decoder thread. 
-    virtual void decoder_abort(FrameQueue* fq);  // 指示decoder thread 退出，并等待其退出. todo:  fq 已经搬进this
+    virtual void decoder_abort();  // 指示decoder thread 退出，并等待其退出
 
 
     int stream_has_enough_packets(); 
@@ -325,7 +325,7 @@ protected:
     int64_t next_pts;
     AVRational next_pts_tb;
 
-    SimpleConditionVar* empty_queue_cond;  // just ref, dont take owner ship
+    SimpleConditionVar* empty_pkt_queue_cond;  // just ref, dont take owner ship
 public:
     FrameQueue  frame_q;        // 原 VideoState:: pictq/sampq/subpq
     PacketQueue packet_q;       // 原 VideoState:: videoq/audioq/subtitleq
@@ -348,7 +348,7 @@ public:
     int width, height, xleft, ytop;
 
     double frame_timer; // frame_timer 是‘当前显示帧’,理论上应该‘上屏’的时刻。 
-                        // 比如 根据pts, 当前帧应该在 00:05:38.04 显示，但实际上'刷新显示操作'发生在 00:05:38.045，即物理上该帧于00:05:38.045‘上屏’
+                        // 比如 根据pts, 当前帧应该在 00:05:38.04 显示，但实际上'刷新显示操作'发生在 00:05:38.05，即物理上该帧于00:05:38.05‘上屏’
                         // 我们还是认为 frame_timer == 00:05:38.04
     struct SwsContext* img_convert_ctx;
     virtual int decoder_init(AVCodecContext* avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond);
@@ -530,16 +530,16 @@ public:
         seek_req = 0;
     }
 
-    int open(const char* filename, AVInputFormat* iformat);
-    // 关闭VS，释放内部资源
-    void close();
+    int open_input_stream(const char* filename, AVInputFormat* iformat);
+    
+    void close_input_stream(); 
     
     // called to display each frame 
     void video_refresh(double* remaining_time);
         
 public:
 
-    Render render;
+    Render render; // todo: move to decoder
 
     int abort_request;
     int force_refresh;
@@ -593,16 +593,16 @@ protected:
     
     int last_paused; // 之前一次reader loop的时候，是否是paused
 
+    int open_stream_file();
+    int open_streams();
 
-    // open a given stream. Return 0 if OK 
+
+    // open a given stream, create decoder for it. Return 0 if OK 
     int stream_component_open( int stream_index);
     void stream_component_close( int stream_index);
 
 
     // 'reader thread' section {{{
-    int open_stream_file();
-    int open_streams();
-
     int  read_loop_check_pause(); // return: > 0 -- shoud 'continue', 0 -- go on current iteration, < 0 -- error exit loop
     int  read_loop_check_seek();  // return: > 0 -- shoud 'continue', 0 -- go on current iteration, < 0 -- error exit loop
 
@@ -656,8 +656,6 @@ inline int compute_mod(int a, int b)
 
 //  }}} render section 
 
-
-void do_exit(VideoState* is);
 void sigterm_handler(int sig);
 
 /* seek in the stream */

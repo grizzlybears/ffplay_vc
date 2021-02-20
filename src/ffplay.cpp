@@ -66,8 +66,7 @@ void event_loop(VideoState *cur_stream)
         switch (event.type) {
         case SDL_KEYDOWN:
             if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_q) {
-                do_exit(cur_stream);
-                break;
+                return;
             }
             // If we don't yet have a window, skip all key events, because read_thread might still be initializing...
             if (!cur_stream->viddec.width)
@@ -212,8 +211,8 @@ void event_loop(VideoState *cur_stream)
             break;
         case SDL_QUIT:
         case FF_QUIT_EVENT:
-            do_exit(cur_stream);
-            break;
+            return;
+
         default:
             break;
         }
@@ -368,8 +367,6 @@ int main(int argc, char **argv)
 
     init_opts();
 
-    signal(SIGINT , sigterm_handler); /* Interrupt (ANSI).    */
-    signal(SIGTERM, sigterm_handler); /* Termination (ANSI).  */
 
     show_banner(argc, argv, options);
 
@@ -392,22 +389,47 @@ int main(int argc, char **argv)
     if (!is)
     {
         av_log(NULL, AV_LOG_FATAL, "Failed to create VideoState.\n");
-        do_exit(NULL);
+        goto EXIT;
     }
 
     if (is->render.init(opt_audio_disable, opt_alwaysontop))
     {
-        do_exit(is);
+        goto EXIT;
     }
     
-    if (is->open(opt_input_filename, opt_file_iformat)) {
+    if (is->open_input_stream(opt_input_filename, opt_file_iformat)) {
         av_log(NULL, AV_LOG_FATAL, "Failed to initialize VideoState!\n");
-        do_exit(is);
+        goto EXIT;
     }
+
+    signal(SIGINT, sigterm_handler); /* Interrupt (ANSI).    */
+    signal(SIGTERM, sigterm_handler); /* Termination (ANSI).  */
 
     event_loop(is);
 
-    /* never returns */
+EXIT:
+    if (is)
+    {
+        is->render.safe_release();
+        is->close_input_stream();
+        delete is;
+    }
+
+    avformat_network_deinit();
+    if (opt_show_status)
+        printf("\n");
+    SDL_Quit();
+    av_log(NULL, AV_LOG_QUIET, "%s", "Bye.\n");
 
     return 0;
+}
+
+
+void sigterm_handler(int sig)
+{
+    SDL_Event event;
+    event.type = SDL_QUIT;
+
+    SDL_PushEvent(&event);
+
 }
