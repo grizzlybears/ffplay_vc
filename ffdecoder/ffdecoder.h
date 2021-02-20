@@ -492,6 +492,10 @@ public:
 
     void show_window(const char* title, int w, int h, int left, int top, int fullscreen);
 
+    int upload_texture(SDL_Texture** tex, AVFrame* frame, struct SwsContext** img_convert_ctx);
+
+    void show_texture(const Frame* video_frame, const SDL_Rect& rect, int show_subtitle);
+
     void clear_render();
     void draw_render();
 
@@ -506,7 +510,7 @@ public:
 
     static void get_sdl_pix_fmt_and_blendmode(int format, Uint32* sdl_pix_fmt, SDL_BlendMode* sdl_blendmode);
     static void set_sdl_yuv_conversion_mode(AVFrame* frame);
-    int upload_texture(SDL_Texture** tex, AVFrame* frame, struct SwsContext** img_convert_ctx);
+    
     static void calculate_display_rect(SDL_Rect* rect,
         int scr_xleft, int scr_ytop, int scr_width, int scr_height,
         int pic_width, int pic_height, AVRational pic_sar);

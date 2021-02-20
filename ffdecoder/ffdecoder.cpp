@@ -1076,26 +1076,17 @@ void VideoDecoder::video_image_display()
         vp->flip_v = vp->frame->linesize[0] < 0;
     }
 
-    // todo: move these SDL_xxx stuff to Render
-    Render::set_sdl_yuv_conversion_mode(vp->frame);
-    SDL_RenderCopyEx(this->_vs->render.renderer, this->_vs->render.vid_texture, NULL, &rect, 0, NULL, (SDL_RendererFlip)(vp->flip_v ? SDL_FLIP_VERTICAL : 0));
+    this->_vs->render.show_texture(vp, rect, sp ? 1 : 0);
+}
+
+void Render::show_texture(const Frame* video_frame, const SDL_Rect& rect, int show_subtitle)
+{
+    Render::set_sdl_yuv_conversion_mode(video_frame->frame);
+    SDL_RenderCopyEx(this->renderer, this->vid_texture, NULL, &rect, 0, NULL, (SDL_RendererFlip)(video_frame->flip_v ? SDL_FLIP_VERTICAL : 0));
     Render::set_sdl_yuv_conversion_mode(NULL);
-    if (sp) {
-#if USE_ONEPASS_SUBTITLE_RENDER
-        SDL_RenderCopy(this->_vs->render.renderer, this->_vs->render.sub_texture, NULL, &rect);
-#else
-        int i;
-        double xratio = (double)rect.w / (double)sp->width;
-        double yratio = (double)rect.h / (double)sp->height;
-        for (i = 0; i < sp->sub.num_rects; i++) {
-            SDL_Rect *sub_rect = (SDL_Rect*)sp->sub.rects[i];
-            SDL_Rect target = {.x = rect.x + sub_rect->x * xratio,
-                               .y = rect.y + sub_rect->y * yratio,
-                               .w = sub_rect->w * xratio,
-                               .h = sub_rect->h * yratio};
-            SDL_RenderCopy(renderer, is->sub_texture, sub_rect, &target);
-        }
-#endif
+
+    if (show_subtitle) {
+        SDL_RenderCopy(this->renderer, this->sub_texture, NULL, &rect);
     }
 }
 
