@@ -33,18 +33,13 @@ extern "C" {
 AVInputFormat * opt_file_iformat;
 const char * opt_input_filename;
   
- int opt_audio_disable = 0;
  int opt_subtitle_disable = 0;
- float opt_seek_interval = 10;
- int opt_alwaysontop = 0;
- int opt_startup_volume = 100;
  int opt_show_status = -1; //原来是 -1;
  int opt_av_sync_type = AV_SYNC_AUDIO_MASTER;
  int64_t opt_start_time = AV_NOPTS_VALUE;
  int64_t opt_duration = AV_NOPTS_VALUE;
  int opt_decoder_reorder_pts = -1;
  int opt_autoexit = 0;
- int opt_framedrop = -1;
  int opt_infinite_buffer = -1;
 
 
@@ -455,13 +450,7 @@ int AudioDecoder::decoder_init(AVCodecContext* avctx, int stream_id, AVStream* s
     this->audio_clock_serial = -1;
 
     //////////////////////////////////////////////////////////////////////////
-
-    if (opt_startup_volume < 0)
-        av_log(NULL, AV_LOG_WARNING, "-volume=%d < 0, setting to 0\n", opt_startup_volume);
-    if (opt_startup_volume > 100)
-        av_log(NULL, AV_LOG_WARNING, "-volume=%d > 100, setting to 100\n", opt_startup_volume);
-    this->audio_volume = opt_startup_volume;
-
+    
     this->audio_volume = av_clip(this->audio_volume, 0, 100);
     this->audio_volume = av_clip(SDL_MIX_MAXVOLUME * this->audio_volume / 100, 0, SDL_MIX_MAXVOLUME);
 
@@ -1434,10 +1423,6 @@ void VideoState::update_video_clock(double pts, int64_t pos, int serial) {
 /* called to display each frame */
 void VideoState::video_refresh(double *remaining_time)
 {
-    double time_now;
-
-    Frame *sp, *sp2;
-
     if (!this->paused && this->get_master_sync_type() == AV_SYNC_EXTERNAL_CLOCK && this->realtime)
         this->check_external_clock_speed();
 
@@ -1505,7 +1490,7 @@ retry:
         Frame* nextvp = this->viddec.frame_q.frame_queue_peek_next();
         duration = this->vp_duration(vp, nextvp);
         if (!this->step &&
-            (opt_framedrop > 0 || (opt_framedrop && get_master_sync_type() != AV_SYNC_VIDEO_MASTER)) &&
+            (get_master_sync_type() != AV_SYNC_VIDEO_MASTER) &&
             time_now > this->viddec.frame_timer + duration) // 没有时间留给'nextvp'显示，所以要跳过'nextvp'。 
         {
             this->frame_drops_late++;
@@ -1662,7 +1647,7 @@ int VideoDecoder::get_video_frame( AVFrame *frame)
 
     frame->sample_aspect_ratio = av_guess_sample_aspect_ratio(this->_vs->format_context, stream, frame);
 
-    if (opt_framedrop >0 || (opt_framedrop && this->_vs->get_master_sync_type() != AV_SYNC_VIDEO_MASTER)) {
+    if (this->_vs->get_master_sync_type() != AV_SYNC_VIDEO_MASTER) {
         // 看看是否有必要抛弃帧
         if (frame->pts != AV_NOPTS_VALUE) {
             double diff = dpts - this->_vs->get_master_clock();
@@ -2241,12 +2226,12 @@ int VideoState::open_streams()
         av_find_best_stream(format_context, AVMEDIA_TYPE_VIDEO,
             st_index[AVMEDIA_TYPE_VIDEO], -1, NULL, 0);
 
-    if (!opt_audio_disable)
-        st_index[AVMEDIA_TYPE_AUDIO] =
-        av_find_best_stream(format_context, AVMEDIA_TYPE_AUDIO,
-            st_index[AVMEDIA_TYPE_AUDIO],
-            st_index[AVMEDIA_TYPE_VIDEO],
-            NULL, 0);
+    
+    st_index[AVMEDIA_TYPE_AUDIO] =
+    av_find_best_stream(format_context, AVMEDIA_TYPE_AUDIO,
+        st_index[AVMEDIA_TYPE_AUDIO],
+        st_index[AVMEDIA_TYPE_VIDEO],
+        NULL, 0);
 
     if (!opt_subtitle_disable)
         st_index[AVMEDIA_TYPE_SUBTITLE] =
@@ -2386,11 +2371,12 @@ unsigned VideoState::run()
         // 3.4 准备读入packet
 
         /* if the queue are full, no need to read more */
-        if (opt_infinite_buffer <1 &&
+        if  (opt_infinite_buffer <1 &&
               (this->auddec.packet_q.size + this->viddec.packet_q.size + this->subdec.packet_q.size > MAX_QUEUE_SIZE
-            || (this->auddec.stream_has_enough_packets() &&
-                this->viddec.stream_has_enough_packets() &&
-                this->subdec.stream_has_enough_packets())))
+              || (this->auddec.stream_has_enough_packets() &&
+                  this->viddec.stream_has_enough_packets() &&
+                  this->subdec.stream_has_enough_packets()))
+            )
         {
             /* wait 10 ms */
             this->continue_read_thread.timed_wait(10);

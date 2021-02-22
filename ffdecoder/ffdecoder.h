@@ -394,6 +394,7 @@ public:
         audio_buf = audio_buf1 = NULL;
         swr_ctx = NULL;   
         audio_callback_time = 0;
+        audio_volume = 100;
     }
     virtual int decoder_init(AVCodecContext* avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond);
     virtual unsigned run();  // BaseThread method 
@@ -412,7 +413,7 @@ public:
     unsigned int audio_buf1_size;
     int audio_buf_index; /* in bytes */
     int audio_write_buf_size;
-    int audio_volume;
+    int audio_volume;  //  volume [0 , 100]
     int muted;
     struct AudioParams audio_src;
     struct AudioParams audio_tgt;  // audio_open 返回，环境要求的audio params
@@ -484,7 +485,7 @@ public:
         safe_release();
     }
 
-    int init(int opt_audio_disable, int opt_alwaysontop);
+    int init(int audio_disable, int alwaysontop);
 
     void toggle_full_screen();
 
@@ -644,16 +645,12 @@ extern AVInputFormat * opt_file_iformat;
 extern const char * opt_input_filename;
 extern int opt_audio_disable;
 extern int opt_subtitle_disable;
-extern float opt_seek_interval;
-extern int opt_alwaysontop;
-extern int opt_startup_volume ;
 extern int opt_show_status;
 extern int opt_av_sync_type;
 extern int64_t opt_start_time;  // 命令行 -ss ，由 av_parse_time 解析为 microseconds
 extern int64_t opt_duration;    // 命令行 -t  ，由 av_parse_time 解析为 microseconds
 extern int opt_decoder_reorder_pts ;
 extern int opt_autoexit;
-extern int opt_framedrop;
 extern int opt_infinite_buffer;
 
 extern int opt_full_screen;

@@ -123,16 +123,16 @@ void event_loop(VideoState *cur_stream)
                 cur_stream->seek_chapter( -1);
                 break;
             case SDLK_LEFT:
-                incr = opt_seek_interval ? -opt_seek_interval : -10.0;
+                incr =  -10.0; // 以秒为单位的，相对当前位置的seek幅度
                 goto do_seek;
             case SDLK_RIGHT:
-                incr = opt_seek_interval ? opt_seek_interval : 10.0;
+                incr =  10.0; // 以秒为单位的，相对当前位置的seek幅度
                 goto do_seek;
             case SDLK_UP:
-                incr = 60.0;
+                incr = 60.0;  // 以秒为单位的，相对当前位置的seek幅度
                 goto do_seek;
             case SDLK_DOWN:
-                incr = -60.0;
+                incr = -60.0; // 以秒为单位的，相对当前位置的seek幅度
             do_seek:
                     {
                         pos = cur_stream->get_master_clock();
@@ -235,11 +235,6 @@ int opt_format(void *optctx, const char *opt, const char *arg)
     return 0;
 }
 
-int opt_frame_pix_fmt(void *optctx, const char *opt, const char *arg)
-{
-    av_log(NULL, AV_LOG_WARNING, "Option -pix_fmt is deprecated, use -pixel_format.\n");
-    return opt_default(NULL, "pixel_format", arg);
-}
 
 int opt_sync(void *optctx, const char *opt, const char *arg)
 {
@@ -288,22 +283,15 @@ static const OptionDef options[] = {
     CMDUTILS_COMMON_OPTIONS
     { "s", HAS_ARG | OPT_VIDEO, { .func_arg = opt_frame_size }, "set frame size (WxH or abbreviation)", "size" },
     { "fs", OPT_BOOL, { &opt_full_screen }, "force full screen" },
-    { "an", OPT_BOOL, { &opt_audio_disable }, "disable audio" },
     { "sn", OPT_BOOL, { &opt_subtitle_disable }, "disable subtitling" },
     { "ss", HAS_ARG, { .func_arg = opt_seek }, "seek to a given position in seconds", "pos" },
     { "t", HAS_ARG, { .func_arg = parse_opt_duration }, "play  \"duration\" seconds of audio/video", "duration" },
-    { "seek_interval", OPT_FLOAT | HAS_ARG, { &opt_seek_interval }, "set seek interval for left/right keys, in seconds", "seconds" },
-    { "alwaysontop", OPT_BOOL, { &opt_alwaysontop }, "window always on top" },
-    { "volume", OPT_INT | HAS_ARG, { &opt_startup_volume}, "set startup volume 0=min 100=max", "volume" },
     { "f", HAS_ARG, { .func_arg = opt_format }, "force format", "fmt" },
-    { "pix_fmt", HAS_ARG | OPT_EXPERT | OPT_VIDEO, { .func_arg = opt_frame_pix_fmt }, "set pixel format", "format" },
     { "stats", OPT_BOOL | OPT_EXPERT, { &opt_show_status }, "show status", "" },
     { "drp", OPT_INT | HAS_ARG | OPT_EXPERT, { &opt_decoder_reorder_pts }, "let decoder reorder pts 0=off 1=on -1=auto", ""},
     { "sync", HAS_ARG | OPT_EXPERT, { .func_arg = opt_sync }, "set audio-video sync. type (type=audio/video/ext)", "type" },
     { "autoexit", OPT_BOOL | OPT_EXPERT, { &opt_autoexit }, "exit at the end", "" },
-    { "framedrop", OPT_BOOL | OPT_EXPERT, { &opt_framedrop }, "drop frames when cpu is too slow", "" },
     { "infbuf", OPT_BOOL | OPT_EXPERT, { &opt_infinite_buffer }, "don't limit the input buffer size (useful with realtime streams)", "" },
-    { "default", HAS_ARG | OPT_AUDIO | OPT_VIDEO | OPT_EXPERT, { .func_arg = opt_default }, "generic catch all option", "" },
     { "i", OPT_BOOL, { &dummy}, "read specified file", "input_file"},    
     { NULL, },
 };
@@ -392,7 +380,7 @@ int main(int argc, char **argv)
         goto EXIT;
     }
 
-    if (is->render.init(opt_audio_disable, opt_alwaysontop))
+    if (is->render.init(0 /*audio disable*/ , 0 /*alwaysontop*/))
     {
         goto EXIT;
     }
