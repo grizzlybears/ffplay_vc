@@ -283,7 +283,6 @@ static const OptionDef options[] = {
     CMDUTILS_COMMON_OPTIONS
     { "s", HAS_ARG | OPT_VIDEO, { .func_arg = opt_frame_size }, "set frame size (WxH or abbreviation)", "size" },
     { "fs", OPT_BOOL, { &opt_full_screen }, "force full screen" },
-    { "sn", OPT_BOOL, { &opt_subtitle_disable }, "disable subtitling" },
     { "ss", HAS_ARG, { .func_arg = opt_seek }, "seek to a given position in seconds", "pos" },
     { "t", HAS_ARG, { .func_arg = parse_opt_duration }, "play  \"duration\" seconds of audio/video", "duration" },
     { "f", HAS_ARG, { .func_arg = opt_format }, "force format", "fmt" },

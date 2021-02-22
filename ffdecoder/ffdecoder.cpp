@@ -310,10 +310,10 @@ int Decoder::decoder_decode_frame(AVFrame *frame, AVSubtitle *sub) {
                             if (frame->pts != AV_NOPTS_VALUE)
                                 frame->pts = av_rescale_q(frame->pts, this->avctx->pkt_timebase, tb);
                             else if (this->next_pts != AV_NOPTS_VALUE)
-                                frame->pts = av_rescale_q(this->next_pts, this->next_pts_tb, tb);
+                                frame->pts = av_rescale_q(this->next_pts, this->next_pts_timebase, tb);
                             if (frame->pts != AV_NOPTS_VALUE) {
                                 this->next_pts = frame->pts + frame->nb_samples;
-                                this->next_pts_tb = tb;
+                                this->start_pts_timebase = tb;
                             }
                         }
                         break;
@@ -350,8 +350,8 @@ int Decoder::decoder_decode_frame(AVFrame *frame, AVSubtitle *sub) {
         if (PacketQueue::is_flush_pkt(pkt)) {
             avcodec_flush_buffers(this->avctx);
             this->finished = 0;
-            this->next_pts = this->start_pts;
-            this->next_pts_tb = this->start_pts_tb;
+            this->next_pts          = this->start_pts;
+            this->next_pts_timebase = this->start_pts_timebase;
 
             continue;
         }
@@ -483,9 +483,9 @@ int AudioDecoder::decoder_init(AVCodecContext* avctx, int stream_id, AVStream* s
 
     if ((this->_vs->format_context->iformat->flags & (AVFMT_NOBINSEARCH | AVFMT_NOGENSEARCH | AVFMT_NO_BYTE_SEEK))
         && !this->_vs->format_context->iformat->read_seek)
-    {
+    {   // 如果iformat不支持seek，那么起始位置就以AVStream里说的为准，否则还有机会根据命令行-ss来seek
         this->start_pts = this->stream->start_time;
-        this->start_pts_tb = this->stream->time_base;
+        this->start_pts_timebase = this->stream->time_base;
     }
 
     SDL_PauseAudioDevice(this->_vs->render.audio_dev, 0);
@@ -517,32 +517,6 @@ void AudioDecoder::decoder_destroy() {
     }
         
     this->audio_buf = NULL;
-}
-int SubtitleDecoder::decoder_init(AVCodecContext* avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond)
-{
-    if (MyBase::decoder_init(avctx, stream_id, stream, empty_queue_cond))
-    {
-        return 1;
-    }
-
-    if (this->frame_q.frame_queue_init(&this->packet_q, SUBPICTURE_QUEUE_SIZE, 0) < 0)
-        return 2;
-
-    if (decoder_start())
-    {
-        return 3;
-    }
-    return 0;
-}
-
-void SubtitleDecoder::decoder_destroy() {
-    MyBase::decoder_destroy();
-
-    if (this->sub_convert_ctx)
-    {
-        sws_freeContext(this->sub_convert_ctx);
-        this->sub_convert_ctx = NULL;
-    }
 }
 
 //     }}} decoder section 
@@ -1011,81 +985,13 @@ void Render::set_sdl_yuv_conversion_mode(AVFrame *frame)
 #endif
 }
 
-Frame* VideoState::get_current_subtitle_frame( Frame* current_video_frame)
-{
-    if (!this->subdec.stream) 
-    {
-        return NULL;
-    }
-
-    if (this->subdec.frame_q.frame_queue_nb_remaining() <= 0)
-    {
-        return NULL;
-    }
-    
-    Frame* sp =  this->subdec.frame_q.frame_queue_peek();
-    if (current_video_frame->pts < sp->pts + ((float)sp->sub.start_display_time / 1000))
-    {
-        return NULL;
-    }
-
-    if (sp->uploaded)
-    {
-        return sp;
-    }
-    
-    
-    uint8_t* pixels[4];
-    int pitch[4];
-
-    if (!sp->width || !sp->height) {
-        sp->width = current_video_frame->width;
-        sp->height = current_video_frame->height;
-    }
-
-    if (this->render.realloc_texture(&this->render.sub_texture, SDL_PIXELFORMAT_ARGB8888, sp->width, sp->height, SDL_BLENDMODE_BLEND, 1) < 0)
-    {
-        LOG_WARN("Failed in realloc_texture for substitle start at %u\n" , sp->sub.start_display_time);
-        return NULL ;
-    }
-
-    for (unsigned int i = 0; i < sp->sub.num_rects; i++) {
-        AVSubtitleRect* sub_rect = sp->sub.rects[i];
-
-        sub_rect->x = av_clip(sub_rect->x, 0, sp->width);
-        sub_rect->y = av_clip(sub_rect->y, 0, sp->height);
-        sub_rect->w = av_clip(sub_rect->w, 0, sp->width - sub_rect->x);
-        sub_rect->h = av_clip(sub_rect->h, 0, sp->height - sub_rect->y);
-
-        this->subdec.sub_convert_ctx = sws_getCachedContext(this->subdec.sub_convert_ctx,
-            sub_rect->w, sub_rect->h, AV_PIX_FMT_PAL8,
-            sub_rect->w, sub_rect->h, AV_PIX_FMT_BGRA,
-            0, NULL, NULL, NULL);
-        if (!this->subdec.sub_convert_ctx) {
-            av_log(NULL, AV_LOG_FATAL, "Cannot initialize the conversion context\n");
-            return NULL;
-        }
-
-        if (!SDL_LockTexture(this->render.sub_texture, (SDL_Rect*)sub_rect, (void**)pixels, pitch)) {
-            sws_scale(this->subdec.sub_convert_ctx, (const uint8_t* const*)sub_rect->data, sub_rect->linesize,
-                0, sub_rect->h, pixels, pitch);
-            SDL_UnlockTexture(this->render.sub_texture);
-        }
-    }
-    sp->uploaded = 1;
-        
-    return sp;
-}
-
 void VideoDecoder::video_image_display()
 {
     Frame *vp;
-    Frame *sp = NULL;
+
     SDL_Rect rect;
 
     vp = this->frame_q.frame_queue_peek_last();
-
-    sp = this->_vs->get_current_subtitle_frame( vp);
 
     Render::calculate_display_rect(&rect, this->xleft, this->ytop, this->width, this->height, vp->width, vp->height, vp->sample_aspect_ratio);
 
@@ -1096,7 +1002,7 @@ void VideoDecoder::video_image_display()
         vp->flip_v = vp->frame->linesize[0] < 0;
     }
 
-    this->_vs->render.show_texture(vp, rect, sp ? 1 : 0);
+    this->_vs->render.show_texture(vp, rect,  0);
 }
 
 void Render::show_texture(const Frame* video_frame, const SDL_Rect& rect, int show_subtitle)
@@ -1131,10 +1037,6 @@ void VideoState::stream_component_close( int stream_index)
         this->viddec.decoder_abort();
         this->viddec.decoder_destroy();
         break;
-    case AVMEDIA_TYPE_SUBTITLE:
-        this->subdec.decoder_abort();
-        this->subdec.decoder_destroy();
-        break;
     default:
         break;
     }
@@ -1148,10 +1050,6 @@ void VideoState::stream_component_close( int stream_index)
     case AVMEDIA_TYPE_VIDEO:
         this->viddec.stream = NULL;
         this->viddec.stream_id = -1;
-        break;
-    case AVMEDIA_TYPE_SUBTITLE:
-        this->subdec.stream = NULL;
-        this->subdec.stream_id = -1;
         break;
     default:
         break;
@@ -1169,8 +1067,6 @@ void VideoState::close_input_stream()
         stream_component_close(this->auddec.stream_id);
     if (this->viddec.stream_id >= 0)
         stream_component_close(this->viddec.stream_id);
-    if (this->subdec.stream_id >= 0)
-        stream_component_close( this->subdec.stream_id);
 
     avformat_close_input(&this->format_context);
 
@@ -1463,7 +1359,6 @@ retry:
         return;
 
     double time_now, last_duration, duration, delay;
-    Frame* sp, * sp2;
 
     /* compute nominal last_duration */
     last_duration = this->vp_duration(lastvp, vp);      // 根据pts计算出名义上lastvp应该显示多久
@@ -1499,41 +1394,6 @@ retry:
         }
     }
 
-    if (this->subdec.stream) {  // 酌情叠加字幕
-        while (this->subdec.frame_q.frame_queue_nb_remaining() > 0) {
-            sp = this->subdec.frame_q.frame_queue_peek();
-
-            if (this->subdec.frame_q.frame_queue_nb_remaining() > 1)
-                sp2 = this->subdec.frame_q.frame_queue_peek_next();
-            else
-                sp2 = NULL;
-
-            if (sp->serial != this->subdec.packet_q.serial
-                || (this->viddec.stream_clock.pts > (sp->pts + ((float)sp->sub.end_display_time / 1000)))
-                || (sp2 && this->viddec.stream_clock.pts > (sp2->pts + ((float)sp2->sub.start_display_time / 1000))))
-            {
-                if (sp->uploaded) {
-                    unsigned int i;
-                    for (i = 0; i < sp->sub.num_rects; i++) {
-                        AVSubtitleRect* sub_rect = sp->sub.rects[i];
-                        uint8_t* pixels;
-                        int pitch, j;
-
-                        if (!SDL_LockTexture(this->render.sub_texture, (SDL_Rect*)sub_rect, (void**)&pixels, &pitch)) {
-                            for (j = 0; j < sub_rect->h; j++, pixels += pitch)
-                                memset(pixels, 0, sub_rect->w << 2);
-                            SDL_UnlockTexture(this->render.sub_texture);
-                        }
-                    }
-                }
-                this->subdec.frame_q.frame_queue_next();
-            }
-            else {
-                break;
-            }
-        }
-    }
-
     this->viddec.frame_q.frame_queue_next();
     this->force_refresh = 1;
 
@@ -1546,7 +1406,7 @@ void VideoState::print_stream_status()
     AVBPrint buf;
     static int64_t last_time = 0;
     int64_t cur_time;
-    int aqsize, vqsize, sqsize;
+    int aqsize, vqsize;
     double av_diff;
 
     cur_time = av_gettime_relative();
@@ -1558,13 +1418,12 @@ void VideoState::print_stream_status()
     
     aqsize = 0;
     vqsize = 0;
-    sqsize = 0;
+    
     if (this->auddec.stream)
         aqsize = this->auddec.packet_q.size;
     if (this->viddec.stream)
         vqsize = this->viddec.packet_q.size;
-    if (this->subdec.stream)
-        sqsize = this->subdec.packet_q.size;
+
     av_diff = 0;
     if (this->auddec.stream && this->viddec.stream)
         av_diff = this->auddec.stream_clock.get_clock() - this->viddec.stream_clock.get_clock();
@@ -1575,14 +1434,13 @@ void VideoState::print_stream_status()
 
     av_bprint_init(&buf, 0, AV_BPRINT_SIZE_AUTOMATIC);
     av_bprintf(&buf,
-        "clock:%7.2f %s:%7.3f framedrop=%4d aq=%5dKB vq=%5dKB sq=%5dB f=%" PRId64 "/%" PRId64 "   \r",
+        "clock:%7.2f %s:%7.3f framedrop=%4d aq=%5dKB vq=%5dKB f=%" PRId64 "/%" PRId64 "   \r",
         this->get_master_clock(),
         (this->auddec.stream && this->viddec.stream) ? "A-V" : (this->viddec.stream ? "M-V" : (this->auddec.stream ? "M-A" : "   ")),
         av_diff,
         this->frame_drops_early + this->frame_drops_late,
         aqsize / 1024,
-        vqsize / 1024,
-        sqsize,
+        vqsize / 1024,        
         this->viddec.stream ? this->viddec.avctx->pts_correction_num_faulty_dts : 0,
         this->viddec.stream ? this->viddec.avctx->pts_correction_num_faulty_pts : 0);
 
@@ -1759,39 +1617,6 @@ unsigned int VideoDecoder::run()
     }
  the_end:
     av_frame_free(&frame);
-    return 0;
-}
-
-unsigned int SubtitleDecoder::run()
-{
-    Frame *sp;
-    int got_subtitle;
-    double pts;
-
-    for (;;) {
-        if (!(sp = frame_q.frame_queue_peek_writable()))
-            return 0;
-
-        if ((got_subtitle = decoder_decode_frame( NULL, &sp->sub)) < 0)
-            break;
-
-        pts = 0;
-
-        if (got_subtitle && sp->sub.format == 0) {
-            if (sp->sub.pts != AV_NOPTS_VALUE)
-                pts = sp->sub.pts / (double)AV_TIME_BASE;
-            sp->pts = pts;
-            sp->serial = pkt_serial;
-            sp->width = avctx->width;
-            sp->height = avctx->height;
-            sp->uploaded = 0;
-
-            /* now we can update the picture count */
-            frame_q.frame_queue_push();
-        } else if (got_subtitle) {
-            avsubtitle_free(&sp->sub);
-        }
-    }
     return 0;
 }
 
@@ -2104,10 +1929,6 @@ int VideoState::stream_component_open(int stream_index)
         this->viddec.decoder_init( avctx, stream_index, format_context->streams[stream_index], &this->continue_read_thread); 
         this->last_video_stream = stream_index;
         break;
-    case AVMEDIA_TYPE_SUBTITLE: 
-        this->subdec.decoder_init( avctx, stream_index, format_context->streams[stream_index], &this->continue_read_thread);
-        this->last_subtitle_stream = stream_index;
-        break;
     default:
         break;
     }
@@ -2317,10 +2138,6 @@ int  VideoState::read_loop_check_seek()   // return: > 0 -- shoud 'continue', 0 
             this->auddec.packet_q.packet_queue_flush();
             this->auddec.packet_q.packet_queue_put(&PacketQueue::flush_pkt); // packet queue 的 serial ++
         }
-        if (this->subdec.stream_id >= 0) {
-            this->subdec.packet_q.packet_queue_flush();
-            this->subdec.packet_q.packet_queue_put(&PacketQueue::flush_pkt);
-        }
         if (this->viddec.stream_id >= 0) {
             this->viddec.packet_q.packet_queue_flush();
             this->viddec.packet_q.packet_queue_put(&PacketQueue::flush_pkt);
@@ -2372,10 +2189,9 @@ unsigned VideoState::run()
 
         /* if the queue are full, no need to read more */
         if  (opt_infinite_buffer <1 &&
-              (this->auddec.packet_q.size + this->viddec.packet_q.size + this->subdec.packet_q.size > MAX_QUEUE_SIZE
+              (this->auddec.packet_q.size + this->viddec.packet_q.size > MAX_QUEUE_SIZE
               || (this->auddec.stream_has_enough_packets() &&
-                  this->viddec.stream_has_enough_packets() &&
-                  this->subdec.stream_has_enough_packets()))
+                  this->viddec.stream_has_enough_packets() ))
             )
         {
             /* wait 10 ms */
@@ -2390,8 +2206,6 @@ unsigned VideoState::run()
                     this->viddec.packet_q.packet_queue_put_nullpacket( this->viddec.stream_id);
                 if (this->auddec.stream_id >= 0)
                     this->auddec.packet_q.packet_queue_put_nullpacket( this->auddec.stream_id);
-                if (this->subdec.stream_id >= 0)
-                    this->subdec.packet_q.packet_queue_put_nullpacket( this->subdec.stream_id);
                 this->eof = 1;
             }
             if (format_context->pb && format_context->pb->error) {
@@ -2417,9 +2231,6 @@ unsigned VideoState::run()
         }
         else if (pkt->stream_index == this->viddec.stream_id && !(this->viddec.stream->disposition & AV_DISPOSITION_ATTACHED_PIC)) {
             this->viddec.packet_q.packet_queue_put( pkt);
-        }
-        else if (pkt->stream_index == this->subdec.stream_id ) {
-            this->subdec.packet_q.packet_queue_put( pkt);
         }
         else {
             av_packet_unref(pkt);
@@ -2478,7 +2289,6 @@ int VideoState::open_input_stream(const char *filename, AVInputFormat *iformat)
 
     this->last_video_stream = this->viddec.stream_id = -1;
     this->last_audio_stream = this->auddec.stream_id = -1;
-    this->last_subtitle_stream = this->subdec.stream_id = -1;
     this->filename = av_strdup(filename);
     if (!this->filename)
         return 1;
@@ -2523,8 +2333,6 @@ void VideoState::stream_cycle_channel( int codec_type)
         start_index = this->last_audio_stream;
         old_index = this->auddec.stream_id;
     } else {
-        start_index = this->last_subtitle_stream;
-        old_index = this->subdec.stream_id;
     }
     stream_index = start_index;
 
@@ -2547,7 +2355,6 @@ void VideoState::stream_cycle_channel( int codec_type)
             if (codec_type == AVMEDIA_TYPE_SUBTITLE)
             {
                 stream_index = -1;
-                this->last_subtitle_stream = -1;
                 goto the_end;
             }
             if (start_index == -1)

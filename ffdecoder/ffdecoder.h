@@ -313,24 +313,24 @@ public:
     int pkt_serial;
     int finished;
 
-    int64_t start_pts;
-    AVRational start_pts_tb;
+    int64_t start_pts;              // todo: 源自 _vs->format_context ，需要self-contain
+    AVRational start_pts_timebase;
 
 protected:    
-    VideoState* _vs;
+    VideoState* _vs;              // todo: 需要分离
     
     AVPacket pending_pkt;
     int is_packet_pending;
     
-    int64_t next_pts;
-    AVRational next_pts_tb;
+    int64_t    next_pts;
+    AVRational next_pts_timebase;
 
     SimpleConditionVar* empty_pkt_queue_cond;  // just ref, dont take owner ship
 public:
     FrameQueue  frame_q;        // 原 VideoState:: pictq/sampq/subpq
     PacketQueue packet_q;       // 原 VideoState:: videoq/audioq/subtitleq
     int         stream_id;      // 原 VideoState:: video_stream/audio_stream/subtitle_stream 
-    AVStream*   stream;         // 原 VideoState:: video_st/audio_st/subtitle_st
+    AVStream*   stream;         // 原 VideoState:: video_st/audio_st/subtitle_st   todo: 需要self-contain
     Clock       stream_clock;   // 原 VideoState:: vidclk/audclk/(null)
 };
 
@@ -365,23 +365,6 @@ public:
 protected:
     int video_open(); // open the window for showing video
     void video_image_display();
-};
-
-class SubtitleDecoder
-    :public Decoder
-{
-public:
-    typedef Decoder MyBase;
-    SubtitleDecoder(VideoState* vs) :MyBase(vs)
-    {
-        sub_convert_ctx = NULL;
-    }
-
-    struct SwsContext* sub_convert_ctx;
-    virtual int decoder_init(AVCodecContext* avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond);
-    virtual unsigned run();  // BaseThread method 
-
-    virtual void decoder_destroy();
 };
 
 class AudioDecoder
@@ -517,12 +500,13 @@ public:
         int pic_width, int pic_height, AVRational pic_sar);
 };
 
+
 class VideoState
     :public BaseThread //  stream reader thread 
 {
 public:
     VideoState()
-        :auddec(this),viddec(this), subdec(this)
+        :auddec(this),viddec(this)
     {
         format_context = NULL;
         eof = 0;
@@ -570,7 +554,6 @@ public:
     Clock extclk;
     AudioDecoder    auddec;
     VideoDecoder    viddec;
-    SubtitleDecoder subdec;
 
     // called to display each frame (from event loop )
     void video_refresh(double* remaining_time); 
@@ -591,15 +574,13 @@ public:
     int frame_drops_early;
     int frame_drops_late;
 
-    Frame* get_current_subtitle_frame(Frame* current_video_frame);
-
     // }}} 'simple av decoder' section 
 
     int eof;
     int step; // 单帧模式
 
     void stream_cycle_channel(int codec_type);   // 切換流
-    int last_video_stream, last_audio_stream, last_subtitle_stream;
+    int last_video_stream, last_audio_stream ;
 
     SimpleConditionVar continue_read_thread;
 
@@ -644,7 +625,6 @@ protected:
 extern AVInputFormat * opt_file_iformat;
 extern const char * opt_input_filename;
 extern int opt_audio_disable;
-extern int opt_subtitle_disable;
 extern int opt_show_status;
 extern int opt_av_sync_type;
 extern int64_t opt_start_time;  // 命令行 -ss ，由 av_parse_time 解析为 microseconds
