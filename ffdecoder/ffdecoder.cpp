@@ -290,41 +290,18 @@ int Decoder::decoder_decode_frame(AVFrame *frame, AVSubtitle *sub) {
                     return -1;
 
                 // 在音视频流中顺序解码
-
-                switch (this->avctx->codec_type) {
-                    case AVMEDIA_TYPE_VIDEO:
-                        ret = avcodec_receive_frame(this->avctx, frame);
-                        if (ret >= 0) {
-                            // 成功解得frame
-                            if (opt_decoder_reorder_pts == -1) { // let decoder reorder pts 0=off 1=on -1=auto
-                                frame->pts = frame->best_effort_timestamp;
-                            } else if (!opt_decoder_reorder_pts) {
-                                frame->pts = frame->pkt_dts;
-                            }
-                        }
-                        break;
-                    case AVMEDIA_TYPE_AUDIO:
-                        ret = avcodec_receive_frame(this->avctx, frame);
-                        if (ret >= 0) { // 成功解得frame
-                            AVRational tb = { 1, frame->sample_rate };
-                            if (frame->pts != AV_NOPTS_VALUE)
-                                frame->pts = av_rescale_q(frame->pts, this->avctx->pkt_timebase, tb);
-                            else if (this->next_pts != AV_NOPTS_VALUE)
-                                frame->pts = av_rescale_q(this->next_pts, this->next_pts_timebase, tb);
-                            if (frame->pts != AV_NOPTS_VALUE) {
-                                this->next_pts = frame->pts + frame->nb_samples;
-                                this->start_pts_timebase = tb;
-                            }
-                        }
-                        break;
-                }
-                if (ret == AVERROR_EOF) {
+                ret = avcodec_receive_frame(this->avctx, frame);
+                if (ret >= 0) {
+                    // 成功解得frame
+                    on_got_new_frame(frame);
+                    return 1;
+                }                
+                else if (ret == AVERROR_EOF) {
                     this->finished = this->pkt_serial;
                     avcodec_flush_buffers(this->avctx);
                     return 0;
-                }
-                if (ret >= 0) // 成功解得frame
-                    return 1;
+                }                
+                    
             } while (ret != AVERROR(EAGAIN));
         }
 
@@ -345,7 +322,7 @@ int Decoder::decoder_decode_frame(AVFrame *frame, AVSubtitle *sub) {
             av_packet_unref(&pkt);
         } while (1);
 
-        // 现在 ‘pkt’ 的serial符合要求了
+        // 现在 ‘pkt’ 的serial符合要求
 
         if (PacketQueue::is_flush_pkt(pkt)) {
             avcodec_flush_buffers(this->avctx);
@@ -356,33 +333,21 @@ int Decoder::decoder_decode_frame(AVFrame *frame, AVSubtitle *sub) {
             continue;
         }
         
-        if (this->avctx->codec_type == AVMEDIA_TYPE_SUBTITLE) {
-            int got_frame = 0;
-            ret = avcodec_decode_subtitle2(this->avctx, sub, &got_frame, &pkt);
-            if (ret < 0) {
-                ret = AVERROR(EAGAIN);
-            } else {
-                if (got_frame && !pkt.data) {
-                    this->is_packet_pending = 1;
-                    av_packet_move_ref(&this->pending_pkt, &pkt);
-                }
-                ret = got_frame ? 0 : (pkt.data ? AVERROR(EAGAIN) : AVERROR_EOF);
-            }
-        } else {
-            // serial 发生了变化，只能先喂packet进codec
+        
+        // 喂packet进codec
 
-            if (avcodec_send_packet(this->avctx, &pkt) == AVERROR(EAGAIN)) 
-            {
-                //AVERROR(EAGAIN) : input is not accepted in the current state - user
-                //    must read output with avcodec_receive_frame() (once
-                //    all output is read, the packet should be resent, and
-                //    the call will not fail with EAGAIN).
+        if (avcodec_send_packet(this->avctx, &pkt) == AVERROR(EAGAIN)) 
+        {
+            //AVERROR(EAGAIN) : input is not accepted in the current state - user
+            //    must read output with avcodec_receive_frame() (once
+            //    all output is read, the packet should be resent, and
+            //    the call will not fail with EAGAIN).
 
-                av_log(this->avctx, AV_LOG_ERROR, "Receive_frame and send_packet both returned EAGAIN, which is an API violation.\n");
-                this->is_packet_pending = 1;
-                av_packet_move_ref(&this->pending_pkt, &pkt);
-            }
+            av_log(this->avctx, AV_LOG_ERROR, "Receive_frame and send_packet both returned EAGAIN, which is an API violation.\n");
+            this->is_packet_pending = 1;
+            av_packet_move_ref(&this->pending_pkt, &pkt);
         }
+        
         av_packet_unref(&pkt);
     }
 }
@@ -424,6 +389,16 @@ int VideoDecoder::decoder_init(AVCodecContext* avctx, int stream_id, AVStream* s
     }
 
     return 0;
+}
+
+void VideoDecoder::on_got_new_frame(AVFrame* frame)
+{
+    if (opt_decoder_reorder_pts == -1) { // let decoder reorder pts 0=off 1=on -1=auto
+        frame->pts = frame->best_effort_timestamp;
+    }
+    else if (!opt_decoder_reorder_pts) {
+        frame->pts = frame->pkt_dts;
+    }
 }
 
 void VideoDecoder::decoder_destroy() {
@@ -519,6 +494,18 @@ void AudioDecoder::decoder_destroy() {
     this->audio_buf = NULL;
 }
 
+void AudioDecoder::on_got_new_frame(AVFrame* frame)
+{
+    AVRational tb = { 1, frame->sample_rate };
+    if (frame->pts != AV_NOPTS_VALUE)
+        frame->pts = av_rescale_q(frame->pts, this->avctx->pkt_timebase, tb);
+    else if (this->next_pts != AV_NOPTS_VALUE)
+        frame->pts = av_rescale_q(this->next_pts, this->next_pts_timebase, tb);
+    if (frame->pts != AV_NOPTS_VALUE) {
+        this->next_pts = frame->pts + frame->nb_samples;
+        this->start_pts_timebase = tb;
+    }
+}
 //     }}} decoder section 
 
 

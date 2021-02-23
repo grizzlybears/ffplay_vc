@@ -308,9 +308,10 @@ public:
     //      0           -- EoF
     //      positive    -- got frame
     virtual int decoder_decode_frame(AVFrame* frame, AVSubtitle* sub);
+        
 
     AVCodecContext* avctx; // take owner ship
-    int pkt_serial;
+    int pkt_serial;        // 当前pkt的serial 
     int finished;
 
     int64_t start_pts;              // todo: 源自 _vs->format_context ，需要self-contain
@@ -319,13 +320,15 @@ public:
 protected:    
     VideoState* _vs;              // todo: 需要分离
     
-    AVPacket pending_pkt;
+    AVPacket pending_pkt;  // avcodec_send_packet 遇到E_AGAIN，需要暂存
     int is_packet_pending;
     
     int64_t    next_pts;
     AVRational next_pts_timebase;
 
     SimpleConditionVar* empty_pkt_queue_cond;  // just ref, dont take owner ship
+
+    virtual void on_got_new_frame(AVFrame* frame) = 0;
 public:
     FrameQueue  frame_q;        // 原 VideoState:: pictq/sampq/subpq
     PacketQueue packet_q;       // 原 VideoState:: videoq/audioq/subtitleq
@@ -363,6 +366,7 @@ public:
     // display the current picture, if any 
     void video_display();
 protected:
+    virtual void on_got_new_frame(AVFrame* frame);
     int video_open(); // open the window for showing video
     void video_image_display();
 };
@@ -423,7 +427,8 @@ public:
      * value.
      */
     int audio_decode_frame();
-
+protected:
+    virtual void on_got_new_frame(AVFrame* frame);
 };
 
 class Render
