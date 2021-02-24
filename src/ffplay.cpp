@@ -37,19 +37,19 @@ const char g_program_name[] = "ffplay";
 const int program_birth_year = 2003;
 
 
-void refresh_loop_wait_event(VideoState *is, SDL_Event *event) {
+void refresh_loop_wait_event(SimpleAVDecoder * av_decoder, SDL_Event *event) {
     double remaining_time = 0.0;
     SDL_PumpEvents();
     while (!SDL_PeepEvents(event, 1, SDL_GETEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT)) {
-        if (!is->render.cursor_hidden && av_gettime_relative() - is->render.cursor_last_shown > CURSOR_HIDE_DELAY) {
+        if (! av_decoder->render.cursor_hidden && av_gettime_relative() - av_decoder->render.cursor_last_shown > CURSOR_HIDE_DELAY) {
             SDL_ShowCursor(0);
-            is->render.cursor_hidden = 1;
+            av_decoder->render.cursor_hidden = 1;
         }
         if (remaining_time > 0.0)
             av_usleep((int64_t)(remaining_time * 1000000.0));
         remaining_time = REFRESH_RATE;
-        if ( !is->paused || is->force_refresh)
-            is->video_refresh( &remaining_time);
+        if ( !av_decoder->paused || av_decoder->force_refresh)
+            av_decoder->video_refresh( &remaining_time);
         SDL_PumpEvents();
     }
 }
@@ -62,34 +62,34 @@ void event_loop(VideoState *cur_stream)
 
     for (;;) {
         double x;
-        refresh_loop_wait_event(cur_stream, &event);
+        refresh_loop_wait_event(&cur_stream->av_decoder, &event);
         switch (event.type) {
         case SDL_KEYDOWN:
             if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_q) {
                 return;
             }
             // If we don't yet have a window, skip all key events, because read_thread might still be initializing...
-            if (!cur_stream->viddec.width)
+            if (!cur_stream->av_decoder.viddec.width)
                 continue;
             switch (event.key.keysym.sym) {
             case SDLK_f:
-                cur_stream->render.toggle_full_screen();
-                cur_stream->force_refresh = 1;
+                cur_stream->av_decoder.render.toggle_full_screen();
+                cur_stream->av_decoder.force_refresh = 1;
                 break;
             case SDLK_p:
             case SDLK_SPACE:
                 cur_stream->toggle_pause();
                 break;
             case SDLK_m:
-                cur_stream->toggle_mute();
+                cur_stream->av_decoder.toggle_mute();
                 break;
             case SDLK_KP_MULTIPLY:
             case SDLK_0:
-                cur_stream->update_volume( 1, SDL_VOLUME_STEP);
+                cur_stream->av_decoder.update_volume( 1, SDL_VOLUME_STEP);
                 break;
             case SDLK_KP_DIVIDE:
             case SDLK_9:
-                cur_stream->update_volume( -1, SDL_VOLUME_STEP);
+                cur_stream->av_decoder.update_volume( -1, SDL_VOLUME_STEP);
                 break;
             case SDLK_s: // S: Step to next frame
                 cur_stream->step_to_next_frame();
@@ -135,7 +135,7 @@ void event_loop(VideoState *cur_stream)
                 incr = -60.0; // 以秒为单位的，相对当前位置的seek幅度
             do_seek:
                     {
-                        pos = cur_stream->get_master_clock();
+                        pos = cur_stream->av_decoder.get_master_clock();
                         if (isnan(pos))
                             pos = (double)cur_stream->seek_pos / AV_TIME_BASE;
                         pos += incr;
@@ -152,19 +152,19 @@ void event_loop(VideoState *cur_stream)
             if (event.button.button == SDL_BUTTON_LEFT) {
                 static int64_t last_mouse_left_click = 0;
                 if (av_gettime_relative() - last_mouse_left_click <= 500000) {
-                    cur_stream->render.toggle_full_screen();
-                    cur_stream->force_refresh = 1;
+                    cur_stream->av_decoder.render.toggle_full_screen();
+                    cur_stream->av_decoder.force_refresh = 1;
                     last_mouse_left_click = 0;
                 } else {
                     last_mouse_left_click = av_gettime_relative();
                 }
             }
         case SDL_MOUSEMOTION:
-            if (cur_stream->render.cursor_hidden) {
+            if (cur_stream->av_decoder.render.cursor_hidden) {
                 SDL_ShowCursor(1);
-                cur_stream->render.cursor_hidden = 0;
+                cur_stream->av_decoder.render.cursor_hidden = 0;
             }
-            cur_stream->render.cursor_last_shown = av_gettime_relative();
+            cur_stream->av_decoder.render.cursor_last_shown = av_gettime_relative();
             if (event.type == SDL_MOUSEBUTTONDOWN) {
                 if (event.button.button != SDL_BUTTON_RIGHT)
                     break;
@@ -176,7 +176,7 @@ void event_loop(VideoState *cur_stream)
             }
                 if (cur_stream->format_context->duration <= 0) {
                     uint64_t size =  avio_size(cur_stream->format_context->pb);
-                    cur_stream->stream_seek( size*x/cur_stream->viddec.width, 0, 1);
+                    cur_stream->stream_seek( size*x/cur_stream->av_decoder.viddec.width, 0, 1);
                 } else {
                     int64_t ts;
                     int ns, hh, mm, ss;
@@ -185,7 +185,7 @@ void event_loop(VideoState *cur_stream)
                     thh  = tns / 3600;
                     tmm  = (tns % 3600) / 60;
                     tss  = (tns % 60);
-                    frac = x / cur_stream->viddec.width;
+                    frac = x / cur_stream->av_decoder.viddec.width;
                     ns   = frac * tns;
                     hh   = ns / 3600;
                     mm   = (ns % 3600) / 60;
@@ -202,11 +202,11 @@ void event_loop(VideoState *cur_stream)
         case SDL_WINDOWEVENT:
             switch (event.window.event) {
                 case SDL_WINDOWEVENT_SIZE_CHANGED:
-                    cur_stream->render.screen_width  = cur_stream->viddec.width  = event.window.data1;
-                    cur_stream->render.screen_height = cur_stream->viddec.height = event.window.data2;
+                    cur_stream->av_decoder.render.screen_width  = cur_stream->av_decoder.viddec.width  = event.window.data1;
+                    cur_stream->av_decoder.render.screen_height = cur_stream->av_decoder.viddec.height = event.window.data2;
                     
                 case SDL_WINDOWEVENT_EXPOSED:
-                    cur_stream->force_refresh = 1;
+                    cur_stream->av_decoder.force_refresh = 1;
             }
             break;
         case SDL_QUIT:
@@ -379,7 +379,7 @@ int main(int argc, char **argv)
         goto EXIT;
     }
 
-    if (is->render.init(0 /*audio disable*/ , 0 /*alwaysontop*/))
+    if (is->av_decoder.render.init(0 /*audio disable*/ , 0 /*alwaysontop*/))
     {
         goto EXIT;
     }
@@ -397,7 +397,7 @@ int main(int argc, char **argv)
 EXIT:
     if (is)
     {
-        is->render.safe_release();
+        is->av_decoder.render.safe_release();
         is->close_input_stream();
         delete is;
     }

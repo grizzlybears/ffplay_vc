@@ -265,7 +265,7 @@ protected:
                         // 如果keeplast (重画最后一帧需要)，那么第一次‘移动读头’不能动rindex, 而是要 rindex_shown = 1。
                         // 这样 rindex + rindex_shown 是‘读头’ , 用 frame_queue_peek() 看;
                         // rindex 是‘刚刚画过的一帧’, 用 frame_queue_peek_last() 看;
-                        // rindex + rindex_shown 是‘读头’后面一帧, 用 frame_queue_peek_next() 看。
+                        // rindex + rindex_shown + 1 是‘读头’后面一帧, 用 frame_queue_peek_next() 看。
     int windex;
     int size;
     int max_size;
@@ -280,14 +280,16 @@ enum {
 };
 
 class VideoState;
+class SimpleAVDecoder;
+class Render;
 
 class Decoder 
     :public BaseThread  //decoder thread
 {
 public:
-    Decoder(VideoState* vs)
+    Decoder(SimpleAVDecoder* av_decoder)
     {
-        _vs = vs;
+        _av_decoder = av_decoder;
         stream_id = -1;
         stream = NULL;
         avctx = NULL;
@@ -318,7 +320,8 @@ public:
     AVRational start_pts_timebase;
 
 protected:    
-    VideoState* _vs;              // todo: 需要分离
+    SimpleAVDecoder* _av_decoder; 
+    Render* get_render();
     
     AVPacket pending_pkt;  // avcodec_send_packet 遇到E_AGAIN，需要暂存
     int is_packet_pending;
@@ -329,6 +332,7 @@ protected:
     SimpleConditionVar* empty_pkt_queue_cond;  // just ref, dont take owner ship
 
     virtual void on_got_new_frame(AVFrame* frame) = 0;
+
 public:
     FrameQueue  frame_q;        // 原 VideoState:: pictq/sampq/subpq
     PacketQueue packet_q;       // 原 VideoState:: videoq/audioq/subtitleq
@@ -342,7 +346,7 @@ class VideoDecoder
 {
 public:
     typedef Decoder MyBase;
-    VideoDecoder(VideoState* vs):MyBase(vs)
+    VideoDecoder(SimpleAVDecoder* av_decoder):MyBase(av_decoder)
     {
         img_convert_ctx = NULL;
         width = height = xleft =  ytop = 0;
@@ -359,7 +363,7 @@ public:
 
     virtual unsigned run();  // BaseThread method 
 
-    int get_video_frame( AVFrame* frame);
+    int get_video_frame( AVFrame* frame);  // 返回 <0 表示退出解码线程
     int queue_picture(AVFrame* src_frame, double pts, double duration, int64_t pos, int serial);
        
 
@@ -376,7 +380,7 @@ class AudioDecoder
 {
 public:
     typedef Decoder MyBase;
-    AudioDecoder(VideoState* vs) :MyBase(vs)
+    AudioDecoder(SimpleAVDecoder* av_decoder) :MyBase(av_decoder)
     {
         audio_buf = audio_buf1 = NULL;
         swr_ctx = NULL;   
@@ -387,12 +391,21 @@ public:
     virtual unsigned run();  // BaseThread method 
     virtual void decoder_destroy();
 
-    double audio_clock;
-    int audio_clock_serial;
-    double audio_diff_cum; /* used for AV difference average computation */
+    int muted;
+    int audio_volume;  //  volume [0 , 100]
+
+    double audio_diff_cum; /* used for AV difference average computation, in sync_audio() */
     double audio_diff_avg_coef;
     double audio_diff_threshold;
     int audio_diff_avg_count;
+
+    struct AudioParams audio_src;
+
+    double audio_clock;         // pts of 'last decoded Frame' + frame duration, use this to update this->stream_clock in SDL cb.
+    int audio_clock_serial;
+
+protected:
+    
     int audio_hw_buf_size;
     uint8_t* audio_buf;
     uint8_t* audio_buf1;
@@ -400,9 +413,8 @@ public:
     unsigned int audio_buf1_size;
     int audio_buf_index; /* in bytes */
     int audio_write_buf_size;
-    int audio_volume;  //  volume [0 , 100]
-    int muted;
-    struct AudioParams audio_src;
+    
+    
     struct AudioParams audio_tgt;  // audio_open 返回，环境要求的audio params
     struct SwrContext* swr_ctx;
 
@@ -427,7 +439,7 @@ public:
      * value.
      */
     int audio_decode_frame();
-protected:
+
     virtual void on_got_new_frame(AVFrame* frame);
 };
 
@@ -505,63 +517,31 @@ public:
         int pic_width, int pic_height, AVRational pic_sar);
 };
 
-
-class VideoState
-    :public BaseThread //  stream reader thread 
+class SimpleAVDecoder
 {
 public:
-    VideoState()
-        :auddec(this),viddec(this)
+    SimpleAVDecoder(VideoState * vs)
+        :auddec(this), viddec(this)
     {
-        format_context = NULL;
-        eof = 0;
-        abort_request = 0;
-        paused = 0;
-        seek_req = 0;
+        this->vs = vs;
+        this->extclk.init_clock(&this->extclk.serial);
+        frame_drops_early = frame_drops_late = 0;
+        paused = step = 0;
+        force_refresh = 0;
     }
 
-    int open_input_stream(const char* filename, AVInputFormat* iformat);
-    
-    void close_input_stream(); 
+    VideoState* vs;  // todo: 要剥离
 
-    // {{{ stream operation section
-    void stream_seek( int64_t pos, int64_t rel, int seek_by_bytes);
-
-    void toggle_pause();
-    void internal_toggle_pause();
-
-    void step_to_next_frame();
-
-    void toggle_mute();
-
-    void update_volume(int sign, double step);
-
-    void seek_chapter( int incr);
-
-    // }}} stream operation section
-        
-public:
-    int abort_request;
-    int force_refresh;
-    int paused;
-
-    int seek_req;
-    int seek_flags;
-    int64_t seek_pos;
-    int64_t seek_rel;
-    int read_pause_return;  // 'reader loop'中， 遇到'pause' req, av_read_pause 这个API的返回值
-    AVFormatContext * format_context;
-
-    // {{{ 'simple av decoder' section 
-
-    Render render; 
+    Render render;
 
     Clock extclk;
+    void check_external_clock_speed();
+
     AudioDecoder    auddec;
     VideoDecoder    viddec;
 
     // called to display each frame (from event loop )
-    void video_refresh(double* remaining_time); 
+    void video_refresh(double* remaining_time);
     void prepare_picture_for_display(double* remaining_time);
 
 
@@ -579,15 +559,86 @@ public:
     int frame_drops_early;
     int frame_drops_late;
 
-    // }}} 'simple av decoder' section 
+    int force_refresh;   // 是否需要‘draw frame’
+
+    // decoder status section {{
+    int paused;
+    int internal_toggle_pause();
+
+    int step; // 单帧模式
+
+    void toggle_mute();
+    void update_volume(int sign, double step);
+    // }} decoder status section
+
+    void discard_buffer(double seek_target = NAN); // 用于在seek后清cache。如果是按时间seek，则应顺手给出 seek_target (以秒为单位)
+    int  is_buffer_full();
+    void feed_null_pkt(); // todo: 作用不明，待研究
+    void feed_pkt(AVPacket* pkt); // 向解码器喂数据包, take ownership。如果不是感兴趣的包，则释放。
+protected:
+    
+    void print_stream_status();
+
+    double vp_duration(Frame* vp, Frame* nextvp); //  refs 'max_frame_duration'
+    double compute_target_delay(double delay);
+    void update_video_clock(double pts, int64_t pos, int serial);
+
+};
+
+class VideoState
+    :public BaseThread //  stream reader thread 
+{
+public:
+    VideoState()
+        :av_decoder(this)
+    {
+        format_context = NULL;
+        eof = 0;
+        abort_request = 0;
+        paused = 0;
+        seek_req = 0;
+    }
+
+    int open_input_stream(const char* filename, AVInputFormat* iformat);
+    
+    void close_input_stream(); 
+
+    // {{{ stream operation section
+    void stream_seek( int64_t pos, int64_t rel, int seek_by_bytes);
+
+    void toggle_pause();
+    
+    void step_to_next_frame();
+        
+
+    void seek_chapter( int incr);
+
+    // }}} stream operation section
+        
+public:
+    // format status section {{
+    int paused;
+    // }}  format status section
+
+    int abort_request;
+
+    int seek_req;
+    int seek_flags;
+    int64_t seek_pos;
+    int64_t seek_rel;
+    AVFormatContext * format_context;
+
+    SimpleAVDecoder av_decoder;
 
     int eof;
-    int step; // 单帧模式
+    
 
     void stream_cycle_channel(int codec_type);   // 切換流
     int last_video_stream, last_audio_stream ;
 
     SimpleConditionVar continue_read_thread;
+
+    int realtime;   // 是否是实时流
 
 protected:    
     virtual unsigned run();  //  stream reader thread 
@@ -595,7 +646,7 @@ protected:
 
     AVInputFormat* iformat;   // 命令行指定容器格式，ref only
     char* filename; // 播放的文件 or url
-    int realtime;   // 是否是实时流
+    
     
     int last_paused; // 之前一次reader loop的时候，是否是paused
 
@@ -617,13 +668,7 @@ protected:
 
     // }}} 'reader thread' section
 
-    void print_stream_status();
-    
-    void check_external_clock_speed();
 
-    double vp_duration(Frame* vp, Frame* nextvp); //  refs 'max_frame_duration'
-    double compute_target_delay(double delay);
-    void update_video_clock(double pts, int64_t pos, int serial);
 };
 
 /* options specified by the user */
@@ -656,3 +701,5 @@ inline int compute_mod(int a, int b)
 void sigterm_handler(int sig);
 
 int is_realtime(AVFormatContext* s);
+
+CString av_strerror2(int err);
