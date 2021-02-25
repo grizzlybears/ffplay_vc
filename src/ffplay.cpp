@@ -30,12 +30,13 @@ extern "C" {
 #include "cmdutils.h"
 }
 #include <assert.h>
-
+#include <signal.h>
 #include "utils/utils.h"
 
 const char g_program_name[] = "ffplay";
 const int program_birth_year = 2003;
 
+void sigterm_handler(int sig);
 
 void refresh_loop_wait_event(SimpleAVDecoder * av_decoder, SDL_Event *event) {
     double remaining_time = 0.0;

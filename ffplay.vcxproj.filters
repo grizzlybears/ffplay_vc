@@ -36,6 +36,9 @@
     <ClCompile Include="src\cmdutils.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="ffdecoder\SimpleAvCommon.cpp">
+      <Filter>ffdecoder</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="utils\thread_utils.h">
@@ -49,6 +52,9 @@
     </ClInclude>
     <ClInclude Include="src\cmdutils.h">
       <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ffdecoder\SimpleAvCommon.h">
+      <Filter>ffdecoder</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

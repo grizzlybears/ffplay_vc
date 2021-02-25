@@ -70,171 +70,6 @@ const char * opt_input_filename;
 };
 
 
-///////////// packet_queue section {{{
-
-/* packet queue handling */
-
-AVPacket PacketQueue::flush_pkt;
-
-int PacketQueue::is_flush_pkt(const AVPacket& to_check)
-{
-    return to_check.data == flush_pkt.data;
-}
-
-int PacketQueue::packet_queue_put_private( AVPacket *pkt)
-{
-    MyAVPacketListNode* pkt1;
-
-    if (this->abort_request)
-       return -1;
-
-    pkt1 = (MyAVPacketListNode*) av_malloc(sizeof(MyAVPacketListNode));
-    if (!pkt1)
-        return -1;
-
-    pkt1->pkt = *pkt;   // 要点, ‘pkt’ 已经被 clone 进 MyAVPacketList， 因此无所谓‘pkt’是来自heap/stack/global
-    pkt1->next = NULL;
-    if (pkt == &flush_pkt)
-        this->serial++;
-
-    pkt1->serial = this->serial;
-
-    if (!this->last_pkt)
-        this->first_pkt = pkt1;
-    else
-        this->last_pkt->next = pkt1;
-
-    this->last_pkt = pkt1;
-
-    this->nb_packets++;
-    this->size += pkt1->pkt.size + sizeof(*pkt1);
-
-    this->total_duration += pkt1->pkt.duration;
-    /* XXX: should duplicate packet data in DV case */
-
-    this->cond.wake();
-    
-    return 0;
-}
-
-// 接管pkt生命周期，put失败也释放掉
-int PacketQueue::packet_queue_put( AVPacket *pkt)
-{
-    int ret;
-
-    AutoLocker _yes_locked(this->cond);
-    ret = packet_queue_put_private(pkt);
-        
-    if (pkt != &flush_pkt && ret < 0)
-        av_packet_unref(pkt);
-
-    return ret;
-}
-
-int PacketQueue::packet_queue_put_nullpacket( int stream_index)
-{
-    AVPacket pkt1, *pkt = &pkt1;  
-    av_init_packet(pkt);
-    pkt->data = NULL;
-    pkt->size = 0;
-    pkt->stream_index = stream_index;
-    return packet_queue_put(pkt);
-}
-
-
-void PacketQueue::packet_queue_flush()
-{
-    MyAVPacketListNode *pkt, *pkt1;
-
-    AutoLocker _yes_locked(this->cond);
-    
-    for (pkt = this->first_pkt; pkt; pkt = pkt1) {
-        pkt1 = pkt->next;
-        av_packet_unref(&pkt->pkt);   
-        av_freep(&pkt);  
-    }
-    this->last_pkt = NULL;
-    this->first_pkt = NULL;
-    this->nb_packets = 0;
-    this->size = 0;
-    this->total_duration = 0;
-}
-
-void PacketQueue::packet_queue_destroy()
-{
-    packet_queue_flush();    
-}
-
-void PacketQueue::packet_queue_abort()
-{
-    AutoLocker _yes_locked(this->cond);
-    this->abort_request = 1;
-    this->cond.wake();
-}
-
-void PacketQueue::packet_queue_start()
-{
-    AutoLocker _yes_locked(this->cond);
-    this->abort_request = 0;
-    this->cond.wake();
-}
-
-/* return < 0 if aborted, 0 if no packet and > 0 if packet.  */
-int PacketQueue::packet_queue_get( AVPacket *pkt, int block, /*out*/ int *serial)
-{
-    MyAVPacketListNode *pkt1;
-    int ret;
-
-    AutoLocker _yes_locked(this->cond);
-
-    for (;;) {
-        if (this->abort_request) {
-            ret = -1;
-            break;
-        }
-
-        pkt1 = this->first_pkt;
-        if (pkt1) {
-            
-            // 推移 list_header
-            this->first_pkt = pkt1->next;
-            if (!this->first_pkt)
-                this->last_pkt = NULL;
-
-            // 调整 ‘queue统计’
-            this->nb_packets--;
-            this->size -= pkt1->pkt.size + sizeof(*pkt1);
-            this->total_duration -= pkt1->pkt.duration;
-            
-            // output 节点
-            *pkt = pkt1->pkt;
-            if (serial)
-                *serial = pkt1->serial;
-            
-            av_free(pkt1);
-            ret = 1;
-            break;
-        } else if (!block) {
-            ret = 0;
-            break;
-        } else {
-            this->cond.wait();
-        }
-    }
-    
-    return ret;
-}
-
-///////////// }}} packet_queue section
-
-void AutoReleasePtr<AVCodecContext>::release()
-{
-    if (!me)
-        return;
-
-    avcodec_free_context(&me);
-    me = NULL;
-}
 
 //     decoder section {{{
 AVCodecContext* Decoder::create_codec(AVFormatContext* format_context, int stream_id)
@@ -514,139 +349,6 @@ void AudioDecoder::on_got_new_frame(AVFrame* frame)
 }
 //     }}} decoder section 
 
-
-//     frame_queue section {{{
-
-void FrameQueue::unref_item(Frame* vp)
-{
-    av_frame_unref(vp->frame);
-    avsubtitle_free(&vp->sub);
-}
-
-int FrameQueue::frame_queue_init( PacketQueue *pktq, int max_size, int keep_last)
-{
-    int i;    
-
-    this->pktq = pktq;
-    this->max_size = FFMIN(max_size, FRAME_QUEUE_SIZE);
-    this->keep_last = !!keep_last;
-    for (i = 0; i < this->max_size; i++)
-        if (!(this->queue[i].frame = av_frame_alloc()))
-            return AVERROR(ENOMEM);
-    return 0;
-}
-
-void FrameQueue::frame_queue_destory()
-{
-    int i;
-    for (i = 0; i < this->max_size; i++) {
-        Frame *vp = &this->queue[i];
-        unref_item(vp);
-        av_frame_free(&vp->frame);
-    }
-
-}
-
- void FrameQueue::frame_queue_signal()
-{
-     AutoLocker _yes_locked(this->fq_signal);
-     this->fq_signal.wake();
-}
-
-Frame * FrameQueue::frame_queue_peek()
-{
-    return & this->queue[(this->rindex + this->rindex_shown) % this->max_size];
-}
-
-Frame * FrameQueue::frame_queue_peek_next()
-{
-    return &this->queue[(this->rindex + this->rindex_shown + 1) % this->max_size];
-}
-
-Frame * FrameQueue::frame_queue_peek_last()
-{
-    return & this->queue[this->rindex];
-}
-
-Frame * FrameQueue::frame_queue_peek_writable()
-{
-    /* wait until we have space to put a new frame */
-    {
-        AutoLocker _yes_locked(this->fq_signal);
-        while (this->size >= this->max_size && !this->pktq->abort_request)  // todo: 如果挂钩的packet queue 退了，怎么能 signal 本 FrameQueue的 cond?
-        {
-            this->fq_signal.wait();
-        }
-    }
-
-    if (this->pktq->abort_request)
-        return NULL;
-
-    return &this->queue[this->windex];
-}
-
-Frame * FrameQueue::frame_queue_peek_readable()
-{
-    /* wait until we have a readable a new frame */
-    {
-        AutoLocker _yes_locked(this->fq_signal);
-        while (this->size - this->rindex_shown <= 0 &&
-            !this->pktq->abort_request) // todo: 如果挂钩的packet queue 退了，怎么能 signal 本 FrameQueue的 cond?
-        {
-            this->fq_signal.wait();
-        }
-    }
-
-    if (this->pktq->abort_request)
-        return NULL;
-
-    return &this->queue[(this->rindex + this->rindex_shown) % this->max_size];
-}
-
-void FrameQueue::frame_queue_push()
-{
-    if (++this->windex == this->max_size)
-        this->windex = 0;
-
-    AutoLocker _yes_locked(this->fq_signal);
-    this->size++;
-
-    this->fq_signal.wake();
-}
-
-void FrameQueue::frame_queue_next()
-{
-    if (this->keep_last && !this->rindex_shown) {
-        this->rindex_shown = 1;
-        return;
-    }
-    unref_item(&this->queue[this->rindex]);  // 出队列前，先释放 Frame内带的data
-    if (++this->rindex == this->max_size)
-        this->rindex = 0;
-
-    AutoLocker _yes_locked(this->fq_signal);
-    this->size--;
-    this->fq_signal.wake();
-
-}
-
-/* return the number of undisplayed frames in the queue */
-int FrameQueue::frame_queue_nb_remaining()
-{
-    return this->size - this->rindex_shown;
-}
-
-/* return last shown position */
-int64_t FrameQueue::frame_queue_last_pos()
-{
-    Frame *fp = &this->queue[this->rindex];
-    if (this->rindex_shown && fp->serial == this->pktq->serial)
-        return fp->pos;
-    else
-        return -1;
-}
-//      }}} frame_queue section
-
 // render sectio {{{
 
 int Render::init(int audio_disable, int alwaysontop)
@@ -854,11 +556,10 @@ int Render::realloc_texture(SDL_Texture **texture, Uint32 new_format, int new_wi
     }
     return 0;
 }
-// }}} render sectio 
 
-void Render::calculate_display_rect(SDL_Rect *rect,
-                                   int scr_xleft, int scr_ytop, int scr_width, int scr_height,
-                                   int pic_width, int pic_height, AVRational pic_sar)
+void Render::calculate_display_rect(SDL_Rect* rect,
+    int scr_xleft, int scr_ytop, int scr_width, int scr_height,
+    int pic_width, int pic_height, AVRational pic_sar)
 {
     AVRational aspect_ratio = pic_sar;
     int64_t width, height, x, y;
@@ -888,19 +589,19 @@ void Render::calculate_display_rect(SDL_Rect *rect,
     x = (scr_width - width) / 2;
     y = (scr_height - height) / 2;
     rect->x = (int)(scr_xleft + x);
-    rect->y = (int)(scr_ytop  + y);
-    rect->w = FFMAX((int)width,  1);
+    rect->y = (int)(scr_ytop + y);
+    rect->w = FFMAX((int)width, 1);
     rect->h = FFMAX((int)height, 1);
 }
 
-void Render::get_sdl_pix_fmt_and_blendmode(int format, Uint32 *sdl_pix_fmt, SDL_BlendMode *sdl_blendmode)
+void Render::get_sdl_pix_fmt_and_blendmode(int format, Uint32* sdl_pix_fmt, SDL_BlendMode* sdl_blendmode)
 {
     int i;
     *sdl_blendmode = SDL_BLENDMODE_NONE;
     *sdl_pix_fmt = SDL_PIXELFORMAT_UNKNOWN;
-    if (format == AV_PIX_FMT_RGB32   ||
+    if (format == AV_PIX_FMT_RGB32 ||
         format == AV_PIX_FMT_RGB32_1 ||
-        format == AV_PIX_FMT_BGR32   ||
+        format == AV_PIX_FMT_BGR32 ||
         format == AV_PIX_FMT_BGR32_1)
         *sdl_blendmode = SDL_BLENDMODE_BLEND;
     for (i = 0; i < FF_ARRAY_ELEMS(sdl_texture_format_map) - 1; i++) {
@@ -911,7 +612,7 @@ void Render::get_sdl_pix_fmt_and_blendmode(int format, Uint32 *sdl_pix_fmt, SDL_
     }
 }
 
-int Render::upload_texture(SDL_Texture **tex, AVFrame *frame, struct SwsContext **img_convert_ctx) {
+int Render::upload_texture(SDL_Texture** tex, AVFrame* frame, struct SwsContext** img_convert_ctx) {
     int ret = 0;
     Uint32 sdl_pix_fmt;
     SDL_BlendMode sdl_blendmode;
@@ -919,50 +620,54 @@ int Render::upload_texture(SDL_Texture **tex, AVFrame *frame, struct SwsContext 
     if (realloc_texture(tex, sdl_pix_fmt == SDL_PIXELFORMAT_UNKNOWN ? SDL_PIXELFORMAT_ARGB8888 : sdl_pix_fmt, frame->width, frame->height, sdl_blendmode, 0) < 0)
         return -1;
     switch (sdl_pix_fmt) {
-        case SDL_PIXELFORMAT_UNKNOWN:
-            /* This should only happen if we are not using avfilter... */
-            *img_convert_ctx = sws_getCachedContext(*img_convert_ctx,
-                frame->width, frame->height, (enum AVPixelFormat) frame->format, frame->width, frame->height,
-                AV_PIX_FMT_BGRA, sws_flags, NULL, NULL, NULL);
-            if (*img_convert_ctx != NULL) {
-                uint8_t *pixels[4];
-                int pitch[4];
-                if (!SDL_LockTexture(*tex, NULL, (void **)pixels, pitch)) {
-                    sws_scale(*img_convert_ctx, (const uint8_t * const *)frame->data, frame->linesize,
-                              0, frame->height, pixels, pitch);
-                    SDL_UnlockTexture(*tex);
-                }
-            } else {
-                av_log(NULL, AV_LOG_FATAL, "Cannot initialize the conversion context\n");
-                ret = -1;
+    case SDL_PIXELFORMAT_UNKNOWN:
+        /* This should only happen if we are not using avfilter... */
+        *img_convert_ctx = sws_getCachedContext(*img_convert_ctx,
+            frame->width, frame->height, (enum AVPixelFormat)frame->format, frame->width, frame->height,
+            AV_PIX_FMT_BGRA, SWS_FLAG_4_PIXELFORMAT_UNKNOWN, NULL, NULL, NULL);
+        if (*img_convert_ctx != NULL) {
+            uint8_t* pixels[4];
+            int pitch[4];
+            if (!SDL_LockTexture(*tex, NULL, (void**)pixels, pitch)) {
+                sws_scale(*img_convert_ctx, (const uint8_t* const*)frame->data, frame->linesize,
+                    0, frame->height, pixels, pitch);
+                SDL_UnlockTexture(*tex);
             }
-            break;
-        case SDL_PIXELFORMAT_IYUV:
-            if (frame->linesize[0] > 0 && frame->linesize[1] > 0 && frame->linesize[2] > 0) {
-                ret = SDL_UpdateYUVTexture(*tex, NULL, frame->data[0], frame->linesize[0],
-                                                       frame->data[1], frame->linesize[1],
-                                                       frame->data[2], frame->linesize[2]);
-            } else if (frame->linesize[0] < 0 && frame->linesize[1] < 0 && frame->linesize[2] < 0) {
-                ret = SDL_UpdateYUVTexture(*tex, NULL, frame->data[0] + frame->linesize[0] * (frame->height                    - 1), -frame->linesize[0],
-                                                       frame->data[1] + frame->linesize[1] * (AV_CEIL_RSHIFT(frame->height, 1) - 1), -frame->linesize[1],
-                                                       frame->data[2] + frame->linesize[2] * (AV_CEIL_RSHIFT(frame->height, 1) - 1), -frame->linesize[2]);
-            } else {
-                av_log(NULL, AV_LOG_ERROR, "Mixed negative and positive linesizes are not supported.\n");
-                return -1;
-            }
-            break;
-        default:
-            if (frame->linesize[0] < 0) {
-                ret = SDL_UpdateTexture(*tex, NULL, frame->data[0] + frame->linesize[0] * (frame->height - 1), -frame->linesize[0]);
-            } else {
-                ret = SDL_UpdateTexture(*tex, NULL, frame->data[0], frame->linesize[0]);
-            }
-            break;
+        }
+        else {
+            av_log(NULL, AV_LOG_FATAL, "Cannot initialize the conversion context\n");
+            ret = -1;
+        }
+        break;
+    case SDL_PIXELFORMAT_IYUV:
+        if (frame->linesize[0] > 0 && frame->linesize[1] > 0 && frame->linesize[2] > 0) {
+            ret = SDL_UpdateYUVTexture(*tex, NULL, frame->data[0], frame->linesize[0],
+                frame->data[1], frame->linesize[1],
+                frame->data[2], frame->linesize[2]);
+        }
+        else if (frame->linesize[0] < 0 && frame->linesize[1] < 0 && frame->linesize[2] < 0) {
+            ret = SDL_UpdateYUVTexture(*tex, NULL, frame->data[0] + frame->linesize[0] * (frame->height - 1), -frame->linesize[0],
+                frame->data[1] + frame->linesize[1] * (AV_CEIL_RSHIFT(frame->height, 1) - 1), -frame->linesize[1],
+                frame->data[2] + frame->linesize[2] * (AV_CEIL_RSHIFT(frame->height, 1) - 1), -frame->linesize[2]);
+        }
+        else {
+            av_log(NULL, AV_LOG_ERROR, "Mixed negative and positive linesizes are not supported.\n");
+            return -1;
+        }
+        break;
+    default:
+        if (frame->linesize[0] < 0) {
+            ret = SDL_UpdateTexture(*tex, NULL, frame->data[0] + frame->linesize[0] * (frame->height - 1), -frame->linesize[0]);
+        }
+        else {
+            ret = SDL_UpdateTexture(*tex, NULL, frame->data[0], frame->linesize[0]);
+        }
+        break;
     }
     return ret;
 }
 
-void Render::set_sdl_yuv_conversion_mode(AVFrame *frame)
+void Render::set_sdl_yuv_conversion_mode(AVFrame* frame)
 {
 #if SDL_VERSION_ATLEAST(2,0,8)
     SDL_YUV_CONVERSION_MODE mode = SDL_YUV_CONVERSION_AUTOMATIC;
@@ -977,6 +682,21 @@ void Render::set_sdl_yuv_conversion_mode(AVFrame *frame)
     SDL_SetYUVConversionMode(mode);
 #endif
 }
+
+void Render::show_texture(const Frame* video_frame, const SDL_Rect& rect, int show_subtitle)
+{
+    Render::set_sdl_yuv_conversion_mode(video_frame->frame);
+    SDL_RenderCopyEx(this->renderer, this->vid_texture, NULL, &rect, 0, NULL, (SDL_RendererFlip)(video_frame->flip_v ? SDL_FLIP_VERTICAL : 0));
+    Render::set_sdl_yuv_conversion_mode(NULL);
+
+    if (show_subtitle) {
+        SDL_RenderCopy(this->renderer, this->sub_texture, NULL, &rect);
+    }
+}
+
+//  }}} render section 
+
+
 
 void VideoDecoder::video_image_display()
 {
@@ -998,18 +718,6 @@ void VideoDecoder::video_image_display()
     this->get_render()->show_texture(vp, rect,  0);
 }
 
-void Render::show_texture(const Frame* video_frame, const SDL_Rect& rect, int show_subtitle)
-{
-    Render::set_sdl_yuv_conversion_mode(video_frame->frame);
-    SDL_RenderCopyEx(this->renderer, this->vid_texture, NULL, &rect, 0, NULL, (SDL_RendererFlip)(video_frame->flip_v ? SDL_FLIP_VERTICAL : 0));
-    Render::set_sdl_yuv_conversion_mode(NULL);
-
-    if (show_subtitle) {
-        SDL_RenderCopy(this->renderer, this->sub_texture, NULL, &rect);
-    }
-}
-
-//  }}} render section 
 
 
 void VideoState::stream_component_close( int stream_index)
@@ -1103,53 +811,6 @@ void VideoDecoder::video_display()
     
 }
 
-double Clock::get_clock()
-{
-    if (*this->queue_serial != this->serial)
-        return NAN;
-    if (this->paused) {
-        return this->pts;
-    } else {
-        double time = av_gettime_relative() / 1000000.0;
-        return this->pts_drift + time - (time - this->last_updated) * (1.0 - this->speed);
-    }
-}
-
-void Clock::set_clock_at( double pts, int serial, double time)
-{
-    this->pts = pts;
-    this->last_updated = time;
-    this->pts_drift = this->pts - time;
-    this->serial = serial;
-}
-
-void Clock::set_clock( double pts, int serial)
-{
-    double time = av_gettime_relative() / 1000000.0;
-    set_clock_at(pts, serial, time);
-}
-
-void Clock::set_clock_speed( double speed)
-{
-    set_clock( get_clock(), this->serial);
-    this->speed = speed;
-}
-
-void Clock::init_clock( int *queue_serial)
-{
-    this->speed = 1.0;
-    this->paused = 0;
-    this->queue_serial = queue_serial;
-    set_clock( NAN, -1);
-}
-
-void Clock::sync_clock_to_slave( Clock *slave)
-{
-    double clock = get_clock();
-    double slave_clock = slave->get_clock();
-    if (!isnan(slave_clock) && (isnan(clock) || fabs(clock - slave_clock) > AV_NOSYNC_THRESHOLD))
-        this->set_clock(slave_clock, slave->serial);
-}
 
 int SimpleAVDecoder::get_master_sync_type() {
     if (this->av_sync_type == AV_SYNC_VIDEO_MASTER) {
@@ -1934,30 +1595,6 @@ int VideoState::decode_interrupt_cb(void *ctx)
     return is->abort_request;
 }
 
-int is_realtime(AVFormatContext *s)
-{
-    if(   !strcmp(s->iformat->name, "rtp")
-       || !strcmp(s->iformat->name, "rtsp")
-       || !strcmp(s->iformat->name, "sdp")
-    )
-        return 1;
-
-    if(s->pb && (   !strncmp(s->url, "rtp:", 4)
-                 || !strncmp(s->url, "udp:", 4)
-                )
-    )
-        return 1;
-    return 0;
-}
-
-void AutoReleasePtr<AVFormatContext>::release()
-{
-    if (!me)
-        return;
-
-    avformat_close_input(&me);
-    me = NULL;
-}
 
 int VideoState::open_stream_file()
 {
@@ -2426,15 +2063,4 @@ void VideoState::seek_chapter( int incr)
     av_log(NULL, AV_LOG_VERBOSE, "Seeking to chapter %d.\n", i);
     this->stream_seek( av_rescale_q(this->format_context->chapters[i]->start, this->format_context->chapters[i]->time_base,time_base_q)
         , 0, 0);
-}
-
-CString av_strerror2(int err)
-{
-    char errbuf[128];
-    const char* errbuf_ptr = errbuf;
-
-    if (av_strerror(err, errbuf, sizeof(errbuf)) < 0)
-        errbuf_ptr = strerror(AVUNERROR(err));
-    
-    return errbuf_ptr;
 }

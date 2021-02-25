@@ -152,6 +152,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="ffdecoder\ffdecoder.cpp" />
+    <ClCompile Include="ffdecoder\SimpleAvCommon.cpp" />
     <ClCompile Include="src\cmdutils.c" />
     <ClCompile Include="src\ffplay.cpp" />
     <ClCompile Include="utils\thread_utils.cpp" />
@@ -159,6 +160,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ffdecoder\ffdecoder.h" />
+    <ClInclude Include="ffdecoder\SimpleAvCommon.h" />
     <ClInclude Include="src\cmdutils.h" />
     <ClInclude Include="utils\thread_utils.h" />
     <ClInclude Include="utils\utils.h" />
