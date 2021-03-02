@@ -24,6 +24,16 @@ class VideoState;
 class SimpleAVDecoder;
 class Render;
 
+struct StreamParam // cache some initial param from AVStream
+{
+public:
+    AVStream * a;
+    AVRational  time_base;
+    int64_t     start_time;
+    int         stream_index;   // AVPacket::stream_index.  
+                                // 原ffplay的设计来自 AVFormat/AVStream，但是如果format和decoder分离，这里可以固定 V流用0， A流用1。
+};
+
 class Decoder 
     :public BaseThread  //decoder thread
 {
@@ -31,9 +41,9 @@ public:
     Decoder(SimpleAVDecoder* av_decoder)
     {
         _av_decoder = av_decoder;
-        stream_id = -1;
-        stream = NULL;
+        inited = 0;
         avctx = NULL;
+        guessed_frame_rate = av_make_q(25, 1);
     }
     virtual ~Decoder() {}
     static AVCodecContext* create_codec(AVFormatContext* format_context, int stream_id);
@@ -60,8 +70,17 @@ public:
     int64_t start_pts;              // todo: 源自 _vs->format_context ，需要self-contain
     AVRational start_pts_timebase;
 
-protected:    
+    int is_inited() const
+    {
+        return inited;
+    }
+    StreamParam  stream_param;
+
+protected:
+    int inited;
     SimpleAVDecoder* _av_decoder; 
+
+    AVRational guessed_frame_rate;
     Render* get_render();
     
     AVPacket pending_pkt;  // avcodec_send_packet 遇到E_AGAIN，需要暂存
@@ -77,8 +96,8 @@ protected:
 public:
     FrameQueue  frame_q;        // 原 VideoState:: pictq/sampq/subpq
     PacketQueue packet_q;       // 原 VideoState:: videoq/audioq/subtitleq
-    int         stream_id;      // 原 VideoState:: video_stream/audio_stream/subtitle_stream 
-    AVStream*   stream;         // 原 VideoState:: video_st/audio_st/subtitle_st   todo: 需要self-contain
+    //int         stream_id;      // 原 VideoState:: video_stream/audio_stream/subtitle_stream 
+    //AVStream*   stream;         // 原 VideoState:: video_st/audio_st/subtitle_st   todo: 需要self-contain
     Clock       stream_clock;   // 原 VideoState:: vidclk/audclk/(null)
 };
 
@@ -274,6 +293,9 @@ public:
     VideoState* vs;  // todo: 要剥离
 
     Render render;
+    int   open_stream(); // todo: 需要给出的参数是 A/V， codec_id, StreamParam 
+    int   get_opened_streams_mask();   // 返回 bit0 代表V， bit1 代表A
+    void  close_all_stream();
 
     Clock extclk;
     void check_external_clock_speed();
@@ -372,9 +394,7 @@ public:
     SimpleAVDecoder av_decoder;
 
     int eof;
-    
 
-    void stream_cycle_channel(int codec_type);   // 切換流
     int last_video_stream, last_audio_stream ;
 
     SimpleConditionVar continue_read_thread;

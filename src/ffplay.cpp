@@ -95,20 +95,7 @@ void event_loop(VideoState *cur_stream)
             case SDLK_s: // S: Step to next frame
                 cur_stream->step_to_next_frame();
                 break;
-            case SDLK_a:
-                cur_stream->stream_cycle_channel( AVMEDIA_TYPE_AUDIO);
-                break;
-            case SDLK_v:
-                cur_stream->stream_cycle_channel( AVMEDIA_TYPE_VIDEO);
-                break;
-            case SDLK_c:
-                cur_stream->stream_cycle_channel(AVMEDIA_TYPE_VIDEO);
-                cur_stream->stream_cycle_channel(AVMEDIA_TYPE_AUDIO);
-                cur_stream->stream_cycle_channel(AVMEDIA_TYPE_SUBTITLE);
-                break;
-            case SDLK_t:
-                cur_stream->stream_cycle_channel( AVMEDIA_TYPE_SUBTITLE);
-                break;
+           
             case SDLK_PAGEUP:
                 if (cur_stream->format_context->nb_chapters <= 1) {
                     incr = 600.0;

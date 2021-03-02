@@ -55,7 +55,9 @@ extern "C"
 #include "../utils/utils.h"
 
 #define MAX_QUEUE_SIZE (15 * 1024 * 1024)
-#define MIN_FRAMES 25
+#define QUEUE_ENOUGH_TIME    (10.0)
+#define QUEUE_ENOUGH_PKG     (25 * (int)QUEUE_ENOUGH_TIME )
+
 #define EXTERNAL_CLOCK_MIN_FRAMES 2
 #define EXTERNAL_CLOCK_MAX_FRAMES 10
 

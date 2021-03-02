@@ -104,13 +104,17 @@ AVCodecContext* Decoder::create_codec(AVFormatContext* format_context, int strea
 int Decoder::decoder_init( AVCodecContext *avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond)
 {
     this->avctx = avctx;
-    this->stream_id = stream_id;
-    this->stream = stream;
+    //this->stream_id = stream_id;
+    //this->stream = stream;
+
+    stream_param.start_time = stream->start_time;
+    stream_param.time_base = stream->time_base;
+    stream_param.stream_index = stream_id;
     
     this->empty_pkt_queue_cond = empty_queue_cond;
     this->start_pts = AV_NOPTS_VALUE;
     this->pkt_serial = -1;
-
+    
     return 0;
 }
 
@@ -193,12 +197,16 @@ Render* Decoder::get_render()
 }
 
 
-void Decoder::decoder_destroy() {
+void Decoder::decoder_destroy() {    
+    decoder_abort();
+
     av_packet_unref(&this->pending_pkt);
     avcodec_free_context(&this->avctx);
 
     this->packet_q.packet_queue_destroy();
     this->frame_q.frame_queue_destory();
+
+    inited = 0;
 }
 
 void Decoder::decoder_abort()
@@ -219,6 +227,8 @@ int VideoDecoder::decoder_init(AVCodecContext* avctx, int stream_id, AVStream* s
         return 1;
     }
 
+    this->guessed_frame_rate = av_guess_frame_rate(this->_av_decoder->vs->format_context, stream, NULL); // todo: 和format分离
+
     if (this->frame_q.frame_queue_init(&this->packet_q, VIDEO_PICTURE_QUEUE_SIZE, 1) < 0)
         return 2;
 
@@ -228,7 +238,7 @@ int VideoDecoder::decoder_init(AVCodecContext* avctx, int stream_id, AVStream* s
     {
         return 3;
     }
-
+    inited = 1;
     return 0;
 }
 
@@ -300,8 +310,8 @@ int AudioDecoder::decoder_init(AVCodecContext* avctx, int stream_id, AVStream* s
     if ((this->_av_decoder->vs->format_context->iformat->flags & (AVFMT_NOBINSEARCH | AVFMT_NOGENSEARCH | AVFMT_NO_BYTE_SEEK))
         && !this->_av_decoder->vs->format_context->iformat->read_seek)
     {   // 如果iformat不支持seek，那么起始位置就以AVStream里说的为准，否则还有机会根据命令行-ss来seek
-        this->start_pts = this->stream->start_time;
-        this->start_pts_timebase = this->stream->time_base;
+        this->start_pts = stream_param.start_time ;
+        this->start_pts_timebase = stream_param.time_base ;         
     }
 
     SDL_PauseAudioDevice(this->_av_decoder->render.audio_dev, 0);
@@ -310,6 +320,7 @@ int AudioDecoder::decoder_init(AVCodecContext* avctx, int stream_id, AVStream* s
     {
         return 2;
     }
+    inited = 1;
 
     return 0;
 
@@ -730,12 +741,10 @@ void VideoState::stream_component_close( int stream_index)
 
     switch (codecpar->codec_type) {
     case AVMEDIA_TYPE_AUDIO:
-        this->av_decoder.auddec.decoder_abort();
         this->av_decoder.auddec.decoder_destroy();
 
         break;
     case AVMEDIA_TYPE_VIDEO:
-        this->av_decoder.viddec.decoder_abort();
         this->av_decoder.viddec.decoder_destroy();
         break;
     default:
@@ -743,17 +752,33 @@ void VideoState::stream_component_close( int stream_index)
     }
 
     this->format_context->streams[stream_index]->discard = AVDISCARD_ALL;
-    switch (codecpar->codec_type) {
-    case AVMEDIA_TYPE_AUDIO:
-        this->av_decoder.auddec.stream = NULL;
-        this->av_decoder.auddec.stream_id = -1;
-        break;
-    case AVMEDIA_TYPE_VIDEO:
-        this->av_decoder.viddec.stream = NULL;
-        this->av_decoder.viddec.stream_id = -1;
-        break;
-    default:
-        break;
+    
+}
+
+int  SimpleAVDecoder::get_opened_streams_mask()   // 返回 bit0 代表V， bit1 代表A
+{
+    int r = 0;
+    if (this->viddec.is_inited())
+    {
+        r |= 1;
+    }
+    if (this->auddec.is_inited())
+    {
+        r |= 2;
+    }
+    return r;
+}
+
+void SimpleAVDecoder::close_all_stream()
+{
+    if (this->auddec.is_inited())
+    {
+        this->auddec.decoder_destroy();
+    }
+
+    if (this->viddec.is_inited())
+    {
+        this->viddec.decoder_destroy();
     }
 }
 
@@ -764,10 +789,9 @@ void VideoState::close_input_stream()
     this->wait_thread_quit();
 
     /* close each stream */
-    if (this->av_decoder.auddec.stream_id >= 0)    // todo: format 和 decoder分离
-        stream_component_close(this->av_decoder.auddec.stream_id);
-    if (this->av_decoder.viddec.stream_id >= 0)
-        stream_component_close(this->av_decoder.viddec.stream_id);
+    this->av_decoder.close_all_stream();
+    
+    // this->format_context->streams[stream_index]->discard = AVDISCARD_ALL;  // 相比原来ffplay，这个步骤没做
 
     avformat_close_input(&this->format_context);
 
@@ -804,7 +828,7 @@ void VideoDecoder::video_display()
 
     this->get_render()->clear_render();
     
-    if (this->stream)
+    if (this->is_inited())
         this->video_image_display();
 
     this->get_render()->draw_render();
@@ -814,12 +838,12 @@ void VideoDecoder::video_display()
 
 int SimpleAVDecoder::get_master_sync_type() {
     if (this->av_sync_type == AV_SYNC_VIDEO_MASTER) {
-        if (this->viddec.stream)
+        if (this->viddec.is_inited())
             return AV_SYNC_VIDEO_MASTER;
         else
             return AV_SYNC_AUDIO_MASTER;
     } else if (this->av_sync_type == AV_SYNC_AUDIO_MASTER) {
-        if (this->auddec.stream)
+        if (this->auddec.is_inited())
             return AV_SYNC_AUDIO_MASTER;
         else
             return AV_SYNC_EXTERNAL_CLOCK;
@@ -848,14 +872,14 @@ double SimpleAVDecoder::get_master_clock()
 }
 
 void SimpleAVDecoder::check_external_clock_speed() {
-   if (this->viddec.stream_id >= 0 && this->viddec.packet_q.nb_packets <= EXTERNAL_CLOCK_MIN_FRAMES ||
-       this->auddec.stream_id >= 0 && this->auddec.packet_q.nb_packets <= EXTERNAL_CLOCK_MIN_FRAMES)
+   if (this->viddec.is_inited() && this->viddec.packet_q.nb_packets <= EXTERNAL_CLOCK_MIN_FRAMES ||
+       this->auddec.is_inited() && this->auddec.packet_q.nb_packets <= EXTERNAL_CLOCK_MIN_FRAMES)
    {
        // 降速一档
        this->extclk.set_clock_speed( FFMAX(EXTERNAL_CLOCK_SPEED_MIN, this->extclk.get_clock_speed() - EXTERNAL_CLOCK_SPEED_STEP));  
    }
-   else if ((this->viddec.stream_id < 0 || this->viddec.packet_q.nb_packets > EXTERNAL_CLOCK_MAX_FRAMES) &&
-              (this->auddec.stream_id < 0 || this->auddec.packet_q.nb_packets > EXTERNAL_CLOCK_MAX_FRAMES))
+   else if (( !this->viddec.is_inited()  || this->viddec.packet_q.nb_packets > EXTERNAL_CLOCK_MAX_FRAMES) &&
+              ( !this->auddec.is_inited() || this->auddec.packet_q.nb_packets > EXTERNAL_CLOCK_MAX_FRAMES))
    {
        // 加速一档
        this->extclk.set_clock_speed( FFMIN(EXTERNAL_CLOCK_SPEED_MAX, this->extclk.get_clock_speed() + EXTERNAL_CLOCK_SPEED_STEP));
@@ -974,7 +998,7 @@ void SimpleAVDecoder::video_refresh(double *remaining_time)
     if (!this->vs->paused && this->get_master_sync_type() == AV_SYNC_EXTERNAL_CLOCK && this->vs->realtime)
         this->check_external_clock_speed();
 
-    if (this->viddec.stream) {
+    if (this->viddec.is_inited()) {
         prepare_picture_for_display(remaining_time);
 
         /* display picture */
@@ -1071,30 +1095,30 @@ void SimpleAVDecoder::print_stream_status()
     aqsize = 0;
     vqsize = 0;
     
-    if (this->auddec.stream)
+    if (this->auddec.is_inited())
         aqsize = this->auddec.packet_q.size;
-    if (this->viddec.stream)
+    if (this->viddec.is_inited())
         vqsize = this->viddec.packet_q.size;
 
     av_diff = 0;
-    if (this->auddec.stream && this->viddec.stream)
+    if (this->auddec.is_inited() && this->viddec.is_inited())
         av_diff = this->auddec.stream_clock.get_clock() - this->viddec.stream_clock.get_clock();
-    else if (this->viddec.stream)
+    else if (this->viddec.is_inited())
         av_diff = this->get_master_clock() - this->viddec.stream_clock.get_clock();
-    else if (this->auddec.stream)
+    else if (this->auddec.is_inited())
         av_diff = this->get_master_clock() - this->auddec.stream_clock.get_clock();
 
     av_bprint_init(&buf, 0, AV_BPRINT_SIZE_AUTOMATIC);
     av_bprintf(&buf,
         "clock:%7.2f %s:%7.3f framedrop=%4d aq=%5dKB vq=%5dKB f=%" PRId64 "/%" PRId64 "   \r",
         this->get_master_clock(),
-        (this->auddec.stream && this->viddec.stream) ? "A-V" : (this->viddec.stream ? "M-V" : (this->auddec.stream ? "M-A" : "   ")),
+        (this->auddec.is_inited() && this->viddec.is_inited()) ? "A-V" : (this->viddec.is_inited() ? "M-V" : (this->auddec.is_inited() ? "M-A" : "   ")),
         av_diff,
         this->frame_drops_early + this->frame_drops_late,
         aqsize / 1024,
         vqsize / 1024,        
-        this->viddec.stream ? this->viddec.avctx->pts_correction_num_faulty_dts : 0,
-        this->viddec.stream ? this->viddec.avctx->pts_correction_num_faulty_pts : 0);
+        this->viddec.is_inited() ? this->viddec.avctx->pts_correction_num_faulty_dts : 0,
+        this->viddec.is_inited() ? this->viddec.avctx->pts_correction_num_faulty_pts : 0);
 
     if (opt_show_status == 1 && AV_LOG_INFO > av_log_get_level())
         fprintf(stderr, "%s", buf.str);
@@ -1154,7 +1178,7 @@ int VideoDecoder::get_video_frame( AVFrame *frame)
     double dpts = NAN;
 
     if (frame->pts != AV_NOPTS_VALUE)
-        dpts = av_q2d(stream->time_base) * frame->pts;
+        dpts = av_q2d(this->stream_param.time_base ) * frame->pts;
 
     //frame->sample_aspect_ratio = av_guess_sample_aspect_ratio(this->_vs->format_context, stream, frame); // 有点过于奥义，试着删掉看效果
 
@@ -1232,12 +1256,12 @@ int Decoder::decoder_start()
 }
 
 int Decoder::stream_has_enough_packets() {
-    return stream_id < 0 ||
-        packet_q.abort_request ||
-        (stream->disposition & AV_DISPOSITION_ATTACHED_PIC) ||
-        packet_q.nb_packets > MIN_FRAMES && (!packet_q.total_duration    // 如果 total_duration 是0，说明pkt.duration无效，那就是只看包数量
-                                            || av_q2d(stream->time_base) * packet_q.total_duration > 1.0
-            );
+    if (!is_inited() || packet_q.abort_request)
+        return 1;
+    return       //(stream->disposition & AV_DISPOSITION_ATTACHED_PIC) ||   // 不考虑“show静态图片”的情况
+        packet_q.nb_packets > QUEUE_ENOUGH_PKG && (!packet_q.total_duration    // 如果 total_duration 是0，说明pkt.duration无效，那就是只看包数量
+                                            || av_q2d(this->stream_param.time_base) * packet_q.total_duration > QUEUE_ENOUGH_TIME);
+            
 }
 
 unsigned int VideoDecoder::run()
@@ -1246,8 +1270,7 @@ unsigned int VideoDecoder::run()
     double pts;
     double duration;
     int ret;
-    AVRational tb = this->stream->time_base;
-    AVRational frame_rate = av_guess_frame_rate(this->_av_decoder->vs->format_context, this->stream, NULL); // todo: 和format分离
+    AVRational tb = this->stream_param.time_base;
 
     if (!frame)
         return AVERROR(ENOMEM);
@@ -1259,8 +1282,8 @@ unsigned int VideoDecoder::run()
         if (!ret)
             continue;
 
-            AVRational szr_dur = { frame_rate.den, frame_rate.num };
-            duration = (frame_rate.num && frame_rate.den ? av_q2d(szr_dur) : 0);
+            AVRational szr_dur = { guessed_frame_rate.den, guessed_frame_rate.num };
+            duration = (guessed_frame_rate.num && guessed_frame_rate.den ? av_q2d(szr_dur) : 0);
             pts = (frame->pts == AV_NOPTS_VALUE) ? NAN : frame->pts * av_q2d(tb);
             ret = queue_picture( frame, pts, duration, frame->pkt_pos, pkt_serial);
             av_frame_unref(frame);
@@ -1714,7 +1737,7 @@ int VideoState::open_streams()
         stream_component_open(st_index[AVMEDIA_TYPE_SUBTITLE]);
     }
 
-    if (this->av_decoder.viddec.stream_id < 0 && this->av_decoder.auddec.stream_id < 0) {
+    if (0 == this->av_decoder.get_opened_streams_mask()) {
         av_log(NULL, AV_LOG_FATAL, "Failed to open file '%s' or configure filtergraph\n",
             this->filename);
         return -1;
@@ -1751,11 +1774,11 @@ int VideoState::read_loop_check_pause() // return: nonzero -- shoud 'continue', 
 }
 void SimpleAVDecoder::discard_buffer(double seek_target ) // 用于在seek后清cache。如果是按时间seek，则应顺手给出 seek_target (以秒为单位)
 {
-    if (this->auddec.stream_id >= 0) {
+    if (this->auddec.is_inited()) {
         this->auddec.packet_q.packet_queue_flush();
         this->auddec.packet_q.packet_queue_put(&PacketQueue::flush_pkt); // packet queue 的 serial ++
     }
-    if (this->viddec.stream_id >= 0) {
+    if (this->viddec.is_inited()) {
         this->viddec.packet_q.packet_queue_flush();
         this->viddec.packet_q.packet_queue_put(&PacketQueue::flush_pkt);
     }
@@ -1795,23 +1818,33 @@ int  VideoState::read_loop_check_seek()   // return: > 0 -- shoud 'continue', 0 
 
 int SimpleAVDecoder::is_buffer_full()
 {
-    return (this->auddec.packet_q.size + this->viddec.packet_q.size > MAX_QUEUE_SIZE)
-        || (this->auddec.stream_has_enough_packets() && this->viddec.stream_has_enough_packets());
+    if (this->auddec.packet_q.size + this->viddec.packet_q.size > MAX_QUEUE_SIZE)
+    {
+        //OutputDebugString("#\n"); 
+        return 1;
+    }
+
+    if (this->auddec.stream_has_enough_packets() && this->viddec.stream_has_enough_packets())
+    {
+        //OutputDebugString("$\n");
+        return 2;
+    }
+    return 0;
 }
 void SimpleAVDecoder::feed_null_pkt() // todo: 作用不明，待研究
 {
-    if (this->viddec.stream_id >= 0)
-        this->viddec.packet_q.packet_queue_put_nullpacket(this->viddec.stream_id);
-    if (this->auddec.stream_id >= 0)
-        this->auddec.packet_q.packet_queue_put_nullpacket(this->auddec.stream_id);
+    if (this->viddec.is_inited())
+        this->viddec.packet_q.packet_queue_put_nullpacket(this->viddec.stream_param.stream_index);
+    if (this->auddec.is_inited())
+        this->auddec.packet_q.packet_queue_put_nullpacket(this->auddec.stream_param.stream_index);
 }
 
 void SimpleAVDecoder::feed_pkt(AVPacket* pkt) // 向解码器喂数据包
 {
-    if (pkt->stream_index == this->auddec.stream_id) {
+    if (pkt->stream_index == this->auddec.stream_param.stream_index) {
         this->auddec.packet_q.packet_queue_put(pkt);
     }
-    else if (pkt->stream_index == this->viddec.stream_id && !(this->viddec.stream->disposition & AV_DISPOSITION_ATTACHED_PIC)) {
+    else if (pkt->stream_index == this->viddec.stream_param.stream_index ) {
         this->viddec.packet_q.packet_queue_put(pkt);
     }
     else {
@@ -1933,8 +1966,8 @@ int VideoState::open_input_stream(const char *filename, AVInputFormat *iformat)
 {
     AutoReleasePtr<VideoState> close_if_failed(this);
 
-    this->last_video_stream = this->av_decoder.viddec.stream_id = -1;
-    this->last_audio_stream = this->av_decoder.auddec.stream_id = -1;
+    this->last_video_stream = this->last_audio_stream =  -1;
+
     this->filename = av_strdup(filename);
     if (!this->filename)
         return 1;
@@ -1959,81 +1992,6 @@ int VideoState::open_input_stream(const char *filename, AVInputFormat *iformat)
     close_if_failed.dismiss();
     return 0;
 }
-
-void VideoState::stream_cycle_channel( int codec_type)
-{
-    int start_index, stream_index;
-    int old_index;
-    AVStream *st;
-    AVProgram *p = NULL;
-    int nb_streams = format_context->nb_streams;
-
-    if (codec_type == AVMEDIA_TYPE_VIDEO) {
-        start_index = this->last_video_stream;
-        old_index = this->av_decoder.viddec.stream_id;
-    } else if (codec_type == AVMEDIA_TYPE_AUDIO) {
-        start_index = this->last_audio_stream;
-        old_index = this->av_decoder.auddec.stream_id;
-    } else {
-    }
-    stream_index = start_index;
-
-    if (codec_type != AVMEDIA_TYPE_VIDEO && this->av_decoder.viddec.stream_id != -1) {
-        p = av_find_program_from_stream(this->format_context, NULL, this->av_decoder.viddec.stream_id);
-        if (p) {
-            nb_streams = p->nb_stream_indexes;
-            for (start_index = 0; start_index < nb_streams; start_index++)
-                if (p->stream_index[start_index] == stream_index)
-                    break;
-            if (start_index == nb_streams)
-                start_index = -1;
-            stream_index = start_index;
-        }
-    }
-
-    for (;;) {
-        if (++stream_index >= nb_streams)
-        {
-            if (codec_type == AVMEDIA_TYPE_SUBTITLE)
-            {
-                stream_index = -1;
-                goto the_end;
-            }
-            if (start_index == -1)
-                return;
-            stream_index = 0;
-        }
-        if (stream_index == start_index)
-            return;
-        st = this->format_context->streams[p ? p->stream_index[stream_index] : stream_index];
-        if (st->codecpar->codec_type == codec_type) {
-            /* check that parameters are OK */
-            switch (codec_type) {
-            case AVMEDIA_TYPE_AUDIO:
-                if (st->codecpar->sample_rate != 0 &&
-                    st->codecpar->channels != 0)
-                    goto the_end;
-                break;
-            case AVMEDIA_TYPE_VIDEO:
-            case AVMEDIA_TYPE_SUBTITLE:
-                goto the_end;
-            default:
-                break;
-            }
-        }
-    }
- the_end:
-    if (p && stream_index != -1)
-        stream_index = p->stream_index[stream_index];
-    av_log(NULL, AV_LOG_INFO, "Switch %s stream from #%d to #%d\n",
-           av_get_media_type_string((AVMediaType)codec_type),
-           old_index,
-           stream_index);
-
-    this->stream_component_close( old_index);
-    this->stream_component_open(stream_index);
-}
-
 
 void VideoState::seek_chapter( int incr)
 {
