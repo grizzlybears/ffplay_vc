@@ -730,31 +730,6 @@ void VideoDecoder::video_image_display()
 }
 
 
-
-void VideoState::stream_component_close( int stream_index)
-{
-    AVCodecParameters *codecpar;
-
-    if (stream_index < 0 || stream_index >= (int)this->format_context->nb_streams)
-        return;
-    codecpar = format_context->streams[stream_index]->codecpar;
-
-    switch (codecpar->codec_type) {
-    case AVMEDIA_TYPE_AUDIO:
-        this->av_decoder.auddec.decoder_destroy();
-
-        break;
-    case AVMEDIA_TYPE_VIDEO:
-        this->av_decoder.viddec.decoder_destroy();
-        break;
-    default:
-        break;
-    }
-
-    this->format_context->streams[stream_index]->discard = AVDISCARD_ALL;
-    
-}
-
 int  SimpleAVDecoder::get_opened_streams_mask()   // 返回 bit0 代表V， bit1 代表A
 {
     int r = 0;
@@ -794,11 +769,6 @@ void VideoState::close_input_stream()
     // this->format_context->streams[stream_index]->discard = AVDISCARD_ALL;  // 相比原来ffplay，这个步骤没做
 
     avformat_close_input(&this->format_context);
-
-    av_free(this->filename);
-    this->filename = NULL;
-        
-
 }
 
 
@@ -1585,32 +1555,6 @@ int AudioDecoder::audio_open(void *opaque, int64_t wanted_channel_layout, int wa
     return spec.size;
 }
 
-/* open a given stream, create decoder for it. Return 0 if OK */
-int VideoState::stream_component_open(int stream_index)
-{
-    if (stream_index < 0 || stream_index >= (int)format_context->nb_streams)
-        return -1;
-
-    AVCodecContext* avctx = Decoder::create_codec(this->format_context, stream_index);
-    
-    this->eof = 0; // 如果是‘切换流 stream_cycle_channel’来的，这里再清一下eof
-    this->format_context->streams[stream_index]->discard = AVDISCARD_DEFAULT;
-
-    switch (avctx->codec_type) {
-    case AVMEDIA_TYPE_AUDIO:                  
-        this->av_decoder.auddec.decoder_init(avctx, stream_index , format_context->streams[stream_index], &this->continue_read_thread);
-        this->last_audio_stream = stream_index;
-        break;
-    case AVMEDIA_TYPE_VIDEO:  
-        this->av_decoder.viddec.decoder_init( avctx, stream_index, format_context->streams[stream_index], &this->continue_read_thread);
-        this->last_video_stream = stream_index;
-        break;
-    default:
-        break;
-    }
-    
-    return 0;
-}
 
 int VideoState::decode_interrupt_cb(void *ctx)
 {
@@ -1634,9 +1578,9 @@ int VideoState::open_stream_file()
     format_context->interrupt_callback.callback = decode_interrupt_cb;
     format_context->interrupt_callback.opaque = this;
 
-    err = avformat_open_input(&format_context, this->filename, this->iformat, NULL);
+    err = avformat_open_input(&format_context, this->file_to_play, this->iformat, NULL);
     if (err < 0) {
-        print_error(this->filename, err);
+        print_error(this->file_to_play, err);
         return -1;
     }
 
@@ -1649,15 +1593,14 @@ int VideoState::open_stream_file()
     err = avformat_find_stream_info(format_context, NULL);
     if (err < 0) {
         av_log(NULL, AV_LOG_WARNING,
-            "%s: could not find codec parameters\n", this->filename);
+            "%s: could not find codec parameters\n", this->file_to_play.GetString());
         return  -1;
     }
 
     if (format_context->pb)
         format_context->pb->eof_reached = 0; // FIXME hack, ffplay maybe should not use avio_feof() to test for the end
 
-    this->av_decoder.av_sync_type = opt_av_sync_type;
-    this->av_decoder.max_frame_duration = (format_context->iformat->flags & AVFMT_TS_DISCONT) ? 10.0 : 3600.0;
+    this->eof = 0; 
 
     /* if seeking requested, we execute it */
     if (opt_start_time != AV_NOPTS_VALUE) {
@@ -1670,7 +1613,7 @@ int VideoState::open_stream_file()
         ret = avformat_seek_file(format_context, -1, INT64_MIN, timestamp, INT64_MAX, 0);
         if (ret < 0) {
             av_log(NULL, AV_LOG_WARNING, "%s: could not seek to position %0.3f\n",
-                this->filename, (double)timestamp / AV_TIME_BASE);
+                this->file_to_play.GetString(), (double)timestamp / AV_TIME_BASE);
         }
     }
 
@@ -1680,71 +1623,70 @@ int VideoState::open_stream_file()
         opt_infinite_buffer = 1;
 
     if (opt_show_status)
-        av_dump_format(format_context, 0, this->filename, 0);
+        av_dump_format(format_context, 0, this->file_to_play, 0);
 
     return 0;
 }
 
-int VideoState::open_streams()
+// 返回 bit0 代表V opened ， bit1 代表A opened 
+int SimpleAVDecoder::open_stream_from_avformat(AVFormatContext* format_context, /*in,hold*/SimpleConditionVar* notify_reader, int* vstream_id, int* astream_id)
 {
-    int st_index[AVMEDIA_TYPE_NB];
-    memset(st_index, -1, sizeof(st_index));
+    // 1. some preparation
+    this->av_sync_type = opt_av_sync_type;
+    this->max_frame_duration = (format_context->iformat->flags & AVFMT_TS_DISCONT) ? 10.0 : 3600.0;
     
-    // 2.1 av_find_best_stream
-    unsigned int i;
-    for (i = 0; i < this->format_context->nb_streams; i++) {
-        st_index[i] = -1;
-    }
+    std::vector<int> stream_indexes;
 
-    st_index[AVMEDIA_TYPE_VIDEO] =
-        av_find_best_stream(format_context, AVMEDIA_TYPE_VIDEO,
-            st_index[AVMEDIA_TYPE_VIDEO], -1, NULL, 0);
+    // 2. av_find_best_stream
+    int vs,as; 
 
-    
-    st_index[AVMEDIA_TYPE_AUDIO] =
-    av_find_best_stream(format_context, AVMEDIA_TYPE_AUDIO,
-        st_index[AVMEDIA_TYPE_AUDIO],
-        st_index[AVMEDIA_TYPE_VIDEO],
-        NULL, 0);
-
-    if (!opt_subtitle_disable)
-        st_index[AVMEDIA_TYPE_SUBTITLE] =
-        av_find_best_stream(format_context, AVMEDIA_TYPE_SUBTITLE,
-            st_index[AVMEDIA_TYPE_SUBTITLE],
-            (st_index[AVMEDIA_TYPE_AUDIO] >= 0 ?
-                st_index[AVMEDIA_TYPE_AUDIO] :
-                st_index[AVMEDIA_TYPE_VIDEO]),
-            NULL, 0);
-
-    if (st_index[AVMEDIA_TYPE_VIDEO] >= 0) {
-        AVStream* st = format_context->streams[st_index[AVMEDIA_TYPE_VIDEO]];
+    vs = av_find_best_stream(format_context, AVMEDIA_TYPE_VIDEO,-1, -1, NULL, 0);
+    if (vs >= 0)
+    {
+        stream_indexes.push_back(vs);
+        AVStream* st = format_context->streams[vs];
         AVCodecParameters* codec_para = st->codecpar;
         AVRational sar = av_guess_sample_aspect_ratio(format_context, st, NULL);
         if (codec_para->width)
-            this->av_decoder.render.set_default_window_size(codec_para->width, codec_para->height, sar);
+            this->render.set_default_window_size(codec_para->width, codec_para->height, sar);
+    }
+    else
+    {
+        LOG_WARN("No video stream found.\n");
+        vs = -1;
     }
 
-    // 2.2 open the streams 
-    if (st_index[AVMEDIA_TYPE_AUDIO] >= 0) {
-        stream_component_open(st_index[AVMEDIA_TYPE_AUDIO]);
+    as = av_find_best_stream(format_context, AVMEDIA_TYPE_AUDIO, -1, vs, NULL, 0);
+    if (as >= 0)
+    {
+        stream_indexes.push_back(as);
     }
 
-    if (st_index[AVMEDIA_TYPE_VIDEO] >= 0) {
-        stream_component_open(st_index[AVMEDIA_TYPE_VIDEO]);
-    }
+    // 3. open the streams     
+    for (size_t i = 0; i < stream_indexes.size(); i++)
+    {
+        int stream_index = stream_indexes[i];
+        AVCodecContext* avctx = Decoder::create_codec(format_context, stream_index);
 
-    if (st_index[AVMEDIA_TYPE_SUBTITLE] >= 0) {
-        stream_component_open(st_index[AVMEDIA_TYPE_SUBTITLE]);
-    }
+        format_context->streams[stream_index]->discard = AVDISCARD_DEFAULT;
 
-    if (0 == this->av_decoder.get_opened_streams_mask()) {
-        av_log(NULL, AV_LOG_FATAL, "Failed to open file '%s' or configure filtergraph\n",
-            this->filename);
-        return -1;
+        if (AVMEDIA_TYPE_AUDIO == avctx->codec_type) {
+            if (0 == this->auddec.decoder_init(avctx, stream_index, format_context->streams[stream_index], notify_reader))
+            {
+                *astream_id = stream_index;
+            }
+        }
+        else {
+            if ( 0 == this->viddec.decoder_init(avctx, stream_index, format_context->streams[stream_index], notify_reader))
+            {
+                *vstream_id = stream_index;
+            }
+        }
     }
-
-    return 0;
+    
+    return get_opened_streams_mask();
 }
+
 
 int VideoState::read_loop_check_pause() // return: nonzero -- shoud 'continue', 0 -- go on current iteration
 {
@@ -1968,10 +1910,8 @@ int VideoState::open_input_stream(const char *filename, AVInputFormat *iformat)
 
     this->last_video_stream = this->last_audio_stream =  -1;
 
-    this->filename = av_strdup(filename);
-    if (!this->filename)
-        return 1;
-
+    this->file_to_play = filename;
+    
     this->iformat = iformat;
 
 
@@ -1981,9 +1921,10 @@ int VideoState::open_input_stream(const char *filename, AVInputFormat *iformat)
         return 5;
     }
 
-    // 逐个打开流
-    if (open_streams())
+    // 逐流打开解码器
+    if (0 == this->av_decoder.open_stream_from_avformat(this->format_context, &this->continue_read_thread,&last_video_stream, &last_audio_stream))
     {
+        av_log(NULL, AV_LOG_FATAL, "Failed to open file '%s'.\n",  this->file_to_play.GetString());
         return 6;
     }
 

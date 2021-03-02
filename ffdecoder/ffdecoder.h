@@ -293,6 +293,9 @@ public:
     VideoState* vs;  // todo: 要剥离
 
     Render render;
+    
+    // 返回 bit0 代表V opened ， bit1 代表A opened 
+    int   open_stream_from_avformat(AVFormatContext* format_context, /*in,hold*/SimpleConditionVar* notify_reader, int* vstream_id, int* astream_id);
     int   open_stream(); // todo: 需要给出的参数是 A/V， codec_id, StreamParam 
     int   get_opened_streams_mask();   // 返回 bit0 代表V， bit1 代表A
     void  close_all_stream();
@@ -406,19 +409,11 @@ protected:
     static int decode_interrupt_cb(void* ctx);
 
     AVInputFormat* iformat;   // 命令行指定容器格式，ref only
-    char* filename; // 播放的文件 or url
-    
+    CString file_to_play; // 播放的文件 or url
     
     int last_paused; // 之前一次reader loop的时候，是否是paused
 
     int open_stream_file();
-    int open_streams();
-
-
-    // open a given stream, create decoder for it. Return 0 if OK 
-    int stream_component_open( int stream_index);
-    void stream_component_close( int stream_index);
-
 
     // 'reader thread' section {{{
     int  read_loop_check_pause(); // return: > 0 -- shoud 'continue', 0 -- go on current iteration, < 0 -- error exit loop
