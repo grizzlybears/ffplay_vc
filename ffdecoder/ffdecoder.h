@@ -27,11 +27,11 @@ class Render;
 struct StreamParam // cache some initial param from AVStream
 {
 public:
-    AVStream * a;
     AVRational  time_base;
     int64_t     start_time;
     int         stream_index;   // AVPacket::stream_index.  
                                 // 原ffplay的设计来自 AVFormat/AVStream，但是如果format和decoder分离，这里可以固定 V流用0， A流用1。
+    AVRational  guessed_vframe_rate;  // 只有V流用到
 };
 
 class Decoder 
@@ -43,7 +43,6 @@ public:
         _av_decoder = av_decoder;
         inited = 0;
         avctx = NULL;
-        guessed_frame_rate = av_make_q(25, 1);
     }
     virtual ~Decoder() {}
     static AVCodecContext* create_codec(AVFormatContext* format_context, int stream_id);
@@ -80,7 +79,6 @@ protected:
     int inited;
     SimpleAVDecoder* _av_decoder; 
 
-    AVRational guessed_frame_rate;
     Render* get_render();
     
     AVPacket pending_pkt;  // avcodec_send_packet 遇到E_AGAIN，需要暂存
@@ -111,6 +109,7 @@ public:
     {
         img_convert_ctx = NULL;
         width = height = xleft =  ytop = 0;
+        stream_param.guessed_vframe_rate = av_make_q(25, 1);
     }
 
     int width, height, xleft, ytop;
@@ -131,6 +130,7 @@ public:
     // display the current picture, if any 
     void video_display();
 protected:
+    
     virtual void on_got_new_frame(AVFrame* frame);
     int video_open(); // open the window for showing video
     void video_image_display();
@@ -284,15 +284,12 @@ public:
     SimpleAVDecoder(VideoState * vs)
         :auddec(this), viddec(this)
     {
-        this->vs = vs;
         this->extclk.init_clock(&this->extclk.serial);
         frame_drops_early = frame_drops_late = 0;
         paused = step = 0;
         force_refresh = 0;
         realtime = 0;
     }
-
-    VideoState* vs;  // todo: 要剥离
 
     Render render;
     
@@ -405,8 +402,6 @@ public:
 
     SimpleConditionVar continue_read_thread;
 
-    
-
 protected:    
     int infinite_buffer; 
 
@@ -428,13 +423,10 @@ protected:
     double stream_ts_to_second(int64_t ts, int stream_index);
 
     // }}} 'reader thread' section
-
-
 };
 
 /* options specified by the user */
 extern const char * opt_input_filename;
-extern int opt_audio_disable;
 extern int opt_show_status;
 extern int opt_av_sync_type;
 extern int64_t opt_start_time;  // 命令行 -ss ，由 av_parse_time 解析为 microseconds
@@ -449,8 +441,3 @@ extern const struct TextureFormatEntry {
     enum AVPixelFormat format;
     int texture_fmt;
 } sdl_texture_format_map[];
-
-
-
-
-

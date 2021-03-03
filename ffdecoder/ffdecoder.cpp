@@ -227,8 +227,6 @@ int VideoDecoder::decoder_init(AVCodecContext* avctx, int stream_id, AVStream* s
         return 1;
     }
 
-    this->guessed_frame_rate = av_guess_frame_rate(this->_av_decoder->vs->format_context, stream, NULL); // todo: 和format分离
-
     if (this->frame_q.frame_queue_init(&this->packet_q, VIDEO_PICTURE_QUEUE_SIZE, 1) < 0)
         return 2;
 
@@ -307,12 +305,12 @@ int AudioDecoder::decoder_init(AVCodecContext* avctx, int stream_id, AVStream* s
        we correct audio sync only if larger than this threshold */
     this->audio_diff_threshold = (double)(this->audio_hw_buf_size) / this->audio_tgt.bytes_per_sec;
 
-    if ((this->_av_decoder->vs->format_context->iformat->flags & (AVFMT_NOBINSEARCH | AVFMT_NOGENSEARCH | AVFMT_NO_BYTE_SEEK))
-        && !this->_av_decoder->vs->format_context->iformat->read_seek)
-    {   // 如果iformat不支持seek，那么起始位置就以AVStream里说的为准，否则还有机会根据命令行-ss来seek
-        this->start_pts = stream_param.start_time ;
-        this->start_pts_timebase = stream_param.time_base ;         
-    }
+    //if ((this->_av_decoder->vs->format_context->iformat->flags & (AVFMT_NOBINSEARCH | AVFMT_NOGENSEARCH | AVFMT_NO_BYTE_SEEK))
+    //    && !this->_av_decoder->vs->format_context->iformat->read_seek)
+    //{   // 如果iformat不支持seek，那么起始位置就以AVStream里说的为准，否则还有机会根据命令行-ss来seek
+    //    this->start_pts = stream_param.start_time ;
+    //    this->start_pts_timebase = stream_param.time_base ;         
+    //}
 
     SDL_PauseAudioDevice(this->_av_decoder->render.audio_dev, 0);
     
@@ -965,7 +963,7 @@ void SimpleAVDecoder::update_video_clock(double pts, int64_t pos, int serial) {
 /* called to display each frame */
 void SimpleAVDecoder::video_refresh(double *remaining_time)
 {
-    if (!this->vs->paused && this->get_master_sync_type() == AV_SYNC_EXTERNAL_CLOCK && this->realtime)
+    if (!this->paused && this->get_master_sync_type() == AV_SYNC_EXTERNAL_CLOCK && this->realtime)
         this->check_external_clock_speed();
 
     if (this->viddec.is_inited()) {
@@ -1001,7 +999,7 @@ retry:
     if (lastvp->serial != vp->serial)
         this->viddec.frame_timer = av_gettime_relative() / 1000000.0;
 
-    if (this->vs->paused)
+    if (this->paused)
         return;
 
     double time_now, last_duration, duration, delay;
@@ -1252,11 +1250,12 @@ unsigned int VideoDecoder::run()
         if (!ret)
             continue;
 
-            AVRational szr_dur = { guessed_frame_rate.den, guessed_frame_rate.num };
-            duration = (guessed_frame_rate.num && guessed_frame_rate.den ? av_q2d(szr_dur) : 0);
-            pts = (frame->pts == AV_NOPTS_VALUE) ? NAN : frame->pts * av_q2d(tb);
-            ret = queue_picture( frame, pts, duration, frame->pkt_pos, pkt_serial);
-            av_frame_unref(frame);
+        AVRational guessed_frame_rate = stream_param.guessed_vframe_rate;
+        AVRational szr_dur = { guessed_frame_rate.den, guessed_frame_rate.num };
+        duration = (guessed_frame_rate.num && guessed_frame_rate.den ? av_q2d(szr_dur) : 0);
+        pts = (frame->pts == AV_NOPTS_VALUE) ? NAN : frame->pts * av_q2d(tb);
+        ret = queue_picture( frame, pts, duration, frame->pkt_pos, pkt_serial);
+        av_frame_unref(frame);
 
         if (ret < 0)
             goto the_end;
@@ -1678,6 +1677,7 @@ int SimpleAVDecoder::open_stream_from_avformat(AVFormatContext* format_context, 
         else {
             if ( 0 == this->viddec.decoder_init(avctx, stream_index, format_context->streams[stream_index], notify_reader))
             {
+                this->viddec.stream_param.guessed_vframe_rate = av_guess_frame_rate(format_context, format_context->streams[stream_index], NULL);
                 *vstream_id = stream_index;
             }
         }
@@ -1804,7 +1804,7 @@ void SimpleAVDecoder::feed_pkt(AVPacket* pkt) // 向解码器喂数据包
 /* this thread gets the stream from the disk or the network */
 unsigned VideoState::run()
 {
-    unsigned ret = 1;
+    int ret = 1;
     AVPacket pkt1, *pkt = &pkt1;
     this->eof = 0;
 
@@ -1832,15 +1832,18 @@ unsigned VideoState::run()
 
         ret = av_read_frame(format_context, pkt);
         if (ret < 0) {
-            if ((ret == AVERROR_EOF || avio_feof(format_context->pb)) && !this->eof) {  //todo: 走不进来这里，视频放完之后show_status显示vq是乱数
+            if ((ret == AVERROR_EOF || avio_feof(format_context->pb)) && !this->eof) {  
                 this->av_decoder.feed_null_pkt(); // todo: null pkt 作用不明
                 this->eof = 1;
-            }
-            if (format_context->pb && format_context->pb->error) {
+                // todo: 这里可以回调一下通知上层 EOF
                 if (opt_autoexit)
                     goto fail;
-                else
-                    break;
+
+            }
+            if (format_context->pb && format_context->pb->error) {
+                // todo: 这里可以回调一下通知上层 I/O Error
+                if (opt_autoexit)
+                    goto fail;
             }
 
             this->continue_read_thread.timed_wait(10);
@@ -1856,7 +1859,7 @@ unsigned VideoState::run()
 
         this->av_decoder.feed_pkt(pkt);
     }
-
+    
     ret = 0;
  fail:
 
