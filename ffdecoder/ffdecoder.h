@@ -94,6 +94,7 @@ protected:
     virtual void on_got_new_frame(AVFrame* frame) = 0;
 
 public:
+    static void onetime_global_init();
     FrameQueue  frame_q;        // 原 VideoState:: pictq/sampq/subpq
     PacketQueue packet_q;       // 原 VideoState:: videoq/audioq/subtitleq
     //int         stream_id;      // 原 VideoState:: video_stream/audio_stream/subtitle_stream 
@@ -171,7 +172,7 @@ protected:
     uint8_t* audio_buf1;
     unsigned int audio_buf_size; /* in bytes */
     unsigned int audio_buf1_size;
-    int audio_buf_index; /* in bytes */
+    unsigned int audio_buf_index; /* in bytes */
     int audio_write_buf_size;
     
     
@@ -288,6 +289,7 @@ public:
         frame_drops_early = frame_drops_late = 0;
         paused = step = 0;
         force_refresh = 0;
+        realtime = 0;
     }
 
     VideoState* vs;  // todo: 要剥离
@@ -301,7 +303,7 @@ public:
     void  close_all_stream();
 
     Clock extclk;
-    void check_external_clock_speed();
+    void check_external_clock_speed();  // 调节外部时钟速度以适应流速
 
     AudioDecoder    auddec;
     VideoDecoder    viddec;
@@ -313,6 +315,7 @@ public:
 
     int get_master_sync_type();
     int av_sync_type;
+    int realtime;   // 是否是实时流
 
     /* get the current master clock value */
     double get_master_clock();
@@ -363,6 +366,7 @@ public:
         abort_request = 0;
         paused = 0;
         seek_req = 0;
+        infinite_buffer = -1;
     }
 
     int open_input_stream(const char* filename, AVInputFormat* iformat);
@@ -375,7 +379,6 @@ public:
     void toggle_pause();
     
     void step_to_next_frame();
-        
 
     void seek_chapter( int incr);
 
@@ -402,9 +405,11 @@ public:
 
     SimpleConditionVar continue_read_thread;
 
-    int realtime;   // 是否是实时流
+    
 
 protected:    
+    int infinite_buffer; 
+
     virtual unsigned run();  //  stream reader thread 
     static int decode_interrupt_cb(void* ctx);
 
@@ -428,7 +433,6 @@ protected:
 };
 
 /* options specified by the user */
-extern AVInputFormat * opt_file_iformat;
 extern const char * opt_input_filename;
 extern int opt_audio_disable;
 extern int opt_show_status;
@@ -437,9 +441,7 @@ extern int64_t opt_start_time;  // 命令行 -ss ，由 av_parse_time 解析为 microsec
 extern int64_t opt_duration;    // 命令行 -t  ，由 av_parse_time 解析为 microseconds
 extern int opt_decoder_reorder_pts ;
 extern int opt_autoexit;
-extern int opt_infinite_buffer;
 
-extern int opt_full_screen;
 
 #define FF_QUIT_EVENT    (SDL_USEREVENT + 2)
 

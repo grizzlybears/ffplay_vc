@@ -30,7 +30,6 @@ extern "C" {
 }
 
 /* options specified by the user */
-AVInputFormat * opt_file_iformat;
 const char * opt_input_filename;
   
  int opt_subtitle_disable = 0;
@@ -40,11 +39,6 @@ const char * opt_input_filename;
  int64_t opt_duration = AV_NOPTS_VALUE;
  int opt_decoder_reorder_pts = -1;
  int opt_autoexit = 0;
- int opt_infinite_buffer = -1;
-
-
-  int opt_full_screen = 0;
-
 
  const struct TextureFormatEntry sdl_texture_format_map[] = {
     { AV_PIX_FMT_RGB8,           SDL_PIXELFORMAT_RGB332 },
@@ -72,6 +66,12 @@ const char * opt_input_filename;
 
 
 //     decoder section {{{
+void Decoder::onetime_global_init()
+{
+    av_init_packet(&PacketQueue::flush_pkt);
+    PacketQueue::flush_pkt.data = (uint8_t*)&PacketQueue::flush_pkt;
+}
+
 AVCodecContext* Decoder::create_codec(AVFormatContext* format_context, int stream_id)
 {
     AVCodecContext* avctx = avcodec_alloc_context3(NULL);
@@ -782,7 +782,7 @@ int VideoDecoder::video_open()
 
     render->show_window(render->window_title.GetString()
         , render->screen_width, render->screen_height, render->screen_left, render->screen_top
-        , opt_full_screen);
+        , 0);
     
     this->width  = render->screen_width;
     this->height = render->screen_height;
@@ -965,7 +965,7 @@ void SimpleAVDecoder::update_video_clock(double pts, int64_t pos, int serial) {
 /* called to display each frame */
 void SimpleAVDecoder::video_refresh(double *remaining_time)
 {
-    if (!this->vs->paused && this->get_master_sync_type() == AV_SYNC_EXTERNAL_CLOCK && this->vs->realtime)
+    if (!this->vs->paused && this->get_master_sync_type() == AV_SYNC_EXTERNAL_CLOCK && this->realtime)
         this->check_external_clock_speed();
 
     if (this->viddec.is_inited()) {
@@ -1617,10 +1617,8 @@ int VideoState::open_stream_file()
         }
     }
 
-    this->realtime = is_realtime(format_context);
-
-    if (opt_infinite_buffer < 0 && this->realtime)
-        opt_infinite_buffer = 1;
+    if (this->infinite_buffer < 0 && is_realtime(format_context))
+        this->infinite_buffer = 1;
 
     if (opt_show_status)
         av_dump_format(format_context, 0, this->file_to_play, 0);
@@ -1634,7 +1632,8 @@ int SimpleAVDecoder::open_stream_from_avformat(AVFormatContext* format_context, 
     // 1. some preparation
     this->av_sync_type = opt_av_sync_type;
     this->max_frame_duration = (format_context->iformat->flags & AVFMT_TS_DISCONT) ? 10.0 : 3600.0;
-    
+    this->realtime = is_realtime(format_context);
+
     std::vector<int> stream_indexes;
 
     // 2. av_find_best_stream
@@ -1824,7 +1823,7 @@ unsigned VideoState::run()
         // 3.4 准备读入packet
 
         /* if the queue are full, no need to read more */
-        if  (opt_infinite_buffer <1 && this->av_decoder.is_buffer_full())
+        if  (infinite_buffer <1 && this->av_decoder.is_buffer_full())
         {
             /* wait 10 ms */
             this->continue_read_thread.timed_wait(10);
@@ -1849,7 +1848,7 @@ unsigned VideoState::run()
         } else {
             this->eof = 0;
         }
-        /* check if packet is in play range specified by user, then queue, otherwise discard */        
+        /* check if packet is in play range specified by user, then queue, otherwise discard */
         if (!is_pkt_in_play_range(pkt)) { 
             av_packet_unref(pkt); // todo: 不到 start_point，还是超过duration，应该有不同处理
             continue;
@@ -1885,8 +1884,8 @@ int VideoState::is_pkt_in_play_range( AVPacket* pkt)
     int64_t pkt_ts = ( pkt->pts == AV_NOPTS_VALUE) ? pkt->dts : pkt->pts;
     double ts_relative_to_stream = stream_ts_to_second( pkt_ts - stream_start_time, pkt->stream_index);
     //printf("stream %d, ts_relative_to_stream = %f\n", pkt->stream_index, ts_relative_to_stream);
-    double start_point = (opt_start_time != AV_NOPTS_VALUE ? opt_start_time : 0) / 1000000; // opt_start_time is in unit of microsecond
-    double duration = opt_duration / 1000000;
+    double start_point = (double)((opt_start_time != AV_NOPTS_VALUE ? opt_start_time : 0) / 1000000); // opt_start_time is in unit of microsecond
+    double duration = (double) (opt_duration / 1000000);  // opt_duration  is in unit of microsecond
 
     return (ts_relative_to_stream - start_point) <= duration;
 }
