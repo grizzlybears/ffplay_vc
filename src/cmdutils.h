@@ -34,6 +34,19 @@
 #undef main /* We don't want SDL to override our main() */
 #endif
 
+/* options specified by the user */
+extern const char* opt_input_filename;
+extern int opt_show_status;
+extern int opt_av_sync_type;
+extern int64_t opt_start_time;  // 命令行 -ss ，由 av_parse_time 解析为 microseconds
+extern int64_t opt_duration;    // 命令行 -t  ，由 av_parse_time 解析为 microseconds
+extern int opt_autoexit;
+
+extern int opt_decoder_reorder_pts;
+
+
+
+
 /**
  * program name, defined by the program for show_version().
  */
@@ -430,16 +443,6 @@ AVDictionary *filter_codec_opts(AVDictionary *opts, enum AVCodecID codec_id,
 AVDictionary **setup_find_stream_info_opts(AVFormatContext *s,
                                            AVDictionary *codec_opts);
 
-/**
- * Print an error message to stderr, indicating filename and a human
- * readable description of the error code err.
- *
- * If strerror_r() is not available the use of this function in a
- * multithreaded application may be unsafe.
- *
- * @see av_strerror()
- */
-void print_error(const char *filename, int err);
 
 /**
  * Print the program banner to stderr. The banner contents depend on the

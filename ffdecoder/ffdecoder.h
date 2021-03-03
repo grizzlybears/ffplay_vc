@@ -15,7 +15,7 @@ typedef struct AudioParams {
 } AudioParams;
 
 enum {
-    AV_SYNC_AUDIO_MASTER, /* default choice */
+    AV_SYNC_AUDIO_MASTER = 0, /* default choice */
     AV_SYNC_VIDEO_MASTER,
     AV_SYNC_EXTERNAL_CLOCK, /* synchronize to an external clock */
 };
@@ -289,6 +289,8 @@ public:
         paused = step = 0;
         force_refresh = 0;
         realtime = 0;
+        show_status = -1;
+        decoder_reorder_pts = -1;
     }
 
     Render render;
@@ -321,6 +323,11 @@ public:
     int synchronize_audio(int nb_samples);
 
     double max_frame_duration;      // maximum duration of a frame - above this, we consider the jump a timestamp discontinuity
+    
+    // {{  some ffplay cmd line opt  
+    int decoder_reorder_pts;
+    int show_status;
+    // }}  some ffplay cmd line opt  
 
     int frame_drops_early;
     int frame_drops_late;
@@ -364,6 +371,8 @@ public:
         paused = 0;
         seek_req = 0;
         infinite_buffer = -1;
+        streamopt_start_time = streamopt_duration = AV_NOPTS_VALUE;
+        streamopt_autoexit = 0;
     }
 
     int open_input_stream(const char* filename, AVInputFormat* iformat);
@@ -387,6 +396,13 @@ public:
     // }}  format status section
 
     int abort_request;
+
+    // {{  some ffplay cmd line opt  
+    
+    int64_t streamopt_start_time;  // 命令行 -ss ，由 av_parse_time 解析为 microseconds
+    int64_t streamopt_duration;    // 命令行 -t  ，由 av_parse_time 解析为 microseconds
+    int     streamopt_autoexit;
+    // }}
 
     int seek_req;
     int seek_flags;
@@ -425,15 +441,6 @@ protected:
     // }}} 'reader thread' section
 };
 
-/* options specified by the user */
-extern const char * opt_input_filename;
-extern int opt_show_status;
-extern int opt_av_sync_type;
-extern int64_t opt_start_time;  // 命令行 -ss ，由 av_parse_time 解析为 microseconds
-extern int64_t opt_duration;    // 命令行 -t  ，由 av_parse_time 解析为 microseconds
-extern int opt_decoder_reorder_pts ;
-extern int opt_autoexit;
-
 
 #define FF_QUIT_EVENT    (SDL_USEREVENT + 2)
 
@@ -441,3 +448,15 @@ extern const struct TextureFormatEntry {
     enum AVPixelFormat format;
     int texture_fmt;
 } sdl_texture_format_map[];
+
+
+/**
+ * Print an error message to stderr, indicating filename and a human
+ * readable description of the error code err.
+ *
+ * If strerror_r() is not available the use of this function in a
+ * multithreaded application may be unsafe.
+ *
+ * @see av_strerror()
+ */
+void print_error(const char* filename, int err);

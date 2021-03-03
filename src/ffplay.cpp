@@ -339,6 +339,7 @@ int main(int argc, char **argv)
 
     Decoder::onetime_global_init();
 
+    // init format
     VideoState* is = new VideoState();
     if (!is)
     {
@@ -346,11 +347,21 @@ int main(int argc, char **argv)
         goto EXIT;
     }
 
-    if (is->av_decoder.render.init(0 /*audio disable*/ , 0 /*alwaysontop*/))
+    is->streamopt_start_time = opt_start_time;
+    is->streamopt_duration   = opt_duration;
+    is->streamopt_autoexit = opt_autoexit;
+    
+    // init decoder
+    if (is->av_decoder.render.init(0 /*audio disable*/, 0 /*alwaysontop*/))
     {
         goto EXIT;
     }
+    is->av_decoder.render.window_title = opt_input_filename;
+    is->av_decoder.show_status = opt_show_status;
+    is->av_decoder.av_sync_type = opt_av_sync_type;
+    is->av_decoder.decoder_reorder_pts = opt_decoder_reorder_pts;
     
+    // open media
     if (is->open_input_stream(opt_input_filename, NULL)) {
         av_log(NULL, AV_LOG_FATAL, "Failed to initialize VideoState!\n");
         goto EXIT;

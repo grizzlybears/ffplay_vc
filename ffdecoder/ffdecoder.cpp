@@ -25,21 +25,6 @@
 
 #include "ffdecoder.h"
 
-extern "C" {
-#include "src/cmdutils.h"
-}
-
-/* options specified by the user */
-const char * opt_input_filename;
-  
- int opt_subtitle_disable = 0;
- int opt_show_status = -1; //原来是 -1;
- int opt_av_sync_type = AV_SYNC_AUDIO_MASTER;
- int64_t opt_start_time = AV_NOPTS_VALUE;
- int64_t opt_duration = AV_NOPTS_VALUE;
- int opt_decoder_reorder_pts = -1;
- int opt_autoexit = 0;
-
  const struct TextureFormatEntry sdl_texture_format_map[] = {
     { AV_PIX_FMT_RGB8,           SDL_PIXELFORMAT_RGB332 },
     { AV_PIX_FMT_RGB444,         SDL_PIXELFORMAT_RGB444 },
@@ -242,10 +227,10 @@ int VideoDecoder::decoder_init(AVCodecContext* avctx, int stream_id, AVStream* s
 
 void VideoDecoder::on_got_new_frame(AVFrame* frame)
 {
-    if (opt_decoder_reorder_pts == -1) { // let decoder reorder pts 0=off 1=on -1=auto
+    if (_av_decoder->decoder_reorder_pts == -1) { // let decoder reorder pts 0=off 1=on -1=auto
         frame->pts = frame->best_effort_timestamp;
     }
-    else if (!opt_decoder_reorder_pts) {
+    else if (!_av_decoder->decoder_reorder_pts) {
         frame->pts = frame->pkt_dts;
     }
 }
@@ -392,7 +377,7 @@ int Render::init(int audio_disable, int alwaysontop)
 #endif
     cw_flags |= SDL_WINDOW_RESIZABLE;
 
-    if (this->create_window(g_program_name
+    if (this->create_window(window_title.GetString()
         , SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, this->screen_width, this->screen_height
         , cw_flags))
     {
@@ -773,10 +758,6 @@ void VideoState::close_input_stream()
 int VideoDecoder::video_open()
 {
     Render* render = get_render();
-    if ("" == render->window_title)
-    {
-        render->window_title = opt_input_filename;
-    }
 
     render->show_window(render->window_title.GetString()
         , render->screen_width, render->screen_height, render->screen_left, render->screen_top
@@ -974,7 +955,7 @@ void SimpleAVDecoder::video_refresh(double *remaining_time)
             this->viddec.video_display();
     }
     this->force_refresh = 0;
-    if (opt_show_status) {
+    if (this->show_status) {
         this->print_stream_status();
     }
 }
@@ -1088,7 +1069,7 @@ void SimpleAVDecoder::print_stream_status()
         this->viddec.is_inited() ? this->viddec.avctx->pts_correction_num_faulty_dts : 0,
         this->viddec.is_inited() ? this->viddec.avctx->pts_correction_num_faulty_pts : 0);
 
-    if (opt_show_status == 1 && AV_LOG_INFO > av_log_get_level())
+    if (this->show_status == 1 && AV_LOG_INFO > av_log_get_level())
         fprintf(stderr, "%s", buf.str);
     else
         av_log(NULL, AV_LOG_INFO, "%s", buf.str);
@@ -1602,10 +1583,10 @@ int VideoState::open_stream_file()
     this->eof = 0; 
 
     /* if seeking requested, we execute it */
-    if (opt_start_time != AV_NOPTS_VALUE) {
+    if (this->streamopt_start_time != AV_NOPTS_VALUE) {
         int64_t timestamp;
 
-        timestamp = opt_start_time;
+        timestamp = this->streamopt_start_time;
         /* add the stream start time */
         if (format_context->start_time != AV_NOPTS_VALUE)
             timestamp += format_context->start_time;
@@ -1619,8 +1600,7 @@ int VideoState::open_stream_file()
     if (this->infinite_buffer < 0 && is_realtime(format_context))
         this->infinite_buffer = 1;
 
-    if (opt_show_status)
-        av_dump_format(format_context, 0, this->file_to_play, 0);
+    av_dump_format(format_context, 0, this->file_to_play, 0);
 
     return 0;
 }
@@ -1629,7 +1609,6 @@ int VideoState::open_stream_file()
 int SimpleAVDecoder::open_stream_from_avformat(AVFormatContext* format_context, /*in,hold*/SimpleConditionVar* notify_reader, int* vstream_id, int* astream_id)
 {
     // 1. some preparation
-    this->av_sync_type = opt_av_sync_type;
     this->max_frame_duration = (format_context->iformat->flags & AVFMT_TS_DISCONT) ? 10.0 : 3600.0;
     this->realtime = is_realtime(format_context);
 
@@ -1705,7 +1684,7 @@ int VideoState::read_loop_check_pause() // return: nonzero -- shoud 'continue', 
 
     if (this->paused &&
         (!strcmp(this->format_context->iformat->name, "rtsp") ||
-            (format_context->pb && !strncmp(opt_input_filename, "mmsh:", 5)))) {
+            (format_context->pb && !strncmp(this->file_to_play.GetString(), "mmsh:", 5)))) {
         /* wait 10 ms to avoid trying to get another packet */
         /* XXX: horrible */
         SDL_Delay(10);
@@ -1836,13 +1815,13 @@ unsigned VideoState::run()
                 this->av_decoder.feed_null_pkt(); // todo: null pkt 作用不明
                 this->eof = 1;
                 // todo: 这里可以回调一下通知上层 EOF
-                if (opt_autoexit)
+                if (streamopt_autoexit)
                     goto fail;
 
             }
             if (format_context->pb && format_context->pb->error) {
                 // todo: 这里可以回调一下通知上层 I/O Error
-                if (opt_autoexit)
+                if (streamopt_autoexit)
                     goto fail;
             }
 
@@ -1876,7 +1855,7 @@ unsigned VideoState::run()
 
 int VideoState::is_pkt_in_play_range( AVPacket* pkt)
 {
-    if (opt_duration == AV_NOPTS_VALUE)
+    if (this->streamopt_duration == AV_NOPTS_VALUE)
         return 1;
     //todo: 如果是‘实况转播’，来包就放，也应该无条件返回1。
 
@@ -1887,8 +1866,8 @@ int VideoState::is_pkt_in_play_range( AVPacket* pkt)
     int64_t pkt_ts = ( pkt->pts == AV_NOPTS_VALUE) ? pkt->dts : pkt->pts;
     double ts_relative_to_stream = stream_ts_to_second( pkt_ts - stream_start_time, pkt->stream_index);
     //printf("stream %d, ts_relative_to_stream = %f\n", pkt->stream_index, ts_relative_to_stream);
-    double start_point = (double)((opt_start_time != AV_NOPTS_VALUE ? opt_start_time : 0) / 1000000); // opt_start_time is in unit of microsecond
-    double duration = (double) (opt_duration / 1000000);  // opt_duration  is in unit of microsecond
+    double start_point = (double)((streamopt_start_time != AV_NOPTS_VALUE ? streamopt_start_time : 0) / 1000000); // opt_start_time is in unit of microsecond
+    double duration = (double) (streamopt_duration / 1000000);  // opt_duration  is in unit of microsecond
 
     return (ts_relative_to_stream - start_point) <= duration;
 }
@@ -1964,4 +1943,15 @@ void VideoState::seek_chapter( int incr)
     av_log(NULL, AV_LOG_VERBOSE, "Seeking to chapter %d.\n", i);
     this->stream_seek( av_rescale_q(this->format_context->chapters[i]->start, this->format_context->chapters[i]->time_base,time_base_q)
         , 0, 0);
+}
+
+
+void print_error(const char* filename, int err)
+{
+    char errbuf[128];
+    const char* errbuf_ptr = errbuf;
+
+    if (av_strerror(err, errbuf, sizeof(errbuf)) < 0)
+        errbuf_ptr = strerror(AVUNERROR(err));
+    av_log(NULL, AV_LOG_ERROR, "%s: %s\n", filename, errbuf_ptr);
 }

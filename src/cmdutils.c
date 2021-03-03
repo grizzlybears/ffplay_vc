@@ -73,6 +73,18 @@ static FILE *report_file;
 static int report_file_level = AV_LOG_DEBUG;
 int hide_banner = 0;
 
+/* options specified by the user */
+const char* opt_input_filename;
+
+int opt_subtitle_disable = 0;
+int opt_show_status = -1; //Ô­À´ÊÇ -1;
+int opt_av_sync_type = 0;  // AV_SYNC_AUDIO_MASTER = 0, /* default choice */
+int64_t opt_start_time = AV_NOPTS_VALUE;
+int64_t opt_duration = AV_NOPTS_VALUE;
+int opt_decoder_reorder_pts = -1;
+int opt_autoexit = 0;
+
+
 enum show_muxdemuxers {
     SHOW_DEFAULT,
     SHOW_DEMUXERS,
@@ -1082,15 +1094,6 @@ int opt_timelimit(void *optctx, const char *opt, const char *arg)
     return 0;
 }
 
-void print_error(const char *filename, int err)
-{
-    char errbuf[128];
-    const char *errbuf_ptr = errbuf;
-
-    if (av_strerror(err, errbuf, sizeof(errbuf)) < 0)
-        errbuf_ptr = strerror(AVUNERROR(err));
-    av_log(NULL, AV_LOG_ERROR, "%s: %s\n", filename, errbuf_ptr);
-}
 
 static int warned_cfg = 0;
 
