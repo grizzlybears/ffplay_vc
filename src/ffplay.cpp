@@ -23,15 +23,14 @@
  * simple media player based on the FFmpeg libraries
  */
 
-
-#include "ffdecoder/ffdecoder.h"
-
 extern "C" {
 #include "cmdutils.h"
 }
 #include <assert.h>
 #include <signal.h>
-#include "utils/utils.h"
+
+
+#include "ffdecoder/ffdecoder.h"
 
 const char g_program_name[] = "ffplay";
 const int program_birth_year = 2003;
@@ -307,11 +306,13 @@ void show_help_default(const char *opt, const char *arg)
            );
 }
 
+#ifdef _MSC_VER
+SharedFile  g_main_logger;  // on Windows, 'FILE*' is not thread-safe.
+#endif
+
 /* Called from the main */
 int main(int argc, char **argv)
 {
-    //printf_as_default_logger();
-    init_default_logger(GetModuleHandle(NULL), "ffplay.log");
     
     av_log_set_flags(AV_LOG_SKIP_REPEATED);
     parse_loglevel(argc, argv, options);

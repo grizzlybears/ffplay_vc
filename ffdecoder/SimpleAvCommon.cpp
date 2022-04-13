@@ -371,7 +371,7 @@ int is_realtime(AVFormatContext* s)
     return 0;
 }
 
-
+template<>
 void AutoReleasePtr<AVCodecContext>::release()
 {
     if (!me)
@@ -381,6 +381,7 @@ void AutoReleasePtr<AVCodecContext>::release()
     me = NULL;
 }
 
+template<>
 void AutoReleasePtr<AVFormatContext>::release()
 {
     if (!me)

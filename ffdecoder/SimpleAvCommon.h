@@ -52,7 +52,13 @@ extern "C"
 }
 
 #include <assert.h>
+
+#ifdef _WIN32 
 #include "../utils/utils.h"
+#else
+#include "../utils/thread_utils.h"
+#endif 
+
 
 #define MAX_QUEUE_SIZE (15 * 1024 * 1024)
 #define QUEUE_ENOUGH_TIME    (10.0)

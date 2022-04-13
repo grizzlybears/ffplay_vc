@@ -1,82 +1,64 @@
-#include "utils.h"
 #include "thread_utils.h"
+#include "utils.h"
 
 void BaseThread::create_thread()
 {
-	_thread_handle = (HANDLE)_beginthreadex( NULL, 0
-		, _thread_func
-		, this
-		, 0
-		, &_thread_id );
-
-	if ( ! _thread_handle )
+#ifdef __GNUC__
+    int ret;
+    ret = pthread_create(&_thread_handle, NULL,  trampoline, this); 
+	if ( ret )
 	{
-		throw SimpleException("_beginthreadex failed, errno = %d ", errno);
+		throw SimpleException(" pthread_create failed, errno = %d ", errno);
 	}
-}
-
-unsigned  __stdcall BaseThread::_thread_func( void* arg)
-{
-
-    BaseThread* p = (BaseThread*)arg;
-    
-    return p->run();
-}
-
-
-int BaseThread::create_thread_with_cb(ThreadFunc cb, const char* thread_name, void* arg)
-{
-	_cb = cb;
-	_arg_4_cb = arg; 
-
+#else
 	_thread_handle = (HANDLE)_beginthreadex(NULL, 0
-		, _thread_func_4_cb
+		, trampoline
 		, this
 		, 0
 		, &_thread_id);
 
 	if (!_thread_handle)
 	{
-		LOG_ERROR("_beginthreadex for %s failed, errno = %d ", thread_name, errno);
-		return -1;
+		throw SimpleException("_beginthreadex failed, errno = %d ", errno);
 	}
-
-	return 0;
+#endif
 }
 
-unsigned  __stdcall BaseThread::_thread_func_4_cb(void* arg)
+ThreadRetType STDCALL BaseThread::trampoline( void *arg)
 {
-	BaseThread* p = (BaseThread*)arg;
-	p->_cb(p->_arg_4_cb);
-	return 0;
+    BaseThread * real_one = ( BaseThread*)arg;
+    return real_one->thread_main();
 }
 
+ThreadRetType BaseThread::thread_main( )
+{
+    debug_printf("nothing to do.\n");
+    return (ThreadRetType)NULL;
+}
 
+#define MAX_WAIT_THREAD_END_MS (20*1000)
 
-DWORD BaseThread::wait_thread_quit(DWORD  dwMilliseconds)
+int BaseThread::wait_thread_quit()
 {
 	if (!_thread_handle)
 	{
 		return NOTHING_TO_WAIT;
 	}
+#ifdef __GNUC__
+	int i = pthread_join(_thread_handle, NULL);
+    if (i)
+    {
+        SIMPLE_LOG_LIBC_ERROR( "join worder thread",   errno);
+    }
+    _thread_handle = 0;
+	return i;
 
-	return WaitForSingleObject(_thread_handle, dwMilliseconds);
-}
-
-void BaseThread::safe_cleanup()
-{
-	if (!_thread_handle)
-	{
-		return;
-	}
-
-	CloseHandle( _thread_handle );
+#else
+	BOOL b = WaitForSingleObject(_thread_handle, MAX_WAIT_THREAD_END_MS);
+    CloseHanle(_thread_handle);
 	_thread_handle = NULL;
-
-}
-
-unsigned BaseThread::run()
-{
-    return 0;
+	return !b;
+#endif
+    
 }
 

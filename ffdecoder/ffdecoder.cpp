@@ -200,7 +200,6 @@ void Decoder::decoder_abort()
     this->frame_q.frame_queue_signal();
 
     this->BaseThread::wait_thread_quit();  
-    this->BaseThread::safe_cleanup();
 
     this->packet_q.packet_queue_flush();
 }
@@ -1877,6 +1876,7 @@ double VideoState::stream_ts_to_second(int64_t ts,  int stream_index)
     return ts * av_q2d(format_context->streams[stream_index]->time_base);
 }
 
+template <>
 void AutoReleasePtr<VideoState>::release()
 {
     if (!me)
