@@ -121,7 +121,7 @@ public:
     virtual int decoder_init(AVCodecContext* avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond);
     virtual void decoder_destroy();
 
-    virtual unsigned run();  // BaseThread method 
+    virtual  ThreadRetType  thread_main();  // BaseThread method 
 
     int get_video_frame( AVFrame* frame);  // 返回 <0 表示退出解码线程
     int queue_picture(AVFrame* src_frame, double pts, double duration, int64_t pos, int serial);
@@ -149,7 +149,7 @@ public:
         audio_volume = 100;
     }
     virtual int decoder_init(AVCodecContext* avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond);
-    virtual unsigned run();  // BaseThread method 
+    virtual  ThreadRetType thread_main();  // BaseThread method 
     virtual void decoder_destroy();
 
     int muted;
@@ -421,7 +421,7 @@ public:
 protected:    
     int infinite_buffer; 
 
-    virtual unsigned run();  //  stream reader thread 
+    virtual  ThreadRetType thread_main();  //  stream reader thread 
     static int decode_interrupt_cb(void* ctx);
 
     AVInputFormat* iformat;   // 命令行指定容器格式，ref only

@@ -1151,7 +1151,7 @@ int VideoDecoder::get_video_frame( AVFrame *frame)
 }
 
 
-unsigned int AudioDecoder::run()
+ThreadRetType  AudioDecoder::thread_main()
 {
     AVFrame *frame = av_frame_alloc();
     Frame *af;
@@ -1161,7 +1161,7 @@ unsigned int AudioDecoder::run()
     int ret = 0;
 
     if (!frame)
-        return AVERROR(ENOMEM);
+        return (ThreadRetType) AVERROR(ENOMEM);
 
     do {
         if ((got_frame = decoder_decode_frame( frame, NULL)) < 0)
@@ -1193,7 +1193,7 @@ unsigned int AudioDecoder::run()
 
  the_end:
     av_frame_free(&frame);
-    return ret;
+    return (ThreadRetType) ret;
 }
 
 int Decoder::decoder_start()
@@ -1212,7 +1212,7 @@ int Decoder::stream_has_enough_packets() {
             
 }
 
-unsigned int VideoDecoder::run()
+ThreadRetType  VideoDecoder::thread_main()
 {
     AVFrame *frame = av_frame_alloc();
     double pts;
@@ -1221,7 +1221,7 @@ unsigned int VideoDecoder::run()
     AVRational tb = this->stream_param.time_base;
 
     if (!frame)
-        return AVERROR(ENOMEM);
+        return (ThreadRetType)AVERROR(ENOMEM);
 
     for (;;) {
         ret = get_video_frame( frame);
@@ -1242,7 +1242,7 @@ unsigned int VideoDecoder::run()
     }
  the_end:
     av_frame_free(&frame);
-    return 0;
+    return (ThreadRetType) 0;
 }
 
 
@@ -1780,11 +1780,12 @@ void SimpleAVDecoder::feed_pkt(AVPacket* pkt) // 向解码器喂数据包
         continue;\
 }
 /* this thread gets the stream from the disk or the network */
-unsigned VideoState::run()
+ThreadRetType  VideoState::thread_main()
 {
     int ret = 1;
     AVPacket pkt1, *pkt = &pkt1;
     this->eof = 0;
+
 
     // 3. real loop
     for (;;) {
@@ -1804,6 +1805,7 @@ unsigned VideoState::run()
         if  (infinite_buffer <1 && this->av_decoder.is_buffer_full())
         {
             /* wait 10 ms */
+            AutoLocker _yes_locked(continue_read_thread);
             this->continue_read_thread.timed_wait(10);
             continue;
         }
@@ -1824,7 +1826,10 @@ unsigned VideoState::run()
                     goto fail;
             }
 
-            this->continue_read_thread.timed_wait(10);
+            {
+                AutoLocker _yes_locked(continue_read_thread);
+                this->continue_read_thread.timed_wait(10);
+            }
             continue;
         } else {
             this->eof = 0;
@@ -1849,7 +1854,7 @@ unsigned VideoState::run()
         SDL_PushEvent(&event);
     }
 
-    return 0;
+    return (ThreadRetType) 0;
 }
 
 int VideoState::is_pkt_in_play_range( AVPacket* pkt)
