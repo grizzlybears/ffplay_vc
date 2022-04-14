@@ -1806,7 +1806,7 @@ ThreadRetType  VideoState::thread_main()
         {
             /* wait 10 ms */
             AutoLocker _yes_locked(continue_read_thread);
-            this->continue_read_thread.timed_wait(10);
+            this->continue_read_thread.timed_wait_ms(10);
             continue;
         }
 
@@ -1828,7 +1828,7 @@ ThreadRetType  VideoState::thread_main()
 
             {
                 AutoLocker _yes_locked(continue_read_thread);
-                this->continue_read_thread.timed_wait(10);
+                this->continue_read_thread.timed_wait_ms(10);
             }
             continue;
         } else {

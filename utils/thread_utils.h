@@ -185,6 +185,17 @@ public:
 		assert( ERROR_TIMEOUT == GetLastError());
 		return 1;
 	}
+    
+    int timed_wait_ms(unsigned int ms)
+	{
+		BOOL b = SleepConditionVariableCS(&_cond, &_cs, ms);
+		if (b)
+		{
+			return 0;
+		}
+		assert( ERROR_TIMEOUT == GetLastError());
+		return 1;
+	}
 
 	void wake( int how = WAKE_ONE)
 	{
@@ -382,6 +393,28 @@ public:
 	{
         struct timespec time_to_wait = {0, 0};
         time_to_wait.tv_sec = time(NULL) + seconds; 
+
+        int i = pthread_cond_timedwait(&_cond, &m_pthr_mutex, &time_to_wait ); 
+        if (ETIMEDOUT ==i)
+        {
+            return 1;
+        }
+        else if (i)
+        {
+            SIMPLE_LOG_LIBC_ERROR( "wait_cond", i );
+            return 1;
+        }
+
+        return 0;
+	}
+    
+    // return 0        -- wait success
+    // return nonzero  -- wait timeout
+    int timed_wait_ms(unsigned int ms)
+	{
+        struct timespec time_to_wait = {0, 0};
+        time_to_wait.tv_sec = time(NULL) + ms / 1000; 
+        time_to_wait.tv_nsec =  1000* (ms % 1000); 
 
         int i = pthread_cond_timedwait(&_cond, &m_pthr_mutex, &time_to_wait ); 
         if (ETIMEDOUT ==i)

@@ -376,8 +376,8 @@ int main(int argc, char **argv)
 EXIT:
     if (is)
     {
-        is->av_decoder.render.safe_release();
         is->close_input_stream();
+        is->av_decoder.render.safe_release();
         delete is;
     }
 
