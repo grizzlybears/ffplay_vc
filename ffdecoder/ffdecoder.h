@@ -145,6 +145,7 @@ public:
     AudioDecoder(SimpleAVDecoder* av_decoder) :MyBase(av_decoder)
     {
         audio_buf = audio_buf1 = NULL;
+        audio_buf_size = audio_buf1_size = 0;
         swr_ctx = NULL;   
         audio_callback_time = 0;
         audio_volume = 100;
