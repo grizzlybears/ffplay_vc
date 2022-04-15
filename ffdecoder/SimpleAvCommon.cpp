@@ -171,6 +171,11 @@ int FrameQueue::frame_queue_init(PacketQueue* pktq, int max_size, int keep_last)
 {
     int i;
 
+    rindex = 0 ;         // 最初的‘读头’
+    rindex_shown = 0;   // rindex指向的位置，是否曾经被 shown过
+    windex = 0;
+    size = 0;
+
     this->pktq = pktq;
     this->max_size = FFMIN(max_size, FRAME_QUEUE_SIZE);
     this->keep_last = !!keep_last;
@@ -217,7 +222,8 @@ Frame* FrameQueue::frame_queue_peek_writable()
     /* wait until we have space to put a new frame */
     {
         AutoLocker _yes_locked(this->fq_signal);
-        while (this->size >= this->max_size && !this->pktq->abort_request)  // todo: 如果挂钩的packet queue 退了，怎么能 signal 本 FrameQueue的 cond?
+        while (this->size >= this->max_size 
+                && !this->pktq->abort_request)  // todo: 如果挂钩的packet queue 退了，怎么能 signal 本 FrameQueue的 cond?
         {
             this->fq_signal.wait();
         }

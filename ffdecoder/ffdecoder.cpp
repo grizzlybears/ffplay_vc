@@ -99,6 +99,7 @@ int Decoder::decoder_init( AVCodecContext *avctx, int stream_id, AVStream* strea
     this->empty_pkt_queue_cond = empty_queue_cond;
     this->start_pts = AV_NOPTS_VALUE;
     this->pkt_serial = -1;
+    is_packet_pending = 0;
     
     return 0;
 }

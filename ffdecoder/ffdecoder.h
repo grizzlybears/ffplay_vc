@@ -41,7 +41,7 @@ public:
     Decoder(SimpleAVDecoder* av_decoder)
     {
         _av_decoder = av_decoder;
-        inited = 0;
+        inited = 0; 
         avctx = NULL;
     }
     virtual ~Decoder() {}
@@ -109,7 +109,8 @@ public:
     {
         img_convert_ctx = NULL;
         width = height = xleft =  ytop = 0;
-        stream_param.guessed_vframe_rate = av_make_q(25, 1);
+        stream_param.guessed_vframe_rate = av_make_q(25, 1); 
+        frame_timer = 0;
     }
 
     int width, height, xleft, ytop;
@@ -238,7 +239,8 @@ public:
         screen_top = SDL_WINDOWPOS_CENTERED;
 
         fullscreen = 0;
-        cursor_hidden = 0;
+        cursor_hidden = 0; 
+        cursor_last_shown = 0;
     }
 
     ~Render()
@@ -368,7 +370,8 @@ public:
         format_context = NULL;
         eof = 0;
         abort_request = 0;
-        paused = 0;
+        paused = 0; 
+        last_paused = 0;
         seek_req = 0;
         infinite_buffer = -1;
         streamopt_start_time = streamopt_duration = AV_NOPTS_VALUE;
