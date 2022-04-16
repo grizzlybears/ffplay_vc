@@ -88,12 +88,11 @@ AVCodecContext* Decoder::create_codec_directly( const AVCodecParameters * codec_
     return codec_context;
 }
 
-int Decoder::decoder_init( AVCodecContext *avctx, AVStream* stream, SimpleConditionVar* empty_queue_cond)
+int Decoder::decoder_init( AVCodecContext *avctx, const StreamParam* extra_para, SimpleConditionVar* empty_queue_cond)
 {
     this->avctx = avctx;
 
-    stream_param.start_time = stream->start_time;
-    stream_param.time_base = stream->time_base;
+    stream_param = *extra_para;
     
     this->empty_pkt_queue_cond = empty_queue_cond;
     this->start_pts = AV_NOPTS_VALUE;
@@ -206,9 +205,9 @@ void Decoder::decoder_abort()
     this->packet_q.packet_queue_flush();
 }
 
-int VideoDecoder::decoder_init(AVCodecContext* avctx, AVStream* stream, SimpleConditionVar* empty_queue_cond)
+int VideoDecoder::decoder_init(AVCodecContext* avctx, const StreamParam* extra_para,   SimpleConditionVar* empty_queue_cond)
 {
-    if (MyBase::decoder_init(avctx, stream, empty_queue_cond))
+    if (MyBase::decoder_init(avctx, extra_para, empty_queue_cond))
     {
         return 1;
     }
@@ -246,9 +245,9 @@ void VideoDecoder::decoder_destroy() {
     }
 }
 
-int AudioDecoder::decoder_init(AVCodecContext* avctx,  AVStream* stream, SimpleConditionVar* empty_queue_cond)
+int AudioDecoder::decoder_init(AVCodecContext* avctx, const StreamParam* extra_para,  SimpleConditionVar* empty_queue_cond)
 {
-    if (MyBase::decoder_init(avctx,  stream, empty_queue_cond))
+    if (MyBase::decoder_init(avctx,  extra_para, empty_queue_cond))
     {
         return 1;
     }
@@ -1653,15 +1652,16 @@ int SimpleAVDecoder::open_stream_from_avformat(AVFormatContext* format_context, 
         stream->discard = AVDISCARD_DEFAULT;
 
         if (AVMEDIA_TYPE_AUDIO == codec_context->codec_type) {
-            if (0 == this->auddec.decoder_init( codec_context, stream, notify_reader))
+            if (0 == this->auddec.decoder_init( codec_context, &extra_para, notify_reader))
             {
                 *astream_id = stream_index;
             }
         }
         else {
-            if ( 0 == this->viddec.decoder_init( codec_context, stream, notify_reader))
+            extra_para.guessed_vframe_rate = av_guess_frame_rate(format_context, stream, NULL);
+
+            if ( 0 == this->viddec.decoder_init( codec_context, &extra_para, notify_reader))
             {
-                this->viddec.stream_param.guessed_vframe_rate = av_guess_frame_rate(format_context, stream, NULL);
                 *vstream_id = stream_index;
             }
         }

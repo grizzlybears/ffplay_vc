@@ -132,7 +132,7 @@ public:
                         // 比如 根据pts, 当前帧应该在 00:05:38.04 显示，但实际上'刷新显示操作'发生在 00:05:38.05，即物理上该帧于00:05:38.05‘上屏’
                         // 我们还是认为 frame_timer == 00:05:38.04
     struct SwsContext* img_convert_ctx;
-    virtual int decoder_init(AVCodecContext* avctx, AVStream* stream, SimpleConditionVar* empty_queue_cond);
+    virtual int decoder_init(AVCodecContext* avctx, const StreamParam* extra_para, SimpleConditionVar* empty_queue_cond);
     virtual void decoder_destroy();
 
     virtual  ThreadRetType  thread_main();  // BaseThread method 
@@ -163,7 +163,7 @@ public:
         audio_callback_time = 0;
         audio_volume = 100;
     }
-    virtual int decoder_init(AVCodecContext* avctx, AVStream* stream, SimpleConditionVar* empty_queue_cond);
+    virtual int decoder_init(AVCodecContext* avctx, const StreamParam* extra_para,  SimpleConditionVar* empty_queue_cond);
     virtual  ThreadRetType thread_main();  // BaseThread method 
     virtual void decoder_destroy();
 
