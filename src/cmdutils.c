@@ -220,7 +220,7 @@ void show_help_children(const AVClass *class, int flags)
         printf("\n");
     }
 
-    while (child = av_opt_child_class_next(class, child))
+    while ( (child = av_opt_child_class_next(class, child)) )
         show_help_children(child, flags);
 }
 
@@ -483,7 +483,7 @@ static void dump_argument(const char *a)
 {
     const unsigned char *p;
 
-    for (p = a; *p; p++)
+    for (p = (const unsigned char *) a; *p; p++)
         if (!((*p >= '+' && *p <= ':') || (*p >= '@' && *p <= 'Z') ||
               *p == '_' || (*p >= 'a' && *p <= 'z')))
             break;
@@ -492,7 +492,7 @@ static void dump_argument(const char *a)
         return;
     }
     fputc('"', report_file);
-    for (p = a; *p; p++) {
+    for (p = (const unsigned char *)a; *p; p++) {
         if (*p == '\\' || *p == '"' || *p == '$' || *p == '`')
             fprintf(report_file, "\\%c", *p);
         else if (*p < ' ' || *p > '~')
@@ -1740,7 +1740,7 @@ int show_colors(void *optctx, const char *opt, const char *arg)
 
     printf("%-32s #RRGGBB\n", "name");
 
-    for (i = 0; name = av_get_known_color_name(i, &rgb); i++)
+    for (i = 0; (name = av_get_known_color_name(i, &rgb)) ; i++)
         printf("%-32s #%02x%02x%02x\n", name, rgb[0], rgb[1], rgb[2]);
 
     return 0;
@@ -2133,7 +2133,7 @@ AVDictionary *filter_codec_opts(AVDictionary *opts, enum AVCodecID codec_id,
         break;
     }
 
-    while (t = av_dict_get(opts, "", t, AV_DICT_IGNORE_SUFFIX)) {
+    while ( (t = av_dict_get(opts, "", t, AV_DICT_IGNORE_SUFFIX)) ) {
         char *p = strchr(t->key, ':');
 
         /* check stream specification in opt name */

@@ -592,7 +592,7 @@ void Render::calculate_display_rect(SDL_Rect* rect,
 
 void Render::get_sdl_pix_fmt_and_blendmode(int format, Uint32* sdl_pix_fmt, SDL_BlendMode* sdl_blendmode)
 {
-    int i;
+    unsigned int i;
     *sdl_blendmode = SDL_BLENDMODE_NONE;
     *sdl_pix_fmt = SDL_PIXELFORMAT_UNKNOWN;
     if (format == AV_PIX_FMT_RGB32 ||
@@ -823,8 +823,8 @@ double SimpleAVDecoder::get_master_clock()
 }
 
 void SimpleAVDecoder::check_external_clock_speed() {
-   if (this->viddec.is_inited() && this->viddec.packet_q.nb_packets <= EXTERNAL_CLOCK_MIN_FRAMES ||
-       this->auddec.is_inited() && this->auddec.packet_q.nb_packets <= EXTERNAL_CLOCK_MIN_FRAMES)
+   if ( (this->viddec.is_inited() && this->viddec.packet_q.nb_packets <= EXTERNAL_CLOCK_MIN_FRAMES) ||
+        (this->auddec.is_inited() && this->auddec.packet_q.nb_packets <= EXTERNAL_CLOCK_MIN_FRAMES) )
    {
        // ½µËÙÒ»µµ
        this->extclk.set_clock_speed( FFMAX(EXTERNAL_CLOCK_SPEED_MIN, this->extclk.get_clock_speed() - EXTERNAL_CLOCK_SPEED_STEP));  
@@ -1571,7 +1571,6 @@ int VideoState::open_stream_file()
 
     av_format_inject_global_side_data(format_context);
 
-    unsigned int orig_nb_streams = format_context->nb_streams;
     err = avformat_find_stream_info(format_context, NULL);
     if (err < 0) {
         av_log(NULL, AV_LOG_WARNING,

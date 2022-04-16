@@ -27,9 +27,9 @@ class Render;
 struct StreamParam // cache some initial param from AVStream
 {
 public:
-    AVRational  time_base;
+    AVRational  time_base;      // 最小时间单位
     int64_t     start_time;
-    int         stream_index;   // AVPacket::stream_index.  
+    int         stream_index;   // AVPacket::stream_index.   todo: 需要self-contain
                                 // 原ffplay的设计来自 AVFormat/AVStream，但是如果format和decoder分离，这里可以固定 V流用0， A流用1。
     AVRational  guessed_vframe_rate;  // 只有V流用到
 };
@@ -87,7 +87,7 @@ protected:
     int64_t    next_pts;
     AVRational next_pts_timebase;
 
-    SimpleConditionVar* empty_pkt_queue_cond;  // just ref, dont take owner ship
+    SimpleConditionVar* empty_pkt_queue_cond;  // just ref. signal when 'q empty'
 
     virtual void on_got_new_frame(AVFrame* frame) = 0;
 
@@ -95,8 +95,6 @@ public:
     static void onetime_global_init();
     FrameQueue  frame_q;        // 原 VideoState:: pictq/sampq/subpq
     PacketQueue packet_q;       // 原 VideoState:: videoq/audioq/subtitleq
-    //int         stream_id;      // 原 VideoState:: video_stream/audio_stream/subtitle_stream 
-    //AVStream*   stream;         // 原 VideoState:: video_st/audio_st/subtitle_st   todo: 需要self-contain
     Clock       stream_clock;   // 原 VideoState:: vidclk/audclk/(null)
 };
 
@@ -426,7 +424,7 @@ protected:
     int infinite_buffer; 
 
     virtual  ThreadRetType thread_main();  //  stream reader thread 
-    static int decode_interrupt_cb(void* ctx);
+    static int decode_interrupt_cb(void* ctx); // Chance for 'avformat' to 'break reading' 
 
     AVInputFormat* iformat;   // 命令行指定容器格式，ref only
     CString file_to_play; // 播放的文件 or url
