@@ -60,8 +60,8 @@ public:
         avctx = NULL;
     }
     virtual ~Decoder() {}
-    static AVCodecContext* create_codec(AVFormatContext* format_context, int stream_id);
-    virtual int decoder_init( AVCodecContext* avctx, AVStream* stream, SimpleConditionVar* empty_queue_cond);
+    static AVCodecContext* create_codec_directly( const AVCodecParameters * codec_para, const StreamParam* extra_para );
+    virtual int decoder_init( AVCodecContext* avctx, const StreamParam* extra_para,  SimpleConditionVar* empty_queue_cond);
     virtual void decoder_destroy();
 
     virtual int decoder_start(); //Æô¶¯decoder thread. 

@@ -57,33 +57,35 @@ void Decoder::onetime_global_init()
     PacketQueue::flush_pkt.data = (uint8_t*)&PacketQueue::flush_pkt;
 }
 
-AVCodecContext* Decoder::create_codec(AVFormatContext* format_context, int stream_id)
-{
-    AVCodecContext* avctx = avcodec_alloc_context3(NULL);
-    if (!avctx)
+AVCodecContext* Decoder::create_codec_directly( const AVCodecParameters * codec_para, const StreamParam* extra_para )
+{ 
+    AVCodecContext* codec_context = avcodec_alloc_context3(NULL);
+    if (!codec_context)
         return NULL;
 
-    AutoReleasePtr<AVCodecContext> guard(avctx);
-
-    int ret = avcodec_parameters_to_context(avctx, format_context->streams[stream_id]->codecpar);
+    AutoReleasePtr<AVCodecContext> guard(codec_context);
+ 
+    int ret = avcodec_parameters_to_context(codec_context,  codec_para);
     if (ret < 0)
-        return NULL;
-    avctx->pkt_timebase = format_context->streams[stream_id]->time_base;
-
-    AVCodec* codec = avcodec_find_decoder(avctx->codec_id);
+        return NULL;   
+    
+    codec_context->pkt_timebase = extra_para->time_base ;
+ 
+    AVCodec* codec = avcodec_find_decoder(codec_context->codec_id);
     if (!codec) {
         av_log(NULL, AV_LOG_WARNING,
-            "No decoder could be found for codec %s\n", avcodec_get_name(avctx->codec_id));
+            "No decoder could be found for codec %s\n", avcodec_get_name(codec_context->codec_id));
         return NULL;
     }
-    avctx->codec_id = codec->id;
-    if ((ret = avcodec_open2(avctx, codec, NULL)) < 0) {
+    codec_context->codec_id = codec->id;  
+
+    if ((ret = avcodec_open2(codec_context, codec, NULL)) < 0) {
         av_log(NULL, AV_LOG_WARNING, "Failed to open  codec %d(%s), LE = %d\n", codec->id, avcodec_get_name(codec->id), ret);
         return NULL;
     }
 
     guard.dismiss();
-    return avctx;
+    return codec_context;
 }
 
 int Decoder::decoder_init( AVCodecContext *avctx, AVStream* stream, SimpleConditionVar* empty_queue_cond)
@@ -1641,20 +1643,25 @@ int SimpleAVDecoder::open_stream_from_avformat(AVFormatContext* format_context, 
     for (size_t i = 0; i < stream_indexes.size(); i++)
     {
         int stream_index = stream_indexes[i];
-        AVCodecContext* avctx = Decoder::create_codec(format_context, stream_index);
+        AVStream* stream = format_context->streams[stream_index];
+        StreamParam  extra_para;  
+        extra_para.time_base  = stream->time_base;
+        extra_para.start_time = stream->start_time;
 
-        format_context->streams[stream_index]->discard = AVDISCARD_DEFAULT;
+        AVCodecContext* codec_context  = Decoder::create_codec_directly (stream->codecpar , &extra_para);
 
-        if (AVMEDIA_TYPE_AUDIO == avctx->codec_type) {
-            if (0 == this->auddec.decoder_init(avctx, format_context->streams[stream_index], notify_reader))
+        stream->discard = AVDISCARD_DEFAULT;
+
+        if (AVMEDIA_TYPE_AUDIO == codec_context->codec_type) {
+            if (0 == this->auddec.decoder_init( codec_context, stream, notify_reader))
             {
                 *astream_id = stream_index;
             }
         }
         else {
-            if ( 0 == this->viddec.decoder_init(avctx, format_context->streams[stream_index], notify_reader))
+            if ( 0 == this->viddec.decoder_init( codec_context, stream, notify_reader))
             {
-                this->viddec.stream_param.guessed_vframe_rate = av_guess_frame_rate(format_context, format_context->streams[stream_index], NULL);
+                this->viddec.stream_param.guessed_vframe_rate = av_guess_frame_rate(format_context, stream, NULL);
                 *vstream_id = stream_index;
             }
         }
