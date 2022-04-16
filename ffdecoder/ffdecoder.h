@@ -24,13 +24,28 @@ class VideoState;
 class SimpleAVDecoder;
 class Render;
 
+typedef enum      // SimpleAVDecoder内定: V流id是 1, A流id是 2
+{
+    PSI_BAD   =  0,
+    PSI_VIDEO =  1,
+    PSI_AUDIO =  2,
+}PsuedoStreamId ; 
+
+struct AVPacketExtra  // 为了 parser 与 decoder 分离，需要喂 AVPacket的时候，带上一些扩展信息 
+{
+    int v_or_a; // 必须是 PsuedoStreamId 
+
+    AVPacketExtra()
+        : v_or_a(PSI_BAD)
+    {
+    }
+};
+
 struct StreamParam // cache some initial param from AVStream
 {
 public:
     AVRational  time_base;      // 最小时间单位
     int64_t     start_time;
-    int         stream_index;   // AVPacket::stream_index.   todo: 需要self-contain
-                                // 原ffplay的设计来自 AVFormat/AVStream，但是如果format和decoder分离，这里可以固定 V流用0， A流用1。
     AVRational  guessed_vframe_rate;  // 只有V流用到
 };
 
@@ -46,7 +61,7 @@ public:
     }
     virtual ~Decoder() {}
     static AVCodecContext* create_codec(AVFormatContext* format_context, int stream_id);
-    virtual int decoder_init( AVCodecContext* avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond);
+    virtual int decoder_init( AVCodecContext* avctx, AVStream* stream, SimpleConditionVar* empty_queue_cond);
     virtual void decoder_destroy();
 
     virtual int decoder_start(); //启动decoder thread. 
@@ -117,7 +132,7 @@ public:
                         // 比如 根据pts, 当前帧应该在 00:05:38.04 显示，但实际上'刷新显示操作'发生在 00:05:38.05，即物理上该帧于00:05:38.05‘上屏’
                         // 我们还是认为 frame_timer == 00:05:38.04
     struct SwsContext* img_convert_ctx;
-    virtual int decoder_init(AVCodecContext* avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond);
+    virtual int decoder_init(AVCodecContext* avctx, AVStream* stream, SimpleConditionVar* empty_queue_cond);
     virtual void decoder_destroy();
 
     virtual  ThreadRetType  thread_main();  // BaseThread method 
@@ -148,7 +163,7 @@ public:
         audio_callback_time = 0;
         audio_volume = 100;
     }
-    virtual int decoder_init(AVCodecContext* avctx, int stream_id, AVStream* stream, SimpleConditionVar* empty_queue_cond);
+    virtual int decoder_init(AVCodecContext* avctx, AVStream* stream, SimpleConditionVar* empty_queue_cond);
     virtual  ThreadRetType thread_main();  // BaseThread method 
     virtual void decoder_destroy();
 
@@ -348,7 +363,7 @@ public:
     void discard_buffer(double seek_target = NAN); // 用于在seek后清cache。如果是按时间seek，则应顺手给出 seek_target (以秒为单位)
     int  is_buffer_full();
     void feed_null_pkt(); // todo: 作用不明，待研究
-    void feed_pkt(AVPacket* pkt); // 向解码器喂数据包, take ownership。如果不是感兴趣的包，则释放。
+    void feed_pkt(AVPacket* pkt, const AVPacketExtra* extra  ); // 向解码器喂数据包, take ownership。如果不是感兴趣的包，则释放。
 protected:
     
     void print_stream_status();
@@ -416,7 +431,6 @@ public:
 
     int eof;
 
-    int last_video_stream, last_audio_stream ;
 
     SimpleConditionVar continue_read_thread;
 
@@ -432,6 +446,8 @@ protected:
     int last_paused; // 之前一次reader loop的时候，是否是paused
 
     int open_stream_file();
+    int last_video_stream, last_audio_stream ;
+    void fill_packet_extra( AVPacketExtra* extra, const AVPacket* pkt) const;
 
     // 'reader thread' section {{{
     int  read_loop_check_pause(); // return: > 0 -- shoud 'continue', 0 -- go on current iteration, < 0 -- error exit loop
