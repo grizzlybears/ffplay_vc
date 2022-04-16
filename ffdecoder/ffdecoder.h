@@ -313,7 +313,10 @@ public:
     
     // 返回 bit0 代表V opened ， bit1 代表A opened 
     int   open_stream_from_avformat(AVFormatContext* format_context, /*in,hold*/SimpleConditionVar* notify_reader, int* vstream_id, int* astream_id);
-    int   open_stream(); // todo: 需要给出的参数是 A/V， codec_id, StreamParam 
+
+    // Return:  0 -- success, non-zero -- error.
+    int   open_stream(const AVCodecParameters * codec_para, const StreamParam* extra_para, SimpleConditionVar* empty_queue_cond); 
+
     int   get_opened_streams_mask();   // 返回 bit0 代表V， bit1 代表A
     void  close_all_stream();
 

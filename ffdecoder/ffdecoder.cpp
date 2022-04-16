@@ -1603,6 +1603,42 @@ int VideoState::open_stream_file()
 
     return 0;
 }
+ 
+// Return:  0 -- success, non-zero -- error.
+int SimpleAVDecoder::open_stream(const AVCodecParameters * codec_para, const StreamParam* extra_para, SimpleConditionVar*  notify_reader)
+{ 
+    Decoder * decoder = NULL;
+    if (AVMEDIA_TYPE_AUDIO == codec_para->codec_type  )  {
+        decoder = &this->auddec;
+    } 
+    else if (AVMEDIA_TYPE_VIDEO == codec_para->codec_type   ) {
+        decoder = &this->viddec;
+    }
+
+    if (!decoder)
+    {
+        LOG_WARN("Only support audio/video stream.\n");
+        return 1;
+    }
+    
+    if (decoder->is_inited() ) {
+        LOG_WARN("%s stream alread opened.\n", AVMEDIA_TYPE_AUDIO == codec_para->codec_type ? "audio" : "video" );
+        return 2;
+    }
+
+    AVCodecContext* codec_context  = Decoder::create_codec_directly (codec_para , extra_para);
+    if(!codec_context )
+    {
+        return 3;
+    }
+
+    if ( decoder->decoder_init( codec_context, extra_para, notify_reader))
+    {
+        return 4;
+    }
+
+    return 0 ;
+}
 
 // 返回 bit0 代表V opened ， bit1 代表A opened 
 int SimpleAVDecoder::open_stream_from_avformat(AVFormatContext* format_context, /*in,hold*/SimpleConditionVar* notify_reader, int* vstream_id, int* astream_id)
@@ -1611,20 +1647,28 @@ int SimpleAVDecoder::open_stream_from_avformat(AVFormatContext* format_context, 
     this->max_frame_duration = (format_context->iformat->flags & AVFMT_TS_DISCONT) ? 10.0 : 3600.0;
     this->realtime = is_realtime(format_context);
 
-    std::vector<int> stream_indexes;
-
-    // 2. av_find_best_stream
+    // 2. open vstream if present
     int vs,as; 
 
     vs = av_find_best_stream(format_context, AVMEDIA_TYPE_VIDEO,-1, -1, NULL, 0);
     if (vs >= 0)
     {
-        stream_indexes.push_back(vs);
-        AVStream* st = format_context->streams[vs];
-        AVCodecParameters* codec_para = st->codecpar;
-        AVRational sar = av_guess_sample_aspect_ratio(format_context, st, NULL);
-        if (codec_para->width)
-            this->render.set_default_window_size(codec_para->width, codec_para->height, sar);
+        AVStream* stream = format_context->streams[vs];
+        StreamParam  extra_para;  
+        extra_para.time_base  = stream->time_base;
+        extra_para.start_time = stream->start_time;
+        extra_para.guessed_vframe_rate = av_guess_frame_rate(format_context, stream, NULL);
+
+        if (0 == open_stream(stream->codecpar , &extra_para, notify_reader))
+        {
+            *vstream_id = vs;   
+
+            if (stream->codecpar->width)   // todo: maybe moving to VideoDecoer::decoder_init would be better
+            {
+                AVRational sar = av_guess_sample_aspect_ratio(format_context, stream, NULL);
+                this->render.set_default_window_size(stream->codecpar->width, stream->codecpar->height, sar);
+            }
+        }
     }
     else
     {
@@ -1632,38 +1676,18 @@ int SimpleAVDecoder::open_stream_from_avformat(AVFormatContext* format_context, 
         vs = -1;
     }
 
+    // 3. open astream if present
     as = av_find_best_stream(format_context, AVMEDIA_TYPE_AUDIO, -1, vs, NULL, 0);
     if (as >= 0)
     {
-        stream_indexes.push_back(as);
-    }
-
-    // 3. open the streams     
-    for (size_t i = 0; i < stream_indexes.size(); i++)
-    {
-        int stream_index = stream_indexes[i];
-        AVStream* stream = format_context->streams[stream_index];
+        AVStream* stream = format_context->streams[as];
         StreamParam  extra_para;  
         extra_para.time_base  = stream->time_base;
         extra_para.start_time = stream->start_time;
 
-        AVCodecContext* codec_context  = Decoder::create_codec_directly (stream->codecpar , &extra_para);
-
-        stream->discard = AVDISCARD_DEFAULT;
-
-        if (AVMEDIA_TYPE_AUDIO == codec_context->codec_type) {
-            if (0 == this->auddec.decoder_init( codec_context, &extra_para, notify_reader))
-            {
-                *astream_id = stream_index;
-            }
-        }
-        else {
-            extra_para.guessed_vframe_rate = av_guess_frame_rate(format_context, stream, NULL);
-
-            if ( 0 == this->viddec.decoder_init( codec_context, &extra_para, notify_reader))
-            {
-                *vstream_id = stream_index;
-            }
+        if (0 == open_stream(stream->codecpar , &extra_para, notify_reader))
+        {
+            *astream_id = as;
         }
     }
     
