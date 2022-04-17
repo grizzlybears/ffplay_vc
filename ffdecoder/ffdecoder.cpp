@@ -311,7 +311,7 @@ int AudioDecoder::decoder_init(AVCodecContext* avctx, const StreamParam* extra_p
 
 void AudioDecoder::decoder_destroy() {
     MyBase::decoder_destroy();
-    this->_av_decoder->render.close_audio();
+    get_render()->close_audio();
     
     if (this->swr_ctx)
     {
@@ -502,16 +502,6 @@ void Render::safe_release()
         window = NULL;
     }
 
-}
-void Render::fill_rectangle(int x, int y, int w, int h)
-{
-    SDL_Rect rect;
-    rect.x = x;
-    rect.y = y;
-    rect.w = w;
-    rect.h = h;
-    if (w && h)
-        SDL_RenderFillRect(this->renderer, &rect);
 }
 
 void Render::set_default_window_size(int width, int height, AVRational sar)

@@ -89,6 +89,11 @@ public:
         return inited;
     }
     StreamParam  stream_param;
+ 
+    static void onetime_global_init();
+    FrameQueue  frame_q;        // 原 VideoState:: pictq/sampq/subpq
+    PacketQueue packet_q;       // 原 VideoState:: videoq/audioq/subtitleq
+    Clock       stream_clock;   // 原 VideoState:: vidclk/audclk/(null)
 
 protected:
     int inited;
@@ -105,12 +110,6 @@ protected:
     SimpleConditionVar* empty_pkt_queue_cond;  // just ref. signal when 'q empty'
 
     virtual void on_got_new_frame(AVFrame* frame) = 0;
-
-public:
-    static void onetime_global_init();
-    FrameQueue  frame_q;        // 原 VideoState:: pictq/sampq/subpq
-    PacketQueue packet_q;       // 原 VideoState:: videoq/audioq/subtitleq
-    Clock       stream_clock;   // 原 VideoState:: vidclk/audclk/(null)
 };
 
 class VideoDecoder
@@ -219,11 +218,6 @@ protected:
 class Render
 {
 public:
-    SDL_Window* window;
-    SDL_Renderer* renderer;
-    SDL_RendererInfo renderer_info;
-    SDL_AudioDeviceID audio_dev;
-    int fullscreen;
     int screen_width;
     int screen_height;
     int screen_left;
@@ -233,9 +227,8 @@ public:
     int cursor_hidden;
 
     CString window_title;
-    SDL_Texture* sub_texture;   // 字幕画布
-    SDL_Texture* vid_texture;   // 视频画布
-
+    
+    friend AudioDecoder; friend VideoDecoder; friend SimpleAVDecoder;
     Render()
     {
         window = NULL;
@@ -264,26 +257,9 @@ public:
 
     void toggle_full_screen();
 
-    int create_window(const char* title, int x, int y, int w, int h, Uint32 flags);
-
-    void show_window(const char* title, int w, int h, int left, int top, int fullscreen);
     int  is_window_shown()const {return window_shown;}
 
-    int upload_texture(SDL_Texture** tex, AVFrame* frame, struct SwsContext** img_convert_ctx);
-
-    void show_texture(const Frame* video_frame, const SDL_Rect& rect, int show_subtitle);
-
-    void clear_render();
-    void draw_render();
-
-    void close_audio();
-
     void safe_release();
-
-    void fill_rectangle(int x, int y, int w, int h);
-    void set_default_window_size(int width, int height, AVRational sar);
-
-    int realloc_texture(SDL_Texture** texture, Uint32 new_format, int new_width, int new_height, SDL_BlendMode blendmode, int init_texture);
 
     static void get_sdl_pix_fmt_and_blendmode(int format, Uint32* sdl_pix_fmt, SDL_BlendMode* sdl_blendmode);
     static void set_sdl_yuv_conversion_mode(AVFrame* frame);
@@ -291,8 +267,30 @@ public:
     static void calculate_display_rect(SDL_Rect* rect,
         int scr_xleft, int scr_ytop, int scr_width, int scr_height,
         int pic_width, int pic_height, AVRational pic_sar);
+
 protected:
+    SDL_Window* window;
+    SDL_Renderer* renderer;
+    SDL_RendererInfo renderer_info;
+    SDL_AudioDeviceID audio_dev;
+
+    SDL_Texture* sub_texture;   // 字幕画布
+    SDL_Texture* vid_texture;   // 视频画布
+    
+    int fullscreen;
+
+    int create_window(const char* title, int x, int y, int w, int h, Uint32 flags);
     int window_shown;
+    void show_window(const char* title, int w, int h, int left, int top, int fullscreen);
+    void set_default_window_size(int width, int height, AVRational sar);
+    
+    void clear_render();
+    void draw_render();
+    int upload_texture(SDL_Texture** tex, AVFrame* frame, struct SwsContext** img_convert_ctx);
+    void show_texture(const Frame* video_frame, const SDL_Rect& rect, int show_subtitle);
+    int realloc_texture(SDL_Texture** texture, Uint32 new_format, int new_width, int new_height, SDL_BlendMode blendmode, int init_texture);
+    
+    void close_audio();
 };
 
 class SimpleAVDecoder
@@ -310,7 +308,7 @@ public:
         decoder_reorder_pts = -1;
     }
 
-    friend class AudioDecoder; friend  class VideoDecoder;
+    friend AudioDecoder; friend  VideoDecoder;
 
     Render render;
     
