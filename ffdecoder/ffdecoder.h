@@ -121,12 +121,9 @@ public:
     VideoDecoder(SimpleAVDecoder* av_decoder):MyBase(av_decoder)
     {
         img_convert_ctx = NULL;
-        width = height = xleft =  ytop = 0;
         stream_param.guessed_vframe_rate = av_make_q(25, 1); 
         frame_timer = 0;
     }
-
-    int width, height, xleft, ytop;
 
     double frame_timer; // frame_timer 是‘当前显示帧’,理论上应该‘上屏’的时刻。 
                         // 比如 根据pts, 当前帧应该在 00:05:38.04 显示，但实际上'刷新显示操作'发生在 00:05:38.05，即物理上该帧于00:05:38.05‘上屏’
@@ -252,7 +249,8 @@ public:
         screen_left = SDL_WINDOWPOS_CENTERED;
         screen_top = SDL_WINDOWPOS_CENTERED;
 
-        fullscreen = 0;
+        fullscreen = 0; 
+        window_shown = 0;
         cursor_hidden = 0; 
         cursor_last_shown = 0;
     }
@@ -269,6 +267,7 @@ public:
     int create_window(const char* title, int x, int y, int w, int h, Uint32 flags);
 
     void show_window(const char* title, int w, int h, int left, int top, int fullscreen);
+    int  is_window_shown()const {return window_shown;}
 
     int upload_texture(SDL_Texture** tex, AVFrame* frame, struct SwsContext** img_convert_ctx);
 
@@ -292,6 +291,8 @@ public:
     static void calculate_display_rect(SDL_Rect* rect,
         int scr_xleft, int scr_ytop, int scr_width, int scr_height,
         int pic_width, int pic_height, AVRational pic_sar);
+protected:
+    int window_shown;
 };
 
 class SimpleAVDecoder
@@ -321,11 +322,7 @@ public:
 
     int   get_opened_streams_mask();   // 返回 bit0 代表V， bit1 代表A
     void  close_all_stream();
-
-
-    AudioDecoder    auddec;
-    VideoDecoder    viddec;
-
+    
     // called to display each frame (from event loop )
     void video_refresh(double* remaining_time);
     void prepare_picture_for_display(double* remaining_time);
@@ -358,8 +355,10 @@ public:
     void feed_null_pkt(); // todo: 作用不明，待研究
     void feed_pkt(AVPacket* pkt, const AVPacketExtra* extra  ); // 向解码器喂数据包, take ownership。如果不是感兴趣的包，则释放。
     
-    
 protected:
+    AudioDecoder    auddec;
+    VideoDecoder    viddec;
+
     int av_sync_type;
     Clock extclk;
     void check_external_clock_speed();  // 调节外部时钟速度以适应流速

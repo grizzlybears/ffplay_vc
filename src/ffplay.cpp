@@ -69,7 +69,7 @@ void event_loop(VideoState *cur_stream)
                 return;
             }
             // If we don't yet have a window, skip all key events, because read_thread might still be initializing...
-            if (!cur_stream->av_decoder.viddec.width)
+            if (!cur_stream->av_decoder.render.is_window_shown() )
                 continue;
             switch (event.key.keysym.sym) {
             case SDLK_f:
@@ -163,7 +163,7 @@ void event_loop(VideoState *cur_stream)
             }
                 if (cur_stream->format_context->duration <= 0) {
                     uint64_t size =  avio_size(cur_stream->format_context->pb);
-                    cur_stream->stream_seek( (int64_t)( size * x / cur_stream->av_decoder.viddec.width), 0, 1);
+                    cur_stream->stream_seek( (int64_t)( size * x / cur_stream->av_decoder.render.screen_width), 0, 1);
                 } else {
                     int64_t ts;
                     int ns, hh, mm, ss;
@@ -172,7 +172,7 @@ void event_loop(VideoState *cur_stream)
                     thh  = tns / 3600;
                     tmm  = (tns % 3600) / 60;
                     tss  = (tns % 60);
-                    frac = x / cur_stream->av_decoder.viddec.width;
+                    frac = x / cur_stream->av_decoder.render.screen_width ;
                     ns   = (int)(frac * tns);
                     hh   = ns / 3600;
                     mm   = (ns % 3600) / 60;
@@ -189,8 +189,8 @@ void event_loop(VideoState *cur_stream)
         case SDL_WINDOWEVENT:
             switch (event.window.event) {
                 case SDL_WINDOWEVENT_SIZE_CHANGED:
-                    cur_stream->av_decoder.render.screen_width  = cur_stream->av_decoder.viddec.width  = event.window.data1;
-                    cur_stream->av_decoder.render.screen_height = cur_stream->av_decoder.viddec.height = event.window.data2;
+                    cur_stream->av_decoder.render.screen_width  = event.window.data1;
+                    cur_stream->av_decoder.render.screen_height = event.window.data2;
                     
                 case SDL_WINDOWEVENT_EXPOSED:
                     cur_stream->av_decoder.toggle_need_drawing (1);

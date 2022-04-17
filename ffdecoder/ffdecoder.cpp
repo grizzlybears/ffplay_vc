@@ -412,6 +412,7 @@ void Render::show_window(const char* window_title, int w, int h, int left, int t
         this->fullscreen = 1;
     }
     SDL_ShowWindow(window);    
+    window_shown = 1;
 }
 
 int Render::create_window(const char* title, int x, int y, int w, int h, Uint32 flags)
@@ -700,10 +701,11 @@ void VideoDecoder::video_image_display()
 
     vp = this->frame_q.frame_queue_peek_last();
 
-    Render::calculate_display_rect(&rect, this->xleft, this->ytop, this->width, this->height, vp->width, vp->height, vp->sample_aspect_ratio);
+    Render::calculate_display_rect(&rect, 0, 0,  get_render()->screen_width, get_render()->screen_height 
+            , vp->width, vp->height, vp->sample_aspect_ratio);
 
     if (!vp->uploaded) {
-        if (this->_av_decoder->render.upload_texture(&this->get_render()->vid_texture, vp->frame, &this->img_convert_ctx) < 0)
+        if (get_render()->upload_texture(&get_render()->vid_texture, vp->frame, &this->img_convert_ctx) < 0)
             return;
         vp->uploaded = 1;
         vp->flip_v = vp->frame->linesize[0] < 0;
@@ -763,24 +765,21 @@ int VideoDecoder::video_open()
         , render->screen_width, render->screen_height, render->screen_left, render->screen_top
         , 0);
     
-    this->width  = render->screen_width;
-    this->height = render->screen_height;
-
     return 0;
 }
 
 /* display the current picture, if any */
 void VideoDecoder::video_display()
 {
-    if (!this->width)
+    if (! get_render()->is_window_shown())
         this->video_open();
 
-    this->get_render()->clear_render();
+    get_render()->clear_render();
     
     if (this->is_inited())
         this->video_image_display();
 
-    this->get_render()->draw_render();
+    get_render()->draw_render();
     
 }
 
