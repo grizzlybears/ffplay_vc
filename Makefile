@@ -78,5 +78,5 @@ test:$(Target)
 	./$(Target) chopin_revolution.mp4
 
 valgrind:$(Target) 
-	valgrind ./$(Target) chopin_revolution.mp4
+	valgrind --leak-check=full ./$(Target) chopin_revolution.mp4
 
