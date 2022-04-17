@@ -343,8 +343,25 @@ void AudioDecoder::on_got_new_frame(AVFrame* frame)
 }
 //     }}} decoder section 
 
-// render sectio {{{
+// render section {{{
+Render::Render()
+{
+    window = NULL;
+    renderer = NULL;
+    vid_texture = sub_texture = NULL;
+    audio_dev = 0;
+    renderer_info = { 0 };
 
+    screen_width = 640; //default value
+    screen_height = 480;//default value
+    screen_left = SDL_WINDOWPOS_CENTERED;
+    screen_top = SDL_WINDOWPOS_CENTERED;
+
+    fullscreen = 0; 
+    window_shown = 0;
+    cursor_hidden = 0; 
+    cursor_last_shown = 0;
+}
 int Render::init(int audio_disable, int alwaysontop)
 {
     int sdl_flags;
@@ -1208,7 +1225,7 @@ int Decoder::decoder_start()
     return 0;
 }
 
-int Decoder::stream_has_enough_packets() {
+int Decoder::buffered_enough_packets() {
     if (!is_inited() || packet_q.abort_request)
         return 1;
     return       //(stream->disposition & AV_DISPOSITION_ATTACHED_PIC) ||   // ²»¿¼ÂÇ¡°show¾²Ì¬Í¼Æ¬¡±µÄÇé¿ö
@@ -1777,7 +1794,7 @@ int SimpleAVDecoder::is_buffer_full()
         return 1;
     }
 
-    if (this->auddec.stream_has_enough_packets() && this->viddec.stream_has_enough_packets())
+    if (this->auddec.buffered_enough_packets() && this->viddec.buffered_enough_packets())
     {
         //OutputDebugString("$\n");
         return 2;
@@ -1805,6 +1822,18 @@ void SimpleAVDecoder::feed_pkt(AVPacket* pkt, const AVPacketExtra* extra) // Ïò½
     }
 }
 
+VideoState::VideoState()
+{
+    format_context = NULL;
+    eof = 0;
+    abort_request = 0;
+    paused = 0; 
+    last_paused = 0;
+    seek_req = 0;
+    infinite_buffer = -1;
+    streamopt_start_time = streamopt_duration = AV_NOPTS_VALUE;
+    streamopt_autoexit = 0;
+}
 #define LOOP_CHECK(func) \
 {\
     int ret = func;\

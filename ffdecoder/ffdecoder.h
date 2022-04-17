@@ -60,56 +60,53 @@ public:
         avctx = NULL;
     }
     virtual ~Decoder() {}
+    friend SimpleAVDecoder;
+
     static AVCodecContext* create_codec_directly( const AVCodecParameters * codec_para, const StreamParam* extra_para );
     virtual int decoder_init( AVCodecContext* avctx, const StreamParam* extra_para,  SimpleConditionVar* empty_queue_cond);
     virtual void decoder_destroy();
-
-    virtual int decoder_start(); //启动decoder thread. 
-    virtual void decoder_abort();  // 指示decoder thread 退出，并等待其退出
-
-
-    int stream_has_enough_packets(); 
-
-    /// return: 
-    //      negative    -- failed.
-    //      0           -- EoF
-    //      positive    -- got frame
-    virtual int decoder_decode_frame(AVFrame* frame, AVSubtitle* sub);
-        
-
-    AVCodecContext* avctx; // take owner ship
-    int pkt_serial;        // 当前pkt的serial 
-    int finished;
-
-    int64_t start_pts;              // todo: 源自 _vs->format_context ，需要self-contain
-    AVRational start_pts_timebase;
-
+   
     int is_inited() const
     {
         return inited;
     }
-    StreamParam  stream_param;
- 
     static void onetime_global_init();
+   
+protected:
+    int inited;
+    StreamParam  stream_param;
+    SimpleAVDecoder* _av_decoder; 
+    AVCodecContext* avctx; // take owner ship
+    
     FrameQueue  frame_q;        // 原 VideoState:: pictq/sampq/subpq
     PacketQueue packet_q;       // 原 VideoState:: videoq/audioq/subtitleq
     Clock       stream_clock;   // 原 VideoState:: vidclk/audclk/(null)
-
-protected:
-    int inited;
-    SimpleAVDecoder* _av_decoder; 
 
     Render* get_render();
     
     AVPacket pending_pkt;  // avcodec_send_packet 遇到E_AGAIN，需要暂存
     int is_packet_pending;
+    int pkt_serial;        // 当前pkt的serial 
+    int finished;
     
+    int64_t start_pts; 
+    AVRational start_pts_timebase;
     int64_t    next_pts;
     AVRational next_pts_timebase;
 
     SimpleConditionVar* empty_pkt_queue_cond;  // just ref. signal when 'q empty'
 
     virtual void on_got_new_frame(AVFrame* frame) = 0;
+ 
+    virtual int decoder_start();  // start decoder thread. 
+    virtual void decoder_abort(); // signal decoder thread to quit, and wait.
+
+    int buffered_enough_packets();  
+    /// return: 
+    //      negative    -- failed.
+    //      0           -- EoF
+    //      positive    -- got frame
+    virtual int decoder_decode_frame(AVFrame* frame, AVSubtitle* sub);
 };
 
 class VideoDecoder
@@ -123,27 +120,29 @@ public:
         stream_param.guessed_vframe_rate = av_make_q(25, 1); 
         frame_timer = 0;
     }
+    friend SimpleAVDecoder;
 
-    double frame_timer; // frame_timer 是‘当前显示帧’,理论上应该‘上屏’的时刻。 
-                        // 比如 根据pts, 当前帧应该在 00:05:38.04 显示，但实际上'刷新显示操作'发生在 00:05:38.05，即物理上该帧于00:05:38.05‘上屏’
-                        // 我们还是认为 frame_timer == 00:05:38.04
-    struct SwsContext* img_convert_ctx;
     virtual int decoder_init(AVCodecContext* avctx, const StreamParam* extra_para, SimpleConditionVar* empty_queue_cond);
     virtual void decoder_destroy();
 
-    virtual  ThreadRetType  thread_main();  // BaseThread method 
-
-    int get_video_frame( AVFrame* frame);  // 返回 <0 表示退出解码线程
-    int queue_picture(AVFrame* src_frame, double pts, double duration, int64_t pos, int serial);
-       
-
-    // display the current picture, if any 
-    void video_display();
 protected:
     
     virtual void on_got_new_frame(AVFrame* frame);
     int video_open(); // open the window for showing video
-    void video_image_display();
+    void video_image_display(); 
+    
+    double frame_timer; // frame_timer 是‘当前显示帧’,理论上应该‘上屏’的时刻。 
+                        // 比如 根据pts, 当前帧应该在 00:05:38.04 显示，但实际上'刷新显示操作'发生在 00:05:38.05，即物理上该帧于00:05:38.05‘上屏’
+                        // 我们还是认为 frame_timer == 00:05:38.04
+
+    
+    virtual  ThreadRetType  thread_main();  // BaseThread method 
+    
+    struct SwsContext* img_convert_ctx; 
+    void video_display(); // display the current picture, if any  
+    
+    int get_video_frame( AVFrame* frame);  // 返回 <0 表示退出解码线程
+    int queue_picture(AVFrame* src_frame, double pts, double duration, int64_t pos, int serial);
 };
 
 class AudioDecoder
@@ -159,10 +158,11 @@ public:
         audio_callback_time = 0;
         audio_volume = 100;
     }
+    friend SimpleAVDecoder;
     virtual int decoder_init(AVCodecContext* avctx, const StreamParam* extra_para,  SimpleConditionVar* empty_queue_cond);
-    virtual  ThreadRetType thread_main();  // BaseThread method 
     virtual void decoder_destroy();
 
+protected:
     int muted;
     int audio_volume;  //  volume [0 , 100]
 
@@ -175,9 +175,7 @@ public:
 
     double audio_clock;         // pts of 'last decoded Frame' + frame duration, use this to update this->stream_clock in SDL cb.
     int audio_clock_serial;
-
-protected:
-    
+   
     int audio_hw_buf_size;
     uint8_t* audio_buf;
     uint8_t* audio_buf1;
@@ -185,7 +183,6 @@ protected:
     unsigned int audio_buf1_size;
     unsigned int audio_buf_index; /* in bytes */
     int audio_write_buf_size;
-    
     
     struct AudioParams audio_tgt;  // audio_open 返回，环境要求的audio params
     struct SwrContext* swr_ctx;
@@ -213,6 +210,8 @@ protected:
     int audio_decode_frame();
 
     virtual void on_got_new_frame(AVFrame* frame);
+    
+    virtual  ThreadRetType thread_main();  // BaseThread method 
 };
 
 class Render
@@ -229,24 +228,7 @@ public:
     CString window_title;
     
     friend AudioDecoder; friend VideoDecoder; friend SimpleAVDecoder;
-    Render()
-    {
-        window = NULL;
-        renderer = NULL;
-        vid_texture = sub_texture = NULL;
-        audio_dev = 0;
-        renderer_info = { 0 };
-
-        screen_width = 640; //default value
-        screen_height = 480;//default value
-        screen_left = SDL_WINDOWPOS_CENTERED;
-        screen_top = SDL_WINDOWPOS_CENTERED;
-
-        fullscreen = 0; 
-        window_shown = 0;
-        cursor_hidden = 0; 
-        cursor_last_shown = 0;
-    }
+    Render();
 
     ~Render()
     {
@@ -296,7 +278,7 @@ protected:
 class SimpleAVDecoder
 {
 public:
-    SimpleAVDecoder(VideoState * vs)
+    SimpleAVDecoder()
         :auddec(this), viddec(this)
     {
         this->extclk.init_clock(&this->extclk.serial);
@@ -386,19 +368,7 @@ class VideoState
     :public BaseThread //  stream reader thread 
 {
 public:
-    VideoState()
-        :av_decoder(this)
-    {
-        format_context = NULL;
-        eof = 0;
-        abort_request = 0;
-        paused = 0; 
-        last_paused = 0;
-        seek_req = 0;
-        infinite_buffer = -1;
-        streamopt_start_time = streamopt_duration = AV_NOPTS_VALUE;
-        streamopt_autoexit = 0;
-    }
+    VideoState();
 
     int open_input_stream(const char* filename, AVInputFormat* iformat);
     
@@ -414,16 +384,12 @@ public:
     void seek_chapter( int incr);
 
     // }}} stream operation section
-        
-public:
 
     // {{  some ffplay cmd line opt  
-    
     int64_t streamopt_start_time;  // 命令行 -ss ，由 av_parse_time 解析为 microseconds
     int64_t streamopt_duration;    // 命令行 -t  ，由 av_parse_time 解析为 microseconds
     int     streamopt_autoexit;
     // }}
-
     
     SimpleAVDecoder av_decoder;
 
