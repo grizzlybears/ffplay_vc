@@ -785,7 +785,12 @@ void VideoDecoder::video_display()
 }
 
 
-int SimpleAVDecoder::get_master_sync_type() {
+void SimpleAVDecoder::set_master_sync_type(int how)
+{
+    this->av_sync_type = how;
+}
+
+int SimpleAVDecoder::get_master_sync_type() const {
     if (this->av_sync_type == AV_SYNC_VIDEO_MASTER) {
         if (this->viddec.is_inited())
             return AV_SYNC_VIDEO_MASTER;
@@ -873,12 +878,17 @@ int SimpleAVDecoder::internal_toggle_pause()
 void VideoState::toggle_pause()
 {
     paused = this->av_decoder.internal_toggle_pause();
-    this->av_decoder.step = 0;
+    this->av_decoder.toggle_step( 0);
 }
 
 void SimpleAVDecoder::toggle_mute( )
 {
     this->auddec.muted = !this->auddec.muted;
+}
+
+void SimpleAVDecoder::toggle_step(int step_mode)
+{
+    this->step = step_mode;
 }
 
 void SimpleAVDecoder::update_volume( int sign, double step)
@@ -893,7 +903,7 @@ void VideoState::step_to_next_frame()
     /* if the stream is paused unpause it, then step */
     if (this->paused)
         this->av_decoder.internal_toggle_pause();
-    this->av_decoder.step = 1;
+    this->av_decoder.toggle_step(1);
 }
 
 double SimpleAVDecoder::compute_target_delay(double frame_duration)
@@ -939,6 +949,11 @@ void SimpleAVDecoder::update_video_clock(double pts, int64_t pos, int serial) {
     /* update current video pts */
     viddec.stream_clock.set_clock( pts, serial);
     extclk.sync_clock_to_slave( &viddec.stream_clock);
+}
+
+void SimpleAVDecoder::toggle_need_drawing(int need_drawing)
+{
+    force_refresh =  need_drawing;
 }
 
 /* called to display each frame */

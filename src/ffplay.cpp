@@ -48,7 +48,7 @@ void refresh_loop_wait_event(SimpleAVDecoder * av_decoder, SDL_Event *event) {
         if (remaining_time > 0.0)
             av_usleep((unsigned int)(remaining_time * 1000000.0));
         remaining_time = REFRESH_RATE;
-        if ( !av_decoder->paused || av_decoder->force_refresh)
+        if ( !av_decoder->is_paused() || av_decoder->is_drawing_needed())
             av_decoder->video_refresh( &remaining_time);
         SDL_PumpEvents();
     }
@@ -74,7 +74,7 @@ void event_loop(VideoState *cur_stream)
             switch (event.key.keysym.sym) {
             case SDLK_f:
                 cur_stream->av_decoder.render.toggle_full_screen();
-                cur_stream->av_decoder.force_refresh = 1;
+                cur_stream->av_decoder.toggle_need_drawing (1);
                 break;
             case SDLK_p:
             case SDLK_SPACE:
@@ -124,7 +124,7 @@ void event_loop(VideoState *cur_stream)
                     {
                         pos = cur_stream->av_decoder.get_master_clock();
                         if (isnan(pos))
-                            pos = (double)cur_stream->seek_pos / AV_TIME_BASE;
+                            pos = (double) 0;
                         pos += incr;
                         if (cur_stream->format_context->start_time != AV_NOPTS_VALUE && pos < cur_stream->format_context->start_time / (double)AV_TIME_BASE)
                             pos = cur_stream->format_context->start_time / (double)AV_TIME_BASE;
@@ -140,7 +140,7 @@ void event_loop(VideoState *cur_stream)
                 static int64_t last_mouse_left_click = 0;
                 if (av_gettime_relative() - last_mouse_left_click <= 500000) {
                     cur_stream->av_decoder.render.toggle_full_screen();
-                    cur_stream->av_decoder.force_refresh = 1;
+                    cur_stream->av_decoder.toggle_need_drawing (1);
                     last_mouse_left_click = 0;
                 } else {
                     last_mouse_left_click = av_gettime_relative();
@@ -193,7 +193,7 @@ void event_loop(VideoState *cur_stream)
                     cur_stream->av_decoder.render.screen_height = cur_stream->av_decoder.viddec.height = event.window.data2;
                     
                 case SDL_WINDOWEVENT_EXPOSED:
-                    cur_stream->av_decoder.force_refresh = 1;
+                    cur_stream->av_decoder.toggle_need_drawing (1);
             }
             break;
         case SDL_QUIT:
@@ -359,7 +359,7 @@ int main(int argc, char **argv)
     }
     is->av_decoder.render.window_title = opt_input_filename;
     is->av_decoder.show_status = opt_show_status;
-    is->av_decoder.av_sync_type = opt_av_sync_type;
+    is->av_decoder.set_master_sync_type(opt_av_sync_type);
     is->av_decoder.decoder_reorder_pts = opt_decoder_reorder_pts;
     
     // open media

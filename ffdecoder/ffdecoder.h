@@ -309,6 +309,8 @@ public:
         decoder_reorder_pts = -1;
     }
 
+    friend class AudioDecoder; friend  class VideoDecoder;
+
     Render render;
     
     // 返回 bit0 代表V opened ， bit1 代表A opened 
@@ -320,8 +322,6 @@ public:
     int   get_opened_streams_mask();   // 返回 bit0 代表V， bit1 代表A
     void  close_all_stream();
 
-    Clock extclk;
-    void check_external_clock_speed();  // 调节外部时钟速度以适应流速
 
     AudioDecoder    auddec;
     VideoDecoder    viddec;
@@ -330,36 +330,26 @@ public:
     void video_refresh(double* remaining_time);
     void prepare_picture_for_display(double* remaining_time);
 
-
-    int get_master_sync_type();
-    int av_sync_type;
+    int  get_master_sync_type() const;
+    void set_master_sync_type(int how);
     int realtime;   // 是否是实时流
 
     /* get the current master clock value */
     double get_master_clock();
-
-    // return the wanted number of samples to get better sync if sync_type is video or external master clock
-    int synchronize_audio(int nb_samples);
-
-    double max_frame_duration;      // maximum duration of a frame - above this, we consider the jump a timestamp discontinuity
-    
+        
     // {{  some ffplay cmd line opt  
     int decoder_reorder_pts;
     int show_status;
     // }}  some ffplay cmd line opt  
 
-    int frame_drops_early;
-    int frame_drops_late;
-
-    int force_refresh;   // 是否需要‘draw frame’
 
     // decoder status section {{
-    int paused;
+    int   is_drawing_needed() const{ return force_refresh;}  
+    void  toggle_need_drawing(int need_drawing);
     int internal_toggle_pause();
-
-    int step; // 单帧模式
-
+    void toggle_step(int step_mode);
     void toggle_mute();
+    int is_paused() const { return this->paused; }
     void update_volume(int sign, double step);
     // }} decoder status section
 
@@ -367,14 +357,32 @@ public:
     int  is_buffer_full();
     void feed_null_pkt(); // todo: 作用不明，待研究
     void feed_pkt(AVPacket* pkt, const AVPacketExtra* extra  ); // 向解码器喂数据包, take ownership。如果不是感兴趣的包，则释放。
-protected:
     
+    
+protected:
+    int av_sync_type;
+    Clock extclk;
+    void check_external_clock_speed();  // 调节外部时钟速度以适应流速
+
+    // decoder status section {{
+    int force_refresh;   // is there 'frame' waiting for drawing?
+    int paused;
+    int step; // frame by frame mode 
+    // }} decoder status section
+    double max_frame_duration;      // maximum duration of a frame - above this, we consider the jump a timestamp discontinuity
+    // {{ statistics
+    int frame_drops_early;
+    int frame_drops_late;
+    // }} statistics
+   
     void print_stream_status();
 
     double vp_duration(Frame* vp, Frame* nextvp); //  refs 'max_frame_duration'
     double compute_target_delay(double delay);
     void update_video_clock(double pts, int64_t pos, int serial);
 
+    // return the wanted number of samples to get better sync if sync_type is video or external master clock
+    int synchronize_audio(int nb_samples);
 };
 
 class VideoState
@@ -411,11 +419,6 @@ public:
     // }}} stream operation section
         
 public:
-    // format status section {{
-    int paused;
-    // }}  format status section
-
-    int abort_request;
 
     // {{  some ffplay cmd line opt  
     
@@ -424,20 +427,16 @@ public:
     int     streamopt_autoexit;
     // }}
 
-    int seek_req;
-    int seek_flags;
-    int64_t seek_pos;
-    int64_t seek_rel;
-    AVFormatContext * format_context;
-
+    
     SimpleAVDecoder av_decoder;
 
-    int eof;
-
+    AVFormatContext * format_context;
+protected:    
 
     SimpleConditionVar continue_read_thread;
-
-protected:    
+    int eof;
+    int abort_request;
+    
     int infinite_buffer; 
 
     virtual  ThreadRetType thread_main();  //  stream reader thread 
@@ -445,12 +444,20 @@ protected:
 
     AVInputFormat* iformat;   // 命令行指定容器格式，ref only
     CString file_to_play; // 播放的文件 or url
-    
+  
+    // format status section {{
+    int paused;
+    // }}  format status section
     int last_paused; // 之前一次reader loop的时候，是否是paused
 
     int open_stream_file();
     int last_video_stream, last_audio_stream ;
     void fill_packet_extra( AVPacketExtra* extra, const AVPacket* pkt) const;
+
+    int seek_req;
+    int seek_flags;
+    int64_t seek_pos;
+    int64_t seek_rel;
 
     // 'reader thread' section {{{
     int  read_loop_check_pause(); // return: > 0 -- shoud 'continue', 0 -- go on current iteration, < 0 -- error exit loop
