@@ -305,7 +305,6 @@ public:
     
     // called to display each frame (from event loop )
     void video_refresh(double* remaining_time);
-    void prepare_picture_for_display(double* remaining_time);
 
     int  get_master_sync_type() const;
     void set_master_sync_type(int how);
@@ -355,6 +354,8 @@ protected:
     // }} statistics
    
     void print_stream_status();
+
+    void prepare_picture_for_display(double* remaining_time);
 
     double vp_duration(Frame* vp, Frame* nextvp); //  refs 'max_frame_duration'
     double compute_target_delay(double delay);

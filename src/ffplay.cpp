@@ -37,6 +37,7 @@ const int program_birth_year = 2003;
 
 void sigterm_handler(int sig);
 
+// keep refreshing video until any SDL_Event occurs
 void refresh_loop_wait_event(SimpleAVDecoder * av_decoder, SDL_Event *event) {
     double remaining_time = 0.0;
     SDL_PumpEvents();

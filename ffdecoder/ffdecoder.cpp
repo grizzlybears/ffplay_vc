@@ -984,60 +984,65 @@ void SimpleAVDecoder::video_refresh(double *remaining_time)
 void SimpleAVDecoder::prepare_picture_for_display(double* remaining_time)
 {
     Frame* vp, * lastvp;
-retry:    
-    if (this->viddec.frame_q.frame_queue_nb_remaining() == 0) {
-        // nothing to do, no picture to display in the frame queue
-        return;
-    }
-    /* dequeue the picture */
-    lastvp = this->viddec.frame_q.frame_queue_peek_last(); //‘已经上屏的帧’
-    vp = this->viddec.frame_q.frame_queue_peek(); //‘接下来要上屏的帧’
-
-    if (vp->serial != this->viddec.packet_q.serial) { // 说明seek过，vp 是seek前cache的，已经不合时宜
-        this->viddec.frame_q.frame_queue_next();
-        goto retry;
-    }
-    
-    if (lastvp->serial != vp->serial)
-        this->viddec.frame_timer = av_gettime_relative() / 1000000.0;
-
-    if (this->paused)
-        return;
-
-    double time_now, last_duration, duration, delay;
-
-    /* compute nominal last_duration */
-    last_duration = this->vp_duration(lastvp, vp);      // 根据pts计算出名义上lastvp应该显示多久
-    delay = this->compute_target_delay(last_duration);   // 根据‘时钟同步’的要求，再调整‘last_duration’,得到delay = ‘lastvp应该显示多久’
-
-    time_now = av_gettime_relative() / 1000000.0;
-    if (time_now < this->viddec.frame_timer + delay) {
-        *remaining_time = FFMIN(this->viddec.frame_timer + delay - time_now, *remaining_time);  //‘当前显示帧’还可以再坚持‘*remaining_time’之久
-        return;
-    }
-
-    // 要显示下一帧了
-    this->viddec.frame_timer += delay;
-    if (delay > 0 && time_now - this->viddec.frame_timer > AV_SYNC_THRESHOLD_MAX)
-        this->viddec.frame_timer = time_now;
-
-    {
-        AutoLocker yes_locked(this->viddec.frame_q.fq_signal);
-        if (!isnan(vp->pts))
-            this->update_video_clock(vp->pts, vp->pos, vp->serial);  // 其实是更新 vstream的clock，以及‘外部时钟’
-    }
-
-    if (this->viddec.frame_q.frame_queue_nb_remaining() > 1) { // 考察一下是否需要跳帧
-        Frame* nextvp = this->viddec.frame_q.frame_queue_peek_next();
-        duration = this->vp_duration(vp, nextvp);
-        if (!this->step &&
-            (get_master_sync_type() != AV_SYNC_VIDEO_MASTER) &&
-            time_now > this->viddec.frame_timer + duration) // 没有时间留给'nextvp'显示，所以要跳过'nextvp'。 
-        {
-            this->frame_drops_late++;
-            this->viddec.frame_q.frame_queue_next();   // todo: 如果我们可以动态调节‘显示刷新’的间隔，那么不跳帧，而把‘间隔’调到最小，应该提高体验
-            goto retry;
+    while(1) {
+        if (this->viddec.frame_q.frame_queue_nb_remaining() == 0) {
+            // nothing to do, no picture to display in the frame queue
+            return;
         }
+        /* dequeue the picture */
+        lastvp = this->viddec.frame_q.frame_queue_peek_last(); // the frame 'on screen'
+        vp = this->viddec.frame_q.frame_queue_peek(); // the frame to be drawn 
+
+        if (vp->serial != this->viddec.packet_q.serial) { 
+            // we are 'seeking'，and 'vp' was cacche before 'seek'
+            this->viddec.frame_q.frame_queue_next();
+            continue;
+        }
+
+        if (lastvp->serial != vp->serial)
+            this->viddec.frame_timer = av_gettime_relative() / 1000000.0;
+
+        if (this->paused)
+            return;
+
+        double time_now, last_duration, duration, delay;
+
+        /* compute nominal last_duration */
+        last_duration = this->vp_duration(lastvp, vp); // 根据pts计算出名义上lastvp应该显示多久
+        delay = this->compute_target_delay(last_duration);   // 根据‘时钟同步’的要求，再调整‘last_duration’,得到delay = ‘lastvp应该显示多久’
+
+        time_now = av_gettime_relative() / 1000000.0;
+        if (time_now < this->viddec.frame_timer + delay) {
+            *remaining_time = FFMIN(this->viddec.frame_timer + delay - time_now, *remaining_time);  //‘当前显示帧’还可以再坚持‘*remaining_time’之久
+            return;
+        }
+
+        // going to display next frame 
+        this->viddec.frame_timer += delay;
+        if (delay > 0 && time_now - this->viddec.frame_timer > AV_SYNC_THRESHOLD_MAX)
+            this->viddec.frame_timer = time_now;
+
+        {
+            AutoLocker yes_locked(this->viddec.frame_q.fq_signal);
+            if (!isnan(vp->pts))
+                this->update_video_clock(vp->pts, vp->pos, vp->serial);  // 其实是更新 vstream的clock，以及‘外部时钟’
+        }
+
+        if (this->viddec.frame_q.frame_queue_nb_remaining() > 1) { 
+            // if we should 'skip' this frame
+            Frame* nextvp = this->viddec.frame_q.frame_queue_peek_next();
+            duration = this->vp_duration(vp, nextvp);
+            if (!this->step &&
+                    (get_master_sync_type() != AV_SYNC_VIDEO_MASTER) &&
+                    time_now > this->viddec.frame_timer + duration) // 没有时间留给'nextvp'显示，所以要跳过'nextvp'。 
+            {
+                this->frame_drops_late++;
+                this->viddec.frame_q.frame_queue_next();   // todo: 如果我们可以动态调节‘显示刷新’的间隔，那么不跳帧，而把‘间隔’调到最小，应该提高体验
+                continue;
+            }
+        }
+
+        break;
     }
 
     this->viddec.frame_q.frame_queue_next();
