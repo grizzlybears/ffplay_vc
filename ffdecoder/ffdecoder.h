@@ -63,7 +63,7 @@ public:
     friend SimpleAVDecoder;
 
     static AVCodecContext* create_codec_directly( const AVCodecParameters * codec_para, const StreamParam* extra_para );
-    virtual int decoder_init( AVCodecContext* avctx, const StreamParam* extra_para,  SimpleConditionVar* empty_queue_cond);
+    virtual int decoder_init( AVCodecContext* avctx, const StreamParam* extra_para);
     virtual void decoder_destroy();
    
     int is_inited() const
@@ -94,8 +94,6 @@ protected:
     int64_t    next_pts;
     AVRational next_pts_timebase;
 
-    SimpleConditionVar* empty_pkt_queue_cond;  // just ref. signal when 'q empty'
-
     virtual void on_got_new_frame(AVFrame* frame) = 0;
  
     virtual int decoder_start();  // start decoder thread. 
@@ -122,7 +120,7 @@ public:
     }
     friend SimpleAVDecoder;
 
-    virtual int decoder_init(AVCodecContext* avctx, const StreamParam* extra_para, SimpleConditionVar* empty_queue_cond);
+    virtual int decoder_init(AVCodecContext* avctx, const StreamParam* extra_para);
     virtual void decoder_destroy();
 
 protected:
@@ -159,7 +157,7 @@ public:
         audio_volume = 100;
     }
     friend SimpleAVDecoder;
-    virtual int decoder_init(AVCodecContext* avctx, const StreamParam* extra_para,  SimpleConditionVar* empty_queue_cond);
+    virtual int decoder_init(AVCodecContext* avctx, const StreamParam* extra_para);
     virtual void decoder_destroy();
 
 protected:
@@ -295,10 +293,10 @@ public:
     Render render;
     
     // 返回 bit0 代表V opened ， bit1 代表A opened 
-    int   open_stream_from_avformat(AVFormatContext* format_context, /*in,hold*/SimpleConditionVar* notify_reader, int* vstream_id, int* astream_id);
+    int   open_stream_from_avformat(AVFormatContext* format_context,  int* vstream_id, int* astream_id);
 
     // Return:  0 -- success, non-zero -- error.
-    int   open_stream(const AVCodecParameters * codec_para, const StreamParam* extra_para, SimpleConditionVar* empty_queue_cond); 
+    int   open_stream(const AVCodecParameters * codec_para, const StreamParam* extra_para); 
 
     int   get_opened_streams_mask();   // 返回 bit0 代表V， bit1 代表A
     void  close_all_stream();
@@ -396,8 +394,6 @@ public:
 
     AVFormatContext * format_context;
 protected:    
-
-    SimpleConditionVar continue_read_thread;
     int eof;
     int abort_request;
     

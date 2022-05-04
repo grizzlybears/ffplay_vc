@@ -88,13 +88,12 @@ AVCodecContext* Decoder::create_codec_directly( const AVCodecParameters * codec_
     return codec_context;
 }
 
-int Decoder::decoder_init( AVCodecContext *avctx, const StreamParam* extra_para, SimpleConditionVar* empty_queue_cond)
+int Decoder::decoder_init( AVCodecContext *avctx, const StreamParam* extra_para)
 {
     this->avctx = avctx;
 
     stream_param = *extra_para;
     
-    this->empty_pkt_queue_cond = empty_queue_cond;
     this->start_pts = AV_NOPTS_VALUE;
     this->pkt_serial = -1; 
     
@@ -132,9 +131,6 @@ int Decoder::decoder_decode_frame(AVFrame *frame, AVSubtitle *sub) {
 
         AVPacket pkt;
         do {
-            if (this->packet_q.nb_packets == 0) // todo: 为何要q里没包才wake()? reader thread是判断 decoder->stream_has_enough_packets() 决定是否继续读的
-                this->empty_pkt_queue_cond->wake();
-                
             if (this->is_packet_pending) {
                 av_packet_move_ref(&pkt, &this->pending_pkt);
                 this->is_packet_pending = 0;
@@ -205,9 +201,9 @@ void Decoder::decoder_abort()
     this->packet_q.packet_queue_flush();
 }
 
-int VideoDecoder::decoder_init(AVCodecContext* avctx, const StreamParam* extra_para,   SimpleConditionVar* empty_queue_cond)
+int VideoDecoder::decoder_init(AVCodecContext* avctx, const StreamParam* extra_para)
 {
-    if (MyBase::decoder_init(avctx, extra_para, empty_queue_cond))
+    if (MyBase::decoder_init(avctx, extra_para))
     {
         return 1;
     }
@@ -245,9 +241,9 @@ void VideoDecoder::decoder_destroy() {
     }
 }
 
-int AudioDecoder::decoder_init(AVCodecContext* avctx, const StreamParam* extra_para,  SimpleConditionVar* empty_queue_cond)
+int AudioDecoder::decoder_init(AVCodecContext* avctx, const StreamParam* extra_para)
 {
-    if (MyBase::decoder_init(avctx,  extra_para, empty_queue_cond))
+    if (MyBase::decoder_init(avctx,  extra_para))
     {
         return 1;
     }
@@ -862,8 +858,6 @@ void VideoState::stream_seek(int64_t pos, int64_t rel, int seek_by_bytes)
         if (seek_by_bytes)
             this->seek_flags |= AVSEEK_FLAG_BYTE;
         this->seek_req = 1;
-
-        this->continue_read_thread.wake();
     }
 }
 
@@ -1631,7 +1625,7 @@ int VideoState::open_stream_file()
 }
  
 // Return:  0 -- success, non-zero -- error.
-int SimpleAVDecoder::open_stream(const AVCodecParameters * codec_para, const StreamParam* extra_para, SimpleConditionVar*  notify_reader)
+int SimpleAVDecoder::open_stream(const AVCodecParameters * codec_para, const StreamParam* extra_para)
 { 
     Decoder * decoder = NULL;
     if (AVMEDIA_TYPE_AUDIO == codec_para->codec_type  )  {
@@ -1658,7 +1652,7 @@ int SimpleAVDecoder::open_stream(const AVCodecParameters * codec_para, const Str
         return 3;
     }
 
-    if ( decoder->decoder_init( codec_context, extra_para, notify_reader))
+    if ( decoder->decoder_init( codec_context, extra_para))
     {
         return 4;
     }
@@ -1667,7 +1661,7 @@ int SimpleAVDecoder::open_stream(const AVCodecParameters * codec_para, const Str
 }
 
 // 返回 bit0 代表V opened ， bit1 代表A opened 
-int SimpleAVDecoder::open_stream_from_avformat(AVFormatContext* format_context, /*in,hold*/SimpleConditionVar* notify_reader, int* vstream_id, int* astream_id)
+int SimpleAVDecoder::open_stream_from_avformat(AVFormatContext* format_context, int* vstream_id, int* astream_id)
 {
     // 1. some preparation
     this->max_frame_duration = (format_context->iformat->flags & AVFMT_TS_DISCONT) ? 10.0 : 3600.0;
@@ -1685,7 +1679,7 @@ int SimpleAVDecoder::open_stream_from_avformat(AVFormatContext* format_context, 
         extra_para.start_time = stream->start_time;
         extra_para.guessed_vframe_rate = av_guess_frame_rate(format_context, stream, NULL);
 
-        if (0 == open_stream(stream->codecpar , &extra_para, notify_reader))
+        if (0 == open_stream(stream->codecpar , &extra_para))
         {
             *vstream_id = vs;   
 
@@ -1711,7 +1705,7 @@ int SimpleAVDecoder::open_stream_from_avformat(AVFormatContext* format_context, 
         extra_para.time_base  = stream->time_base;
         extra_para.start_time = stream->start_time;
 
-        if (0 == open_stream(stream->codecpar , &extra_para, notify_reader))
+        if (0 == open_stream(stream->codecpar , &extra_para))
         {
             *astream_id = as;
         }
@@ -1873,8 +1867,7 @@ ThreadRetType  VideoState::thread_main()
         if  (infinite_buffer <1 && this->av_decoder.is_buffer_full())
         {
             /* wait 10 ms */
-            AutoLocker _yes_locked(continue_read_thread);
-            this->continue_read_thread.timed_wait_ms(10);
+            av_usleep(10);
             continue;
         }
 
@@ -1893,11 +1886,8 @@ ThreadRetType  VideoState::thread_main()
                 if (streamopt_autoexit)
                     goto fail;
             }
-
-            {
-                AutoLocker _yes_locked(continue_read_thread);
-                this->continue_read_thread.timed_wait_ms(10);
-            }
+            
+            av_usleep(10);
             continue;
         } else {
             this->eof = 0;
@@ -1991,7 +1981,7 @@ int VideoState::open_input_stream(const char *filename, AVInputFormat *iformat)
     }
 
     // 逐流打开解码器
-    if (0 == this->av_decoder.open_stream_from_avformat(this->format_context, &this->continue_read_thread,&last_video_stream, &last_audio_stream))
+    if (0 == this->av_decoder.open_stream_from_avformat(this->format_context, &last_video_stream, &last_audio_stream))
     {
         av_log(NULL, AV_LOG_FATAL, "Failed to open file '%s'.\n",  this->file_to_play.GetString());
         return 6;
