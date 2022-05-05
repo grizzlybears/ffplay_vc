@@ -1681,6 +1681,7 @@ int SimpleAVDecoder::open_stream_from_avformat(AVFormatContext* format_context, 
 
         if (0 == open_stream(stream->codecpar , &extra_para))
         {
+            LOG_DEBUG("%s\n",codec_para_2_str(stream->codecpar).c_str());
             *vstream_id = vs;   
 
             if (stream->codecpar->width)   // todo: maybe moving to VideoDecoer::decoder_init would be better
@@ -1707,6 +1708,7 @@ int SimpleAVDecoder::open_stream_from_avformat(AVFormatContext* format_context, 
 
         if (0 == open_stream(stream->codecpar , &extra_para))
         {
+            LOG_DEBUG("%s\n",codec_para_2_str(stream->codecpar).c_str());
             *astream_id = as;
         }
     }

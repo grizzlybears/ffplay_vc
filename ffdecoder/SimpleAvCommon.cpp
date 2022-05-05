@@ -1,5 +1,6 @@
 #include "SimpleAvCommon.h"
-
+#include "libavutil/pixdesc.h"
+#include "libavutil/avutil.h"
 ///////////// packet_queue section {{{
 
 /* packet queue handling */
@@ -396,3 +397,125 @@ void AutoReleasePtr<AVFormatContext>::release()
     avformat_close_input(&me);
     me = NULL;
 }
+
+CString decode_codec_tag(uint32_t  codec_tag);
+CString codec_para_2_str (const AVCodecParameters * codec_para)
+{
+    //ref: 
+    //  libavformat/dump.c  dump_stream_format()
+    //  libavcodec/utils.c  avcodec_string()
+
+    CString vcodec_para_2_str (const AVCodecParameters * codec_para);
+    CString acodec_para_2_str (const AVCodecParameters * codec_para);
+
+    if ( AVMEDIA_TYPE_VIDEO == codec_para->codec_type)
+    {
+        return vcodec_para_2_str ( codec_para);
+    }
+    else if ( AVMEDIA_TYPE_AUDIO == codec_para->codec_type)
+    {
+        return acodec_para_2_str ( codec_para);
+    }
+    else if ( AVMEDIA_TYPE_UNKNOWN == codec_para->codec_type)
+    {
+        return "'unknown' codec";
+    }
+    else if ( AVMEDIA_TYPE_DATA == codec_para->codec_type)
+    {
+        return "'data'codec";
+    }
+    else if ( AVMEDIA_TYPE_SUBTITLE == codec_para->codec_type)
+    {
+        return "'subtitle' codec";
+    }
+    else if ( AVMEDIA_TYPE_ATTACHMENT == codec_para->codec_type)
+    {
+        return "'attachment' codec";
+    }
+    else
+    {
+        return "bad codec";
+    }
+}
+
+
+CString vcodec_para_2_str (const AVCodecParameters * codec_para)
+{
+    CString codec_desc;
+    const AVCodecDescriptor * descriptor = avcodec_descriptor_get(codec_para->codec_id);
+    if (descriptor)
+    { 
+        codec_desc.Format("Viddo codec '%s %s'  id %d, extra_size: %d"
+                , descriptor->name, decode_codec_tag(codec_para->codec_tag).c_str() 
+                , codec_para->codec_id
+                , codec_para->extradata_size 
+                );
+    }
+    else
+    {
+        codec_desc.Format("unsupoorted video codec id: %d, tag: %u, extra_size: %d"
+                ,  codec_para->codec_id, codec_para->codec_tag
+                , codec_para->extradata_size 
+                );
+    }
+
+    CString s;
+    s.Format(" %s, [%dx%d] sar %d:%d, field_order: %d, %d kb/s"
+            , av_get_pix_fmt_name((AVPixelFormat)codec_para->format) 
+            , codec_para-> width, codec_para->height
+            , codec_para->sample_aspect_ratio.num, codec_para->sample_aspect_ratio.den
+            , codec_para->field_order
+            , (int)(codec_para->bit_rate /1000)
+            );
+
+    return CString("%s\n  %s", codec_desc.c_str(), s.c_str());
+}
+
+CString acodec_para_2_str (const AVCodecParameters * codec_para)
+{
+    CString codec_desc;
+    const AVCodecDescriptor * descriptor = avcodec_descriptor_get(codec_para->codec_id);
+    if (descriptor)
+    {
+        codec_desc.Format("Audio codec '%s %s'  id %d, extra_size: %d"
+                , descriptor->name, decode_codec_tag(codec_para->codec_tag).c_str() 
+                , codec_para->codec_id
+                , codec_para->extradata_size 
+                );
+    }
+    else
+    {
+        codec_desc.Format("unsupoorted audio codec id: %d, tag: %u, extra_size: %d"
+                ,  codec_para->codec_id, codec_para->codec_tag
+                , codec_para->extradata_size 
+                );
+    }
+
+    char layout[100];
+    av_get_channel_layout_string( layout, sizeof(layout), codec_para->channels, codec_para->channel_layout);
+
+    CString s;
+    s.Format(" %s (%d bits), layout: %s, %d Hz, %d kb/s"
+            , av_get_sample_fmt_name((AVSampleFormat)codec_para->format)
+            , av_get_bytes_per_sample((AVSampleFormat)codec_para->format) * 8 
+            , layout
+            , codec_para->sample_rate
+            , (int) (codec_para->bit_rate / 1000)
+            );
+
+    return CString("%s\n  %s", codec_desc.c_str(), s.c_str());
+}
+
+CString decode_codec_tag(uint32_t  codec_tag)
+{
+    if (!codec_tag)
+    {
+        return "";
+    }
+   
+    char buf[AV_FOURCC_MAX_STRING_SIZE] = {0};
+    av_fourcc_make_string(buf, codec_tag );
+
+    return CString( "/%s", buf);
+}
+
