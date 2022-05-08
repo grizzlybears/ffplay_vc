@@ -57,7 +57,45 @@ void Decoder::onetime_global_init()
     PacketQueue::flush_pkt.data = (uint8_t*)&PacketQueue::flush_pkt;
 }
 
-AVCodecContext* Decoder::create_codec_directly( const AVCodecParameters * codec_para, const StreamParam* extra_para )
+AVCodecContext* Decoder::create_codec_by_id( int codec_id)
+{
+    /* In most case, this helper is NOT capable to function.
+     * can open:
+     *      Video: h264 (Main), yuvj420p(pc, bt709)
+     *      Video: h264 (Baseline), yuv420p(progressive)
+     *
+     * can not open:
+     *      Audio: pcm_alaw, 16000 Hz, 1 channels, s16
+     *      Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, stereo, fltp
+     *      Video: h264 (Main) (avc1 / 0x31637661), yuv420p(tv, smpte170m/bt709/bt709)
+     * */
+    // AVCodec* pCodec = avcodec_find_decoder(AV_CODEC_ID_H264);
+    AVCodec* pCodec = avcodec_find_decoder( (AVCodecID)codec_id);
+	if (pCodec == NULL) {
+		LOG_ERROR("Codec %d was not found.\n", codec_id);
+		return NULL;
+	}
+
+	AVCodecContext* pCodecCtx = avcodec_alloc_context3(pCodec);
+    if (!pCodecCtx )
+    {
+        LOG_ERROR("Failed in allocate codec %d.\n", codec_id);
+		return NULL;
+    }
+
+	if (avcodec_open2(pCodecCtx, pCodec, NULL) < 0) {
+		LOG_ERROR("Could not open codec %d.\n", codec_id);
+
+		avcodec_close(pCodecCtx);
+		pCodecCtx = NULL;
+		return NULL;
+	}
+
+    return pCodecCtx;
+
+}
+
+AVCodecContext* Decoder::create_codec_by_para( const AVCodecParameters * codec_para, const StreamParam* extra_para )
 { 
     AVCodecContext* codec_context = avcodec_alloc_context3(NULL);
     if (!codec_context)
@@ -1646,7 +1684,8 @@ int SimpleAVDecoder::open_stream(const AVCodecParameters * codec_para, const Str
         return 2;
     }
 
-    AVCodecContext* codec_context  = Decoder::create_codec_directly (codec_para , extra_para);
+    //AVCodecContext* codec_context  = Decoder::create_codec_by_id(codec_para->codec_id );
+    AVCodecContext* codec_context  = Decoder::create_codec_by_para (codec_para , extra_para);
     if(!codec_context )
     {
         return 3;
@@ -1679,9 +1718,9 @@ int SimpleAVDecoder::open_stream_from_avformat(AVFormatContext* format_context, 
         extra_para.start_time = stream->start_time;
         extra_para.guessed_vframe_rate = av_guess_frame_rate(format_context, stream, NULL);
 
+        LOG_DEBUG("goto open %s\n",codec_para_2_str(stream->codecpar).c_str());
         if (0 == open_stream(stream->codecpar , &extra_para))
         {
-            LOG_DEBUG("%s\n",codec_para_2_str(stream->codecpar).c_str());
             *vstream_id = vs;   
 
             if (stream->codecpar->width)   // todo: maybe moving to VideoDecoer::decoder_init would be better
@@ -1706,9 +1745,9 @@ int SimpleAVDecoder::open_stream_from_avformat(AVFormatContext* format_context, 
         extra_para.time_base  = stream->time_base;
         extra_para.start_time = stream->start_time;
 
+        LOG_DEBUG("goto open %s\n",codec_para_2_str(stream->codecpar).c_str());
         if (0 == open_stream(stream->codecpar , &extra_para))
         {
-            LOG_DEBUG("%s\n",codec_para_2_str(stream->codecpar).c_str());
             *astream_id = as;
         }
     }

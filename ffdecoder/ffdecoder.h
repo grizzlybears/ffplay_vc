@@ -62,7 +62,8 @@ public:
     virtual ~Decoder() {}
     friend SimpleAVDecoder;
 
-    static AVCodecContext* create_codec_directly( const AVCodecParameters * codec_para, const StreamParam* extra_para );
+    static AVCodecContext* create_codec_by_para( const AVCodecParameters * codec_para, const StreamParam* extra_para );
+    static AVCodecContext* create_codec_by_id( int codec_id );
     virtual int decoder_init( AVCodecContext* avctx, const StreamParam* extra_para);
     virtual void decoder_destroy();
    

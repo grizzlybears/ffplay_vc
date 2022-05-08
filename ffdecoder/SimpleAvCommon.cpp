@@ -445,7 +445,7 @@ CString vcodec_para_2_str (const AVCodecParameters * codec_para)
     const AVCodecDescriptor * descriptor = avcodec_descriptor_get(codec_para->codec_id);
     if (descriptor)
     { 
-        codec_desc.Format("Viddo codec '%s %s'  id %d, extra_size: %d"
+        codec_desc.Format("Video codec '%s %s'  id %d, extra_size: %d"
                 , descriptor->name, decode_codec_tag(codec_para->codec_tag).c_str() 
                 , codec_para->codec_id
                 , codec_para->extradata_size 
