@@ -1,22 +1,57 @@
 ﻿#ifndef THREAD_UTILS_H_
 #define THREAD_UTILS_H_
 
+#include <stdio.h>
+#include <assert.h>
+#include <memory>
+#include <vector>
 #include <list>
 #include <map>
 
 #ifdef _WIN32 
-    #include <winnt.h>
-    #include <windows.h>
+	#include <windows.h>
+    #include <winnt.h>    
     #include <process.h>
+	#define STDCALL __stdcall
+	typedef unsigned ThreadRetType;
 #else
     #include <stdint.h>
     #include <pthread.h>
 //    #define DWORD uint32_t
     #define __stdcall  
     #define INFINITE (0xFFFFFFFF)
+	#include "utils.h"
+	#define STDCALL __stdcall
+	typedef void* ThreadRetType;
 #endif
 
+
 #define NOTHING_TO_WAIT (1)
+class BaseThread
+{
+public: 
+    BaseThread()
+    { 
+        _thread_handle = 0;
+    }
+
+    virtual ~BaseThread()
+    {
+    }
+
+    static  ThreadRetType STDCALL trampoline( void *arg);
+    virtual ThreadRetType thread_main();
+	
+	void create_thread();
+	int  wait_thread_quit();
+#ifdef __GNUC__
+    pthread_t _thread_handle;
+#else
+	HANDLE _thread_handle;
+	unsigned _thread_id;
+#endif
+
+};
 
 typedef enum {
 	DONT_WAKE_ANYONE  = 0,
@@ -24,30 +59,43 @@ typedef enum {
 	WAKE_ALL  ,
 } HOW_TO_WAKE;
 
-
 #ifdef _WIN32
 class AutoLocker
 {
 public:
 	AutoLocker(CRITICAL_SECTION&  lock)
 	{
-		pLock = &lock;
+		pLock = &lock; 
+        guard = 1;
 		EnterCriticalSection(pLock);
 	}
 
 	AutoLocker(CRITICAL_SECTION*  lock)
 	{
 		pLock = lock;
+        guard = 1;
 		EnterCriticalSection(pLock);
 	}
 
 	~AutoLocker()
 	{
+        unlock();
+	} 
+
+    void unlock()
+    {
+        if(!guard)
+        {
+            return;
+        } 
+
 		LeaveCriticalSection(pLock);
-	}
+        guard = 0;
+    }
 
 protected:
 	CRITICAL_SECTION* pLock;
+    int guard;
 };
 
 class SimpleMutex
@@ -122,25 +170,32 @@ public:
 
 	void wait()
 	{
-		SleepConditionVariableCS (&_cond, &_cs, INFINITE);  
+		SleepConditionVariableCS (&_cond, &_cs, INFINITE);
 	}
 
-    // return 0        -- wait success
-    // return nonzero  -- wait timeout
-    int timed_wait(unsigned int milliseconds)
-    {
-        BOOL b = SleepConditionVariableCS (&_cond, &_cs
-            , milliseconds
-            ); 
-
-        if (b)
-        {
-            return 0;
-        }
-
-        return 1;
-            
-    }
+	// return 0        -- wait success
+	// return nonzero  -- wait timeout
+	int timed_wait(unsigned int seconds)
+	{
+		BOOL b = SleepConditionVariableCS(&_cond, &_cs, seconds* 1000);
+		if (b)
+		{
+			return 0;
+		}
+		assert( ERROR_TIMEOUT == GetLastError());
+		return 1;
+	}
+    
+    int timed_wait_ms(unsigned int ms)
+	{
+		BOOL b = SleepConditionVariableCS(&_cond, &_cs, ms);
+		if (b)
+		{
+			return 0;
+		}
+		assert( ERROR_TIMEOUT == GetLastError());
+		return 1;
+	}
 
 	void wake( int how = WAKE_ONE)
 	{
@@ -153,6 +208,8 @@ public:
 			WakeAllConditionVariable(&_cond);
 		}
 	}
+
+
 	
 };
 
@@ -214,52 +271,6 @@ public:
 	}
 };
 
-class BaseThread
-{
-public:
-
-	BaseThread()
-	{
-		_thread_handle =NULL;
-		_thread_id = 0; 
-		_arg_4_cb = NULL;
-		_cb = NULL;
-	}
-
-	virtual ~BaseThread()
-	{
-		safe_cleanup();
-	}
-
-	typedef int (*ThreadFunc)(void* arg);
-	// return 0 on success, else errno.
-	int create_thread_with_cb(ThreadFunc cb, const char* thread_name, void* arg);
-	static unsigned  __stdcall _thread_func_4_cb(void* arg);
-	ThreadFunc _cb;
-	void* _arg_4_cb; // doesnt take ownership
-
-
-	void create_thread();		
-
-	/*
-	WAIT_OBJECT_0  0x00000000L			The state of the specified object is signaled.
-	WAIT_TIMEOUT   0x00000102L			The time-out interval elapsed, and the object's state is nonsignaled.
-	WAIT_FAILED    (DWORD)0xFFFFFFFF	The function has failed. 
-	*/
-#define NOTHING_TO_WAIT (1)
-	DWORD wait_thread_quit(DWORD  dwMilliseconds = INFINITE);
-	
-	void safe_cleanup();
-
-	HANDLE _thread_handle;
-	unsigned _thread_id;
-
-    static unsigned  __stdcall _thread_func( void* arg);
-
-    virtual unsigned run();
-
-};
-
 
 #else
 class AutoLocker
@@ -267,7 +278,8 @@ class AutoLocker
 public:
 	AutoLocker(pthread_mutex_t&  lock)
 	{
-		pLock = &lock;
+		pLock = &lock; 
+        guard = 1;
         pthread_mutex_lock( pLock);
 
 	}
@@ -275,16 +287,29 @@ public:
 	AutoLocker(pthread_mutex_t*  lock)
 	{
 		pLock = lock;
+        guard = 1;
         pthread_mutex_lock( pLock);
 	}
 
 	~AutoLocker()
 	{
-        pthread_mutex_unlock(pLock);
+        unlock();
 	}
+
+    void unlock()
+    {
+        if(!guard)
+        {
+            return;
+        } 
+
+        pthread_mutex_unlock(pLock);
+        guard = 0;
+    }
 
 protected:
 	pthread_mutex_t* pLock;
+    int guard;
 };
 
 
@@ -382,6 +407,28 @@ public:
 
         return 0;
 	}
+    
+    // return 0        -- wait success
+    // return nonzero  -- wait timeout
+    int timed_wait_ms(unsigned int ms)
+	{
+        struct timespec time_to_wait = {0, 0};
+        time_to_wait.tv_sec = time(NULL) + ms / 1000; 
+        time_to_wait.tv_nsec =  1000* (ms % 1000); 
+
+        int i = pthread_cond_timedwait(&_cond, &m_pthr_mutex, &time_to_wait ); 
+        if (ETIMEDOUT ==i)
+        {
+            return 1;
+        }
+        else if (i)
+        {
+            SIMPLE_LOG_LIBC_ERROR( "wait_cond", i );
+            return 1;
+        }
+
+        return 0;
+	}
 
 	void wake( int how = WAKE_ONE)
 	{
@@ -404,6 +451,170 @@ public:
 	
 };
 
+class SimpleRwLock
+{
+public:
+    pthread_rwlock_t       rwlock;
+
+	SimpleRwLock()
+	{
+        pthread_rwlock_init(&rwlock, NULL);
+	} 
+
+    SimpleRwLock(const SimpleRwLock& a)  // 锁只能dup，不能copy
+	{
+        pthread_rwlock_init(&rwlock, NULL);
+	} 
+
+    ~SimpleRwLock()
+    {
+        pthread_rwlock_destroy(&rwlock);
+    }
+
+    operator pthread_rwlock_t * ()
+    {
+        return get_lock();
+    }
+
+	pthread_rwlock_t* get_lock()
+	{
+		return & rwlock;
+	}
+    
+};
+
+class AutoRwLocker
+{
+public:
+    typedef enum
+    {
+        LM_Unlocked = 0,
+        LM_LockedForRead,
+        LM_LockedForWrite,
+    }LockMode;
+
+	AutoRwLocker(pthread_rwlock_t  &lock, int mode = LM_LockedForRead)
+	{
+        //PlainFuncTracePlease;
+		pLock = &lock;
+
+        guard = mode;
+        if (LM_LockedForRead  == mode)
+        {
+            //debug_printf("rd lock on %p\n", pLock);
+            pthread_rwlock_rdlock(& lock);
+        }
+        else if (LM_LockedForWrite  == mode)
+        {
+            //debug_printf("wr lock on %p\n", pLock);
+            pthread_rwlock_wrlock(& lock);
+        }
+        else if ( LM_Unlocked == mode)
+        {
+        }
+        else
+        {
+            LOG_THEN_THROW("Bad rwlock mode %d", mode);
+        }
+	}
+
+	AutoRwLocker(pthread_rwlock_t*  lock, int mode = LM_LockedForRead)
+	{
+        //PlainFuncTracePlease;
+		pLock = lock;
+
+        guard = mode;
+        if (LM_LockedForRead  == mode)
+        {
+            //debug_printf("rd lock on %p\n", pLock);
+            pthread_rwlock_rdlock( lock);
+        }
+        else if (LM_LockedForWrite  == mode)
+        {
+            //debug_printf("wr lock on %p\n", pLock);
+            pthread_rwlock_wrlock( lock);
+        }
+        else if ( LM_Unlocked == mode)
+        {
+        }
+        else
+        {
+            LOG_THEN_THROW("Bad rwlock mode %d", mode);
+        }
+	}
+	
+    virtual ~AutoRwLocker()
+    {
+        //PlainFuncTracePlease;
+        unlock();
+    }
+
+    void lock_for_read()
+    { 
+        //PlainFuncTracePlease;
+        if (LM_LockedForRead  == guard)
+        {
+        }
+        else if (LM_LockedForWrite  == guard)
+        {
+        }
+        else if ( LM_Unlocked == guard)
+        {
+            //debug_printf("rw lock on %p\n", pLock);
+            pthread_rwlock_rdlock( pLock);
+            guard = LM_LockedForRead; 
+        }
+        else
+        {
+            LOG_WARN("Bad rwlock mode %d", guard);
+        }
+    }
+
+    void escalate_to_wr_lock()
+    {
+        //PlainFuncTracePlease;
+        if (LM_LockedForRead  == guard)
+        {
+            // The calling thread may deadlock 
+            // if at the time the call is made it holds the read-write lock (whether a read or write lock). (捂脸) 
+            // todo: if needed, we should implement rwlock by ourself
+            unlock();                           
+            //debug_printf("wr lock on %p\n", pLock);
+            pthread_rwlock_wrlock( pLock);
+            guard = LM_LockedForWrite; 
+        }
+        else if (LM_LockedForWrite  == guard)
+        {
+        }
+        else if ( LM_Unlocked == guard)
+        {
+            //debug_printf("wr lock on %p\n", pLock);
+            pthread_rwlock_wrlock( pLock);
+            guard = LM_LockedForWrite; 
+        }
+        else
+        {
+            LOG_WARN("Bad rwlock mode %d", guard);
+        }
+    }
+
+    void unlock()
+    {
+        //PlainFuncTracePlease;
+        if(!guard)
+        {
+            return;
+        } 
+
+        //debug_printf("unlock on %p\n", pLock);
+        pthread_rwlock_unlock(pLock);
+        guard = 0;
+    }
+
+protected:
+	pthread_rwlock_t* pLock;
+    int guard;
+};
 
 #endif
 
@@ -418,21 +629,27 @@ public:
 	//typedef MyBase::reference  reference;
 	//typedef MyBase::value_type  value_type;
 
+    SharedList()
+    { 
+        quit_signal = 0;
+    }
 	SimpleConditionVar  _condition_var;
+    int quit_signal;
 	
 
-	void shared_append_one(const T& v , int wake_type = WAKE_ONE)
+	size_t shared_append_one(const T& v , int wake_type = WAKE_ONE)
 	{
 		AutoLocker _yes_locked(_condition_var);
 		this->push_back(v);
 		_condition_var.wake(wake_type);
+        return this->size();
 	}
 
 	void shared_append_many(MyBase& from , int wake_type = WAKE_ALL)
 	{
 		AutoLocker _yes_locked(_condition_var);
 		slice( MyBase::end(),from);
-		_condition_var.wake();
+		_condition_var.wake(wake_type );
 	}
 
 	void shared_fetch_head( T& v )
@@ -447,6 +664,37 @@ public:
 		v = MyBase::front();
 
 		MyBase::pop_front();
+	}
+
+    void shout_to_quit()
+    {	
+        AutoLocker _yes_locked(_condition_var);
+        quit_signal = 1;
+		_condition_var.wake( WAKE_ALL );
+    }
+
+    // return  0 -- fetched , non-zero -- quit
+    int shared_fetch_head_or_quit( T& v )
+	{
+		AutoLocker _yes_locked(_condition_var);
+
+		while( MyBase::empty() && ( !quit_signal) )
+		{
+            //debug_printf("sq %p sleeping, quit = %d\n", this, quit_signal);
+			_condition_var.wait();
+		}
+
+        //debug_printf("sq %p waken, quit = %d\n", this, quit_signal);
+
+        if (quit_signal)
+        {
+            return 1;
+        }
+
+		v = MyBase::front();
+
+		MyBase::pop_front();
+        return 0;
 	}
 
 	void shared_fetch_all( MyBase& get_to_here )
@@ -484,14 +732,15 @@ public:
 	{
 		AutoLocker _yes_locked(_condition_var);
 		on_off = true;
-		_condition_var.wake(WAKE_ONE);
+		_condition_var.wake(WAKE_ALL);
 	}
+   
 
 	void turn_off()
 	{
 		AutoLocker _yes_locked(_condition_var);
 		on_off = false;
-
+		_condition_var.wake(WAKE_ONE);
 	}
 	
 	void wait_until_on()
@@ -548,11 +797,7 @@ public:
 
     virtual ~SharedPtrMan()
     { 
-        remove_all();        
-    }
-
-    void remove_all()
-    {
+    
         AutoLocker _yes_locked( lock );
 
         typename MyBase::iterator it;
@@ -562,39 +807,22 @@ public:
         }
     }
 
+    size_t get_count()
+    {
+		AutoLocker _yes_locked( lock );
+        return MyBase::size();
+    }
+
 	V* get_item(const K& which)
 	{
 		AutoLocker _yes_locked( lock );
-        return get_item_nolock( which);
-	}
 
-    V* get_item_nolock(const K& which)
-	{
-		
         typename MyBase::iterator the_it;
 		the_it= MyBase::find(which);
 
         if (MyBase::end() == the_it)
         {
             return NULL;
-        }
-
-        return the_it->second;
-	}
-
-    virtual V* get_or_new_item(const K& which)
-	{
-		AutoLocker _yes_locked( lock );
-
-        typename MyBase::iterator the_it;
-		the_it= MyBase::find(which);
-
-        if (MyBase::end() == the_it)
-        {
-            V* new_item =  new V();
-            (*this)[which] = new_item;
-            lock.wake(WAKE_ALL);
-            return new_item;
         }
 
         return the_it->second;
@@ -615,11 +843,9 @@ public:
         delete the_it->second;
 
         this->erase(the_it);
-
-        lock.wake(WAKE_ALL);
     }
  
-    virtual int add_new_item(const K& which, V* what)
+    int add_new_item(const K& which, V* what)
     {
         AutoLocker _yes_locked( lock ); 
         
@@ -629,7 +855,6 @@ public:
         if (MyBase::end() == the_it)
         {
             (*this)[which] = what;
-            lock.wake(WAKE_ALL);
             return 0 ;
         }
         
@@ -637,7 +862,7 @@ public:
         return 1;
     }
 
-    virtual void add_or_replace_item(const K& which, V* what)
+    void add_or_replace_item(const K& which, V* what)
     {
         AutoLocker _yes_locked( lock ); 
         
@@ -647,41 +872,14 @@ public:
         if (MyBase::end() == the_it)
         {
             (*this)[which] = what;
-
-            lock.wake(WAKE_ALL);
             return;
         }
         
         delete the_it->second;
         the_it->second = what;
-
-        lock.wake(WAKE_ALL);
     }
 };
 
-template<typename T>
-class SequenceGenerator
-{
-public:
-    SequenceGenerator()
-    {
-        _seed = 0;
-    }
-
-    T get_next()
-    {
-        AutoLocker _yes_locked( _lock ); 
-
-        _seed++;
-        return _seed;
-    }
-
-protected:
-    T _seed;
-    SimpleMutex _lock;
-};
-
-typedef SequenceGenerator<int> IntSequencer;
 
 #endif
 

@@ -1,230 +1,554 @@
 #include "utils.h"
+#include <sys/types.h>
 
+#ifdef __GNUC__
+#include <unistd.h>
+#include <linux/limits.h>
+#include <sys/wait.h>
+#endif
 
-CString get_path_dir(const char * full_path)
+#ifdef __GNUC__
+
+class   AutoCloseIconv
 {
-    const char * p = full_path + strlen(full_path);
-    while ( p> full_path && '\\' != *p)
+public:
+    iconv_t me;
+    AutoCloseIconv(iconv_t that)
     {
-        p --;
+        me = that;
+    }
+    ~AutoCloseIconv()
+    {
+        if ((iconv_t)-1 != me)
+        {
+            iconv_close(me);
+        }
     }
 
-    if (full_path ==  p)
+};
+
+CString GBK_to_utf8(const char* GBK)
+{
+    CString str1;
+    iconv_t icd = iconv_open("UTF-8", "GBK");
+    if ((iconv_t)-1 == icd)
     {
-        return "";
+        throw std::runtime_error("FailedInIconvOpen");
     }
+    AutoCloseIconv _dont_forget(icd);
+
+    size_t in_bytes_left = strlen(GBK) ;
+    size_t out_bytes_left = (in_bytes_left << 1) + 1;
+
+    char* out_buf = (char*)alloca(out_bytes_left);
+    memset((void*)out_buf, 0, out_bytes_left);
+
+    char* out_buf_pointer = out_buf;
+
+    iconv(icd
+        , (char**)&GBK, &in_bytes_left
+        , &out_buf_pointer, &out_bytes_left);
+
+    str1 =  out_buf;
+
+    return str1;
+}
+
+CString get_exe_path()
+{
+    pid_t my_pid = getpid();
+
+    CString path("/proc/%d/exe", (int)my_pid);
+
+    char buf[PATH_MAX];
+
+    ssize_t len;
+    len = readlink( path.c_str(), buf, sizeof(buf)-1);
+    if (-1 == len)
+    {  
+        throw SimpleException("readlink %s got code %d, %s"
+                , path.c_str()
+                , errno
+                , strerror(errno)
+                );
+    }
+
+    buf[len] = '\0';
+
+    return buf;
+}
+#else
+CString get_exe_path()
+{
+    char result[MAX_PATH];
+    GetModuleFileNameA(NULL, result, MAX_PATH);
+        
+    return result;
+}
+#endif
+
+CString get_exe_dir()
+{
+    return dir_from_file_path(get_exe_path().c_str());
+}
+
+//ä¸ä»¥â€˜/â€™ç»“å°¾
+CString dir_from_file_path(const char * file_path)
+{ 
+    CString path;
+
+    path = file_path;
+#ifdef __GNUC__
+    CString::size_type pos = path.find_last_of('/');
+#else
+    CString::size_type pos = path.find_last_of('\\');
+#endif
+
+    path.erase( pos , path.size() - pos  );
+    return path;
+}
+
+#ifdef __GNUC__
+CString real_path(const char * path )
+{
+    char buf[PATH_MAX], *p;
+
+    p= realpath(path, buf);
+    if (!p)
+    {  
+        throw SimpleException("realpath '%s' got code %d, %s"
+                , path
+                , errno
+                , strerror(errno)
+                );
+    }
+
+    return buf;
+}
+
+// aka.  /bin/bash -c ${cmd_line} 
+int shell_cmd_wait(const char * cmd_line)
+{ 
+    pid_t child = fork();
+    if (child > 0 )
+    {
+        // I am parent.
+        int status;
+        waitpid( child, & status, 0);
+
+        if (WIFSIGNALED(status))
+        {
+            LOG_WARN("'%s' was terminated by sigal #%d.\n", cmd_line, WTERMSIG(status)) ;
+            return 1;
+        }
+
+        return WEXITSTATUS(status);
+    }
+    else if (child < 0)
+    {
+        SIMPLE_LOG_LIBC_ERROR("First time spawn"  , errno);
+        LOG_ERROR("cmd: %s\n", cmd_line);
+        return 1;
+    }
+
+    //  child
     
-    CString s(full_path, p - full_path);
+    //debug_printf("%s\n", cmd_line);
+    execlp("/bin/bash"
+            , "/bin/bash"
+            , "-c"
+            , cmd_line
+            , NULL
+            );
 
-    return s;
+    SIMPLE_LOG_LIBC_ERROR( "exec"  , errno);
+    LOG_ERROR("cmd: %s\n", cmd_line);
+    exit(-1);
+}
+
+// aka.  /bin/bash -c ${cmd_line} &
+int shell_cmd_no_wait(const char * cmd_line)
+{ 
+    pid_t child = fork();
+    if (child > 0 )
+    {
+        // I am parent.
+        int status;
+        waitpid( child, & status, 0);
+        return 0;
+    }
+    else if (child < 0)
+    {
+        SIMPLE_LOG_LIBC_ERROR("First time spawn"  , errno);
+        LOG_ERROR("cmd: %s\n", cmd_line);
+        return 1;
+    }
+
+    // level 1 child
+
+    pid_t child2 = fork();
+    if (child2 > 0 )
+    {
+        // I am parent.
+        exit(0);
+        return 0;
+    }
+    else if (child < 0)
+    {
+        SIMPLE_LOG_LIBC_ERROR("2nd time  spawn"  , errno);
+        LOG_ERROR("cmd: %s\n", cmd_line);
+        return 1;
+    }
+
+    // level 2 child
+    setsid();
+    
+    //debug_printf("%s\n", cmd_line);
+    execlp("/bin/bash"
+            , "/bin/bash"
+            , "-c"
+            , cmd_line
+            , NULL
+            );
+
+    SIMPLE_LOG_LIBC_ERROR( "exec"  , errno);
+    LOG_ERROR("cmd: %s\n", cmd_line);
+    exit(-1);
+}
+
+int shell_cmd(const char * cmd_line, CString& output )
+{
+    FILE* f;
+    if( ( f = popen( cmd_line, "r" ) ) == NULL ) {
+        SIMPLE_LOG_LIBC_ERROR( cmd_line, errno );
+        return -1;
+    }
+
+    output.clear();
+
+    char *line = NULL;
+    size_t len = 0;
+    ssize_t read;
+
+    while ((read = getline(&line, &len, f)) != -1) 
+    {
+        output += line;
+    }
+
+    if (line)
+    {
+        free(line);
+        line = NULL;
+    }
+
+    int status = pclose(f);
+    if (status == -1) {
+        // signal(SIGCHLD, SIG_IGN) will cause pclose() result it returns -1 and errno is set to 10 (No child processes)
+        SIMPLE_LOG_LIBC_ERROR( "pclose", errno );
+        return -2;
+    }
+
+    if (WIFEXITED(status))
+    {
+        int exit_code WEXITSTATUS(status);
+        if ( 0 == exit_code)
+        {
+            return 0;
+        }
+        
+        LOG_WARN("\"%s\" got exit_code %d\n%s\n", cmd_line, exit_code, output.c_str());
+        return 1;
+    }
+
+    if (WIFSIGNALED(status))
+    {
+        int exit_signal  = WTERMSIG(status);
+        LOG_WARN("\"%s\" got signal %d\n%s\n", cmd_line, exit_signal, output.c_str());
+        return 2;
+    }
+
+    LOG_WARN("\"%s\" got status %d\n%s\n", cmd_line, status, output.c_str());
+    return 3;
 }
 
 
+int shell_cmd_ml(const char * cmd_line, std::vector<CString>& output )
+{ 
+    FILE* f;
+    if( ( f = popen( cmd_line, "r" ) ) == NULL ) {
+        SIMPLE_LOG_LIBC_ERROR( cmd_line, errno );
+        return -1;
+    }
 
-int left_match(const char* short_one, const char* long_one)
+    output.clear();
+
+    char *line = NULL;
+    size_t len = 0;
+    ssize_t read;
+
+    while ((read = getline(&line, &len, f)) != -1) 
+    {
+        output.push_back(line);
+    }
+
+    if (line)
+    {
+        free(line);
+        line = NULL;
+    }
+
+    int status = pclose(f);
+    if (status == -1) {
+        SIMPLE_LOG_LIBC_ERROR( "pclose", errno );
+        return -2;
+    }
+
+    if (WIFEXITED(status))
+    {
+        int exit_code WEXITSTATUS(status);
+        if ( 0 == exit_code)
+        {
+            return 0;
+        }
+        
+        LOG_WARN("\"%s\" got exit_code %d\n%s\n", cmd_line, exit_code, put_lines_together( output ).c_str());
+        return 1;
+    }
+
+    if (WIFSIGNALED(status))
+    {
+        int exit_signal  = WTERMSIG(status);
+        LOG_WARN("\"%s\" got signal %d\n%s\n", cmd_line, exit_signal, put_lines_together( output ).c_str());
+        return 2;
+    }
+
+    LOG_WARN("\"%s\" got status %d\n%s\n", cmd_line, status, put_lines_together( output ).c_str());
+    return 3;
+}
+
+CString get_primary_mac()
 {
-    if (!short_one || !long_one)
+    CString output;
+    int r;
+    // ä¸æ­£ç¡®é…ç½®çš„æœºå™¨ä¼šæœ‰å¤šæ¡â€˜default gwâ€™
+    r = shell_cmd("cat /sys/class/net/`ip -o -4 route show to default | awk '{print $5}' | head -n 1`/address 2>&1" , output );
+    if (r)
+    {
+        return "";
+    }
+
+    std::vector<CString> lines;
+    str_split(lines, output,  '\n');
+
+    if (0 == lines.size())
+    {
+        LOG_ERROR("got null mac?output:\n%s\n", output.c_str());
+        return "";
+    }
+
+    return  lines[0];
+}
+
+CString get_ip_for_target(const char * target_addr)
+{
+    CString cmd("ip route get %s | awk '{print $NF;exit}' 2>&1" , target_addr );
+  
+    CString output;
+    int r;
+    r = shell_cmd( cmd.c_str(), output );
+    if (r)
+    {
+        return "";
+    }
+
+    std::vector<CString> lines;
+    str_split(lines, output,  '\n');
+
+    if (0 == lines.size())
+    {
+        LOG_ERROR("got null route entry? output:\n%s\n", output.c_str());
+        return "";
+    }
+
+    return  lines[0];   
+}
+
+CString get_primary_ip()
+{
+    CString output;
+    int r;
+    r = shell_cmd("ip route get 1.0.0.0  | awk '{print $NF;exit}' 2>&1" , output );
+    if (r)
+    {
+        return "";
+    }
+
+    std::vector<CString> lines;
+    str_split(lines, output,  '\n');
+
+    if (0 == lines.size())
+    {
+        LOG_ERROR("got null route entry? output:\n%s\n", output.c_str());
+        return "";
+    }
+
+    return  lines[0];
+}
+
+CString get_hostname()
+{ 
+    CString output;
+    int r;
+    r = shell_cmd("hostname 2>&1" , output );
+    if (r)
+    {
+        return "";
+    }
+
+    std::vector<CString> lines;
+    str_split(lines, output,  '\n');
+
+    if (0 == lines.size())
+    {
+        LOG_ERROR("got null hostname? output:\n%s\n", output.c_str());
+        return "";
+    }
+
+    return  lines[0];
+}
+
+#endif
+
+struct tm* date_add_ym(struct tm* date, int y, int m)
+{
+    date->tm_year += y;
+    
+    date->tm_year +=  m /12;
+
+    date->tm_mon = m %12;
+
+    if (date->tm_mon < 0 )
+    {
+        date->tm_mon += 12;
+        date->tm_year --;
+    }
+    else if (date->tm_mon > 11 )
+    { 
+        date->tm_mon -= 12;
+        date->tm_year ++;
+    }
+
+    int d = get_ym_days(date->tm_year , date->tm_mon);
+
+    if (date->tm_mday > d)   // tm_mday   The day of the month, in the range 1 to 31.
+    {
+        date->tm_mday = d ;  // 4/30 - '2 monthes' => 2/28
+    }
+
+    // TODO: do we need tm_wday and tm_yday?
+
+    return date;
+}
+
+
+int get_ym_days(int y, int m)
+{
+    int is_leap_year(int y);
+
+    static int days_of_month[12] = {31,28,31,30,31,30,31,31,30,31,30,31};
+
+    int r = days_of_month[m];
+    if (1== m &&  is_leap_year(y))
+    {
+        r ++;
+    }
+
+    return r;
+}
+
+int is_leap_year(int y)
+{
+    if (y%4)
     {
         return 0;
     }
 
-    while(1)
+    if (! (y%100) )
     {
-        if ( 0 == *short_one)
-        {
-            return 1;
-        }
-
-        if ( 0== *long_one)
-        {
-            return 0;
-        }
-
-        if ( *short_one !=  *long_one)
-        {
-            return 0;
-        }
-
-        short_one++;
-        long_one++;
+        return 1;
     }
 
-    _ASSERT(0);
+    if (y%400)
+    {
+        return 1;
+    }
+
     return 0;
 }
 
-
-CString to_yyyymmdd_hhmmss(INT64 t)
+CString hex_dump(const unsigned char * buf, int buf_len, int pad_lf )
 {
-    CTime ct(t);
+    CString s;
+    for (int i = 0; i < buf_len; i++)
+    {
+        if ( 0 == i )
+        {
+            s.format_append("%02x", (int)buf[i] );
+        }
+        else
+        {
+            s.format_append(" %02x", (int)buf[i] );
+        }
+    }
 
-    return ct.Format("%Y%m%d %H%M%S");
+    if (pad_lf)
+    {
+        s += "\n";
+    }
+
+    return s;
 }
 
-
-
-int CStreamDumper::create_if_need()
+CString put_lines_together(const std::vector<CString>& lines )
 {
-	if (real_size >= target_size)
-	{
-		return 1;
-	}
+    CString s;
+    for (auto && one: lines)
+    {
+        s += one;
+    }
 
-	if (pFile)
-	{
-		return 0;
-	}
-
-    pFile = fopen(filepath.GetString(), "wb");
-	if (!pFile)
-	{
-		ATLTRACE("failed to create dup file ¡®%s¡¯\n", filepath.GetString());
-		return 1;
-	}
-
-	ATLTRACE("new dump at %p\n", pFile);
-
-	
-	return 0;
+    return s;
 }
 
+void parse_key_value_lines(const std::vector<CString>& lines, Map2<CString, CString>& dict  )
+{ 
+    dict.clear();
+    for (auto && one: lines)
+    {
+        CString key, value;
+        size_t r= str_split2( one.c_str(), key, value, '=');
 
-void CStreamDumper::feed_data(BYTE* buf, int buf_size)
-{
-	if (create_if_need())
-	{
-		return;
-	}
-
-	int remain = target_size - real_size;
-
-	if (!remain)
-	{
-		fclose(pFile);
-		pFile = 0;
-		ATLTRACE("dup file ¡®%s¡¯ is created\n", filepath.GetString());
-
-		return;
-	}
-
-	if (buf_size < remain)
-	{
-		fwrite(buf, 1, buf_size, pFile);
-		//fflush(pFile);
-		real_size += buf_size;
-
-		ATLTRACE("got %d, now size = %d\n", buf_size, real_size);
-	}
-	else if (buf_size = remain)
-	{
-		fwrite(buf, 1, remain, pFile);
-		real_size += remain;
-		fclose(pFile);
-		pFile = 0;
-
-		ATLTRACE("got %d, now size = %d\n", remain, real_size);
-
-		ATLTRACE("dump file ¡®%s¡¯ is created\n", filepath.GetString());
-	}
-	else if (buf_size > remain)
-	{
-		fwrite(buf, 1, remain, pFile);
-		real_size += remain;
-		fclose(pFile);
-		pFile = 0;
-
-		ATLTRACE("got %d, now size = %d\n", remain, real_size);
-
-		ATLTRACE("dump file ¡®%s¡¯ is created\n", filepath.GetString());
-	}
-}
-
-
-CAtlStringA get_module_dir(HMODULE hModule)
-{
-	char result[MAX_PATH];
-	GetModuleFileNameA(hModule, result, MAX_PATH);
-
-	char* p = result + strlen(result);
-	while (p > result && '\\' != *p)
-	{
-		p--;
-	}
-
-	if ('\\' == *p)
-	{
-		*p = 0;
-	}
-
-	return result;
-}
-#ifdef NDEBUG
-Logger      g_logger = NULL;
-#else
-Logger      g_logger = (Logger)printf;
-#endif
-
-
-SharedFile  g_log_file;
-
-void default_logger(const char* _Format, ...);
-
-
-int init_default_logger(HMODULE base_module, const char* basename)
-{
-	CAtlString dir;
-	dir = get_module_dir(base_module);
-
-	CAtlString filepath;
-	filepath.Format("%s\\%s", dir.GetString(), basename);
-
-
-	g_log_file._file = fopen(filepath.GetString(), "a");
-	if (!g_log_file._file)
-	{
-		AtlTrace("Failed to open log file %s.\n", filepath.GetString());
-		//return -1;
-	}
-	else
-	{
-		g_logger = default_logger;
-	}
-
-	return 0;
+        if (2 == r)
+        {
+            dict[key] = value;
+        }
+    }
 
 }
-int printf_as_default_logger()
+#ifdef __GNUC__
+time_t str_to_time(const char * yyyy_mm_dd_hh_mm_ss)
 {
-	g_log_file._file = stdout;
-	g_log_file._auto_close = 0;
-	g_logger = default_logger;
-	return 0;
+    struct tm ts;
+
+    memset(&ts, 0, sizeof(struct tm));
+    // strptime("2001-11-12 18:31:01", "%Y-%m-%d %H:%M:%S", &tm);
+    if ( NULL == strptime(yyyy_mm_dd_hh_mm_ss, "%Y-%m-%d %H:%M:%S", &ts))
+    {
+        LOG_WARN("Bad time spec: %s.\n", yyyy_mm_dd_hh_mm_ss);
+        return 0;
+    }
+
+    return mktime( &ts);
 }
-
-void uninit_default_logger()
-{
-	AutoLocker _lock_it(g_log_file);
-
-	if (g_log_file._file)
-	{
-		fclose(g_log_file._file);
-		g_log_file._file = NULL;
-	}
-}
-
-void  default_logger(const char* pszFormat, ...)
-{
-	AutoLocker _lock_it(g_log_file);
-
-	va_list ptr;
-	va_start(ptr, pszFormat);
-
-
-	vfprintf(g_log_file._file, pszFormat, ptr);
-	fflush(g_log_file._file);
-
-	va_end(ptr);
-
-
-}
+#endif 
 

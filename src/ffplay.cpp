@@ -23,33 +23,34 @@
  * simple media player based on the FFmpeg libraries
  */
 
-
-#include "ffdecoder/ffdecoder.h"
-
 extern "C" {
 #include "cmdutils.h"
 }
 #include <assert.h>
+#include <signal.h>
 
-#include "utils/utils.h"
+
+#include "ffdecoder/ffdecoder.h"
 
 const char g_program_name[] = "ffplay";
 const int program_birth_year = 2003;
 
+void sigterm_handler(int sig);
 
-void refresh_loop_wait_event(VideoState *is, SDL_Event *event) {
+// keep refreshing video until any SDL_Event occurs
+void refresh_loop_wait_event(SimpleAVDecoder * av_decoder, SDL_Event *event) {
     double remaining_time = 0.0;
     SDL_PumpEvents();
     while (!SDL_PeepEvents(event, 1, SDL_GETEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT)) {
-        if (!is->render.cursor_hidden && av_gettime_relative() - is->render.cursor_last_shown > CURSOR_HIDE_DELAY) {
+        if (! av_decoder->render.cursor_hidden && av_gettime_relative() - av_decoder->render.cursor_last_shown > CURSOR_HIDE_DELAY) {
             SDL_ShowCursor(0);
-            is->render.cursor_hidden = 1;
+            av_decoder->render.cursor_hidden = 1;
         }
         if (remaining_time > 0.0)
-            av_usleep((int64_t)(remaining_time * 1000000.0));
+            av_usleep((unsigned int)(remaining_time * 1000000.0));
         remaining_time = REFRESH_RATE;
-        if ( !is->paused || is->force_refresh)
-            is->video_refresh( &remaining_time);
+        if ( !av_decoder->is_paused() || av_decoder->is_drawing_needed())
+            av_decoder->video_refresh( &remaining_time);
         SDL_PumpEvents();
     }
 }
@@ -62,58 +63,45 @@ void event_loop(VideoState *cur_stream)
 
     for (;;) {
         double x;
-        refresh_loop_wait_event(cur_stream, &event);
+        refresh_loop_wait_event(&cur_stream->av_decoder, &event);
         switch (event.type) {
         case SDL_KEYDOWN:
             if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_q) {
                 return;
             }
             // If we don't yet have a window, skip all key events, because read_thread might still be initializing...
-            if (!cur_stream->viddec.width)
+            if (!cur_stream->av_decoder.render.is_window_shown() )
                 continue;
             switch (event.key.keysym.sym) {
             case SDLK_f:
-                cur_stream->render.toggle_full_screen();
-                cur_stream->force_refresh = 1;
+                cur_stream->av_decoder.render.toggle_full_screen();
+                cur_stream->av_decoder.toggle_need_drawing (1);
                 break;
             case SDLK_p:
             case SDLK_SPACE:
                 cur_stream->toggle_pause();
                 break;
             case SDLK_m:
-                cur_stream->toggle_mute();
+                cur_stream->av_decoder.toggle_mute();
                 break;
             case SDLK_KP_MULTIPLY:
             case SDLK_0:
-                cur_stream->update_volume( 1, SDL_VOLUME_STEP);
+                cur_stream->av_decoder.update_volume( 1, SDL_VOLUME_STEP);
                 break;
             case SDLK_KP_DIVIDE:
             case SDLK_9:
-                cur_stream->update_volume( -1, SDL_VOLUME_STEP);
+                cur_stream->av_decoder.update_volume( -1, SDL_VOLUME_STEP);
                 break;
             case SDLK_s: // S: Step to next frame
                 cur_stream->step_to_next_frame();
                 break;
-            case SDLK_a:
-                cur_stream->stream_cycle_channel( AVMEDIA_TYPE_AUDIO);
-                break;
-            case SDLK_v:
-                cur_stream->stream_cycle_channel( AVMEDIA_TYPE_VIDEO);
-                break;
-            case SDLK_c:
-                cur_stream->stream_cycle_channel(AVMEDIA_TYPE_VIDEO);
-                cur_stream->stream_cycle_channel(AVMEDIA_TYPE_AUDIO);
-                cur_stream->stream_cycle_channel(AVMEDIA_TYPE_SUBTITLE);
-                break;
-            case SDLK_t:
-                cur_stream->stream_cycle_channel( AVMEDIA_TYPE_SUBTITLE);
-                break;
+           
             case SDLK_PAGEUP:
                 if (cur_stream->format_context->nb_chapters <= 1) {
-                    incr = 600.0;
+                    incr = 600.0;  // 以秒为单位的，相对当前位置的seek幅度
                     goto do_seek;
                 }
-                cur_stream->seek_chapter( 1);
+                cur_stream->seek_chapter( 1);  // 下一章
                 break;
             case SDLK_PAGEDOWN:
                 if (cur_stream->format_context->nb_chapters <= 1) {
@@ -135,9 +123,9 @@ void event_loop(VideoState *cur_stream)
                 incr = -60.0; // 以秒为单位的，相对当前位置的seek幅度
             do_seek:
                     {
-                        pos = cur_stream->get_master_clock();
+                        pos = cur_stream->av_decoder.get_master_clock();
                         if (isnan(pos))
-                            pos = (double)cur_stream->seek_pos / AV_TIME_BASE;
+                            pos = (double) 0;
                         pos += incr;
                         if (cur_stream->format_context->start_time != AV_NOPTS_VALUE && pos < cur_stream->format_context->start_time / (double)AV_TIME_BASE)
                             pos = cur_stream->format_context->start_time / (double)AV_TIME_BASE;
@@ -152,19 +140,19 @@ void event_loop(VideoState *cur_stream)
             if (event.button.button == SDL_BUTTON_LEFT) {
                 static int64_t last_mouse_left_click = 0;
                 if (av_gettime_relative() - last_mouse_left_click <= 500000) {
-                    cur_stream->render.toggle_full_screen();
-                    cur_stream->force_refresh = 1;
+                    cur_stream->av_decoder.render.toggle_full_screen();
+                    cur_stream->av_decoder.toggle_need_drawing (1);
                     last_mouse_left_click = 0;
                 } else {
                     last_mouse_left_click = av_gettime_relative();
                 }
             }
         case SDL_MOUSEMOTION:
-            if (cur_stream->render.cursor_hidden) {
+            if (cur_stream->av_decoder.render.cursor_hidden) {
                 SDL_ShowCursor(1);
-                cur_stream->render.cursor_hidden = 0;
+                cur_stream->av_decoder.render.cursor_hidden = 0;
             }
-            cur_stream->render.cursor_last_shown = av_gettime_relative();
+            cur_stream->av_decoder.render.cursor_last_shown = av_gettime_relative();
             if (event.type == SDL_MOUSEBUTTONDOWN) {
                 if (event.button.button != SDL_BUTTON_RIGHT)
                     break;
@@ -176,24 +164,24 @@ void event_loop(VideoState *cur_stream)
             }
                 if (cur_stream->format_context->duration <= 0) {
                     uint64_t size =  avio_size(cur_stream->format_context->pb);
-                    cur_stream->stream_seek( size*x/cur_stream->viddec.width, 0, 1);
+                    cur_stream->stream_seek( (int64_t)( size * x / cur_stream->av_decoder.render.screen_width), 0, 1);
                 } else {
                     int64_t ts;
                     int ns, hh, mm, ss;
                     int tns, thh, tmm, tss;
-                    tns  = cur_stream->format_context->duration / 1000000LL;
+                    tns  = (int)( cur_stream->format_context->duration / AV_TIME_BASE);
                     thh  = tns / 3600;
                     tmm  = (tns % 3600) / 60;
                     tss  = (tns % 60);
-                    frac = x / cur_stream->viddec.width;
-                    ns   = frac * tns;
+                    frac = x / cur_stream->av_decoder.render.screen_width ;
+                    ns   = (int)(frac * tns);
                     hh   = ns / 3600;
                     mm   = (ns % 3600) / 60;
                     ss   = (ns % 60);
                     av_log(NULL, AV_LOG_INFO,
                            "Seek to %2.0f%% (%2d:%02d:%02d) of total duration (%2d:%02d:%02d)       \n", frac*100,
                             hh, mm, ss, thh, tmm, tss);
-                    ts = frac * cur_stream->format_context->duration;
+                    ts = (int64_t)( frac * cur_stream->format_context->duration );
                     if (cur_stream->format_context->start_time != AV_NOPTS_VALUE)
                         ts += cur_stream->format_context->start_time;
                     cur_stream->stream_seek( ts, 0, 0);
@@ -202,11 +190,11 @@ void event_loop(VideoState *cur_stream)
         case SDL_WINDOWEVENT:
             switch (event.window.event) {
                 case SDL_WINDOWEVENT_SIZE_CHANGED:
-                    cur_stream->render.screen_width  = cur_stream->viddec.width  = event.window.data1;
-                    cur_stream->render.screen_height = cur_stream->viddec.height = event.window.data2;
+                    cur_stream->av_decoder.render.screen_width  = event.window.data1;
+                    cur_stream->av_decoder.render.screen_height = event.window.data2;
                     
                 case SDL_WINDOWEVENT_EXPOSED:
-                    cur_stream->force_refresh = 1;
+                    cur_stream->av_decoder.toggle_need_drawing (1);
             }
             break;
         case SDL_QUIT:
@@ -223,16 +211,6 @@ int opt_frame_size(void *optctx, const char *opt, const char *arg)
 {
     av_log(NULL, AV_LOG_WARNING, "Option -s is deprecated, use -video_size.\n");
     return opt_default(NULL, "video_size", arg);
-}
-
-int opt_format(void *optctx, const char *opt, const char *arg)
-{
-    opt_file_iformat = av_find_input_format(arg);
-    if (!opt_file_iformat) {
-        av_log(NULL, AV_LOG_FATAL, "Unknown input format: %s\n", arg);
-        return AVERROR(EINVAL);
-    }
-    return 0;
 }
 
 
@@ -280,19 +258,17 @@ void opt_input_file(void *optctx, const char *filename)
 static int dummy;
 
 static const OptionDef options[] = {
+#if defined(__GNUC__) || ( _MSC_VER >= 1920)
     CMDUTILS_COMMON_OPTIONS
     { "s", HAS_ARG | OPT_VIDEO, { .func_arg = opt_frame_size }, "set frame size (WxH or abbreviation)", "size" },
-    { "fs", OPT_BOOL, { &opt_full_screen }, "force full screen" },
-    { "sn", OPT_BOOL, { &opt_subtitle_disable }, "disable subtitling" },
     { "ss", HAS_ARG, { .func_arg = opt_seek }, "seek to a given position in seconds", "pos" },
     { "t", HAS_ARG, { .func_arg = parse_opt_duration }, "play  \"duration\" seconds of audio/video", "duration" },
-    { "f", HAS_ARG, { .func_arg = opt_format }, "force format", "fmt" },
     { "stats", OPT_BOOL | OPT_EXPERT, { &opt_show_status }, "show status", "" },
     { "drp", OPT_INT | HAS_ARG | OPT_EXPERT, { &opt_decoder_reorder_pts }, "let decoder reorder pts 0=off 1=on -1=auto", ""},
     { "sync", HAS_ARG | OPT_EXPERT, { .func_arg = opt_sync }, "set audio-video sync. type (type=audio/video/ext)", "type" },
     { "autoexit", OPT_BOOL | OPT_EXPERT, { &opt_autoexit }, "exit at the end", "" },
-    { "infbuf", OPT_BOOL | OPT_EXPERT, { &opt_infinite_buffer }, "don't limit the input buffer size (useful with realtime streams)", "" },
     { "i", OPT_BOOL, { &dummy}, "read specified file", "input_file"},    
+#endif
     { NULL, },
 };
 
@@ -324,11 +300,6 @@ void show_help_default(const char *opt, const char *arg)
            "m                   toggle mute\n"
            "9, 0                decrease and increase volume respectively\n"
            "/, *                decrease and increase volume respectively\n"
-           "a                   cycle audio channel in the current program\n"
-           "v                   cycle video channel\n"
-           "t                   cycle subtitle channel in the current program\n"
-           "c                   cycle program\n"
-           "w                   cycle video filters or show modes\n"
            "s                   activate frame-step mode\n"
            "left/right          seek backward/forward 10 seconds or to custom interval if -seek_interval is set\n"
            "down/up             seek backward/forward 1 minute\n"
@@ -338,12 +309,13 @@ void show_help_default(const char *opt, const char *arg)
            );
 }
 
+#ifdef _MSC_VER
+SharedFile  g_main_logger;  // on Windows, 'FILE*' is not thread-safe.
+#endif
+
 /* Called from the main */
 int main(int argc, char **argv)
 {
-    //printf_as_default_logger();
-    init_default_logger(GetModuleHandle(NULL), "ffplay.log");
-    
     av_log_set_flags(AV_LOG_SKIP_REPEATED);
     parse_loglevel(argc, argv, options);
 
@@ -368,11 +340,9 @@ int main(int argc, char **argv)
         return (1);
     }
 
+    Decoder::onetime_global_init();
 
-
-    av_init_packet(&PacketQueue::flush_pkt);
-    PacketQueue::flush_pkt.data = (uint8_t*)&PacketQueue::flush_pkt;
-
+    // init format
     VideoState* is = new VideoState();
     if (!is)
     {
@@ -380,12 +350,22 @@ int main(int argc, char **argv)
         goto EXIT;
     }
 
-    if (is->render.init(0 /*audio disable*/ , 0 /*alwaysontop*/))
+    is->streamopt_start_time = opt_start_time;
+    is->streamopt_duration   = opt_duration;
+    is->streamopt_autoexit = opt_autoexit;
+    
+    // init decoder
+    if (is->av_decoder.render.init(0 /*audio disable*/, 0 /*alwaysontop*/))
     {
         goto EXIT;
     }
+    is->av_decoder.render.window_title = opt_input_filename;
+    is->av_decoder.show_status = opt_show_status;
+    is->av_decoder.set_master_sync_type(opt_av_sync_type);
+    is->av_decoder.decoder_reorder_pts = opt_decoder_reorder_pts;
     
-    if (is->open_input_stream(opt_input_filename, opt_file_iformat)) {
+    // open media
+    if (is->open_input_stream(opt_input_filename, NULL)) {
         av_log(NULL, AV_LOG_FATAL, "Failed to initialize VideoState!\n");
         goto EXIT;
     }
@@ -398,8 +378,8 @@ int main(int argc, char **argv)
 EXIT:
     if (is)
     {
-        is->render.safe_release();
         is->close_input_stream();
+        is->av_decoder.render.safe_release();
         delete is;
     }
 
@@ -411,7 +391,6 @@ EXIT:
 
     return 0;
 }
-
 
 void sigterm_handler(int sig)
 {

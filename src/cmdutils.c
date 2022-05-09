@@ -55,12 +55,14 @@
 #include "libavutil/ffversion.h"
 #include "libavutil/version.h"
 #include "cmdutils.h"
-#if HAVE_SYS_RESOURCE_H
+#if defined(_GNUC_) && HAVE_SYS_RESOURCE_H
 #include <sys/time.h>
 #include <sys/resource.h>
 #endif
+
 #ifdef _WIN32
 #include <windows.h>
+#include <time.h>
 #endif
 
 static int init_report(const char *env);
@@ -72,6 +74,18 @@ AVDictionary *format_opts, *codec_opts, *resample_opts;
 static FILE *report_file;
 static int report_file_level = AV_LOG_DEBUG;
 int hide_banner = 0;
+
+/* options specified by the user */
+const char* opt_input_filename;
+
+int opt_subtitle_disable = 0;
+int opt_show_status = -1; //Ô­À´ÊÇ -1;
+int opt_av_sync_type = 0;  // AV_SYNC_AUDIO_MASTER = 0, /* default choice */
+int64_t opt_start_time = AV_NOPTS_VALUE;
+int64_t opt_duration = AV_NOPTS_VALUE;
+int opt_decoder_reorder_pts = -1;
+int opt_autoexit = 0;
+
 
 enum show_muxdemuxers {
     SHOW_DEFAULT,
@@ -208,7 +222,7 @@ void show_help_children(const AVClass *class, int flags)
         printf("\n");
     }
 
-    while (child = av_opt_child_class_next(class, child))
+    while ( (child = av_opt_child_class_next(class, child)) )
         show_help_children(child, flags);
 }
 
@@ -471,7 +485,7 @@ static void dump_argument(const char *a)
 {
     const unsigned char *p;
 
-    for (p = a; *p; p++)
+    for (p = (const unsigned char *) a; *p; p++)
         if (!((*p >= '+' && *p <= ':') || (*p >= '@' && *p <= 'Z') ||
               *p == '_' || (*p >= 'a' && *p <= 'z')))
             break;
@@ -480,7 +494,7 @@ static void dump_argument(const char *a)
         return;
     }
     fputc('"', report_file);
-    for (p = a; *p; p++) {
+    for (p = (const unsigned char *)a; *p; p++) {
         if (*p == '\\' || *p == '"' || *p == '$' || *p == '`')
             fprintf(report_file, "\\%c", *p);
         else if (*p < ' ' || *p > '~')
@@ -1071,7 +1085,7 @@ int opt_max_alloc(void *optctx, const char *opt, const char *arg)
 
 int opt_timelimit(void *optctx, const char *opt, const char *arg)
 {
-#if HAVE_SETRLIMIT
+#if defined(_GNUC_) && HAVE_SETRLIMIT
     int lim = parse_number_or_die(opt, arg, OPT_INT64, 0, INT_MAX);
     struct rlimit rl = { lim, lim + 1 };
     if (setrlimit(RLIMIT_CPU, &rl))
@@ -1082,15 +1096,6 @@ int opt_timelimit(void *optctx, const char *opt, const char *arg)
     return 0;
 }
 
-void print_error(const char *filename, int err)
-{
-    char errbuf[128];
-    const char *errbuf_ptr = errbuf;
-
-    if (av_strerror(err, errbuf, sizeof(errbuf)) < 0)
-        errbuf_ptr = strerror(AVUNERROR(err));
-    av_log(NULL, AV_LOG_ERROR, "%s: %s\n", filename, errbuf_ptr);
-}
 
 static int warned_cfg = 0;
 
@@ -1737,7 +1742,7 @@ int show_colors(void *optctx, const char *opt, const char *arg)
 
     printf("%-32s #RRGGBB\n", "name");
 
-    for (i = 0; name = av_get_known_color_name(i, &rgb); i++)
+    for (i = 0; (name = av_get_known_color_name(i, &rgb)) ; i++)
         printf("%-32s #%02x%02x%02x\n", name, rgb[0], rgb[1], rgb[2]);
 
     return 0;
@@ -2130,7 +2135,7 @@ AVDictionary *filter_codec_opts(AVDictionary *opts, enum AVCodecID codec_id,
         break;
     }
 
-    while (t = av_dict_get(opts, "", t, AV_DICT_IGNORE_SUFFIX)) {
+    while ( (t = av_dict_get(opts, "", t, AV_DICT_IGNORE_SUFFIX)) ) {
         char *p = strchr(t->key, ':');
 
         /* check stream specification in opt name */
