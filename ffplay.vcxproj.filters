@@ -56,5 +56,8 @@
     <ClInclude Include="ffdecoder\SimpleAvCommon.h">
       <Filter>ffdecoder</Filter>
     </ClInclude>
+    <ClInclude Include="utils\CStringWrapper.h">
+      <Filter>utils</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

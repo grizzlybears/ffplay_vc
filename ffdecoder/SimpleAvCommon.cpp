@@ -516,6 +516,6 @@ CString decode_codec_tag(uint32_t  codec_tag)
     char buf[AV_FOURCC_MAX_STRING_SIZE] = {0};
     av_fourcc_make_string(buf, codec_tag );
 
-    return CString( "/%s", buf);
+	return CString ("/%s", (const char*)buf);
 }
 

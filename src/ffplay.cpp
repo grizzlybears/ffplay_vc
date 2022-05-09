@@ -258,6 +258,7 @@ void opt_input_file(void *optctx, const char *filename)
 static int dummy;
 
 static const OptionDef options[] = {
+#if defined(__GNUC__) || ( _MSC_VER >= 1920)
     CMDUTILS_COMMON_OPTIONS
     { "s", HAS_ARG | OPT_VIDEO, { .func_arg = opt_frame_size }, "set frame size (WxH or abbreviation)", "size" },
     { "ss", HAS_ARG, { .func_arg = opt_seek }, "seek to a given position in seconds", "pos" },
@@ -267,6 +268,7 @@ static const OptionDef options[] = {
     { "sync", HAS_ARG | OPT_EXPERT, { .func_arg = opt_sync }, "set audio-video sync. type (type=audio/video/ext)", "type" },
     { "autoexit", OPT_BOOL | OPT_EXPERT, { &opt_autoexit }, "exit at the end", "" },
     { "i", OPT_BOOL, { &dummy}, "read specified file", "input_file"},    
+#endif
     { NULL, },
 };
 
@@ -314,7 +316,6 @@ SharedFile  g_main_logger;  // on Windows, 'FILE*' is not thread-safe.
 /* Called from the main */
 int main(int argc, char **argv)
 {
-    
     av_log_set_flags(AV_LOG_SKIP_REPEATED);
     parse_loglevel(argc, argv, options);
 

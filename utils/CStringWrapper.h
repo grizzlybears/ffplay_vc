@@ -100,7 +100,7 @@ public:
 		clear();
 	}		
 #ifdef _MSC_VER
-    int vasprintf(char** pbuffer, const char* format, va_list args)
+	static int vasprintf(char** pbuffer, const char* format, va_list args)
     {
         int     len;
         len = _vscprintf(format, args) + 1; // _vscprintf doesn't count terminating '\0'
