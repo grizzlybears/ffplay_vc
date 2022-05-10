@@ -1,4 +1,4 @@
-#ifndef  _CSTRING__H_
+﻿#ifndef  _CSTRING__H_
 #define  _CSTRING__H_
 
 #include <stdlib.h>

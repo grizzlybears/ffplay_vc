@@ -459,6 +459,10 @@ int32_t inline  parse_int(const char* buf, size_t buf_size)
 #define PARSE_INT(a) parse_int( a, sizeof(a))
 
 
+#ifndef ABS
+#define ABS(a) ( (a) >= 0 ? (a) :  - (a) )
+#endif 
+
 
 //取本进程exe全路径
 AString get_exe_path();
@@ -503,5 +507,22 @@ AString get_hostname();
 AString GBK_to_utf8(const char* GBK);
 
 time_t str_to_time(const char * yyyy_mm_dd_hh_mm_ss);
+
+
+#ifdef _MSC_VER
+#include <atlstr.h>
+CAtlStringA get_module_dir(HMODULE hModule);
+
+void    seconds_2_hms(int seconds, int* hh, int* mm, int* ss);
+CAtlStringA seconds_2_hhmmss(int seconds);
+
+unsigned int exp2(unsigned int exp);
+CAtlStringA exp2(int exp);
+
+int get_slider_max();
+
+CAtlStringA UTF8ToMB(const CHAR* pszUtf8Text);
+#endif
+
 
 #endif

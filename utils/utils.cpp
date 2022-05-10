@@ -1,4 +1,4 @@
-#include "utils.h"
+﻿#include "utils.h"
 #include <sys/types.h>
 
 #ifdef __GNUC__
@@ -552,3 +552,101 @@ time_t str_to_time(const char * yyyy_mm_dd_hh_mm_ss)
 }
 #endif 
 
+
+#ifdef _MSC_VER
+
+void seconds_2_hms(int seconds, int* hh, int* mm, int* ss)
+{
+	*hh = seconds / 3600;
+	*mm = seconds / 60;
+	*ss = seconds % 60;
+}
+
+CAtlStringA seconds_2_hhmmss(int seconds)
+{
+	int hh, mm, ss;
+	seconds_2_hms(seconds, &hh, &mm, &ss);
+
+	CAtlStringA s;
+	s.Format("%02d:%02d:%02d", hh, mm, ss);
+
+	return s;
+}
+
+
+unsigned int exp2(unsigned int exp)
+{
+	unsigned int r = 1;
+	return (r << exp);
+}
+
+CAtlStringA exp2(int exp)
+{
+	CAtlStringA s;
+
+	if (exp >= 0)
+	{
+		s.Format("%u", exp2((unsigned int)exp));
+		return s;
+	}
+
+	s.Format("1/%u", exp2((unsigned int)(-exp)));
+	return s;
+
+}
+
+int get_slider_max()
+{
+	return 10000;
+	/*
+	if (IsWindows8OrGreater())
+	{
+		return 10000;
+	}
+
+	return 100;
+	*/
+}
+
+
+CAtlStringA UTF8ToMB(const CHAR* pszUtf8Text)
+{
+	/* UTF-8 -> Unicode */
+	INT32 dwSize = ::MultiByteToWideChar(CP_UTF8, 0, pszUtf8Text, -1, NULL, 0);
+	if (0 == dwSize)
+	{
+		return "";
+	}
+
+	wchar_t* wszBuffer = new wchar_t[dwSize + 1];
+	::ZeroMemory(wszBuffer, (dwSize + 1) * sizeof(wchar_t));
+	if (0 == ::MultiByteToWideChar(CP_UTF8, 0, pszUtf8Text, -1, wszBuffer, dwSize + 1))
+	{
+		delete[] wszBuffer;
+		return "";
+	}
+
+	/* Unicode -> Multi byte */
+	dwSize = ::WideCharToMultiByte(CP_ACP, 0, wszBuffer, -1, NULL, 0, NULL, NULL);
+	if (0 == dwSize)
+	{
+		delete[] wszBuffer;
+		return "";
+	}
+	char* szBuffer = new char[dwSize + 1];
+	::ZeroMemory(szBuffer, (dwSize + 1) * sizeof(char));
+	if (0 == ::WideCharToMultiByte(CP_ACP, 0, wszBuffer, -1, szBuffer, dwSize + 1, NULL, NULL))
+	{
+		delete[] wszBuffer;
+		delete[] szBuffer;
+		return "";
+	}
+	CAtlStringA s;
+	s = szBuffer;
+
+	delete[] wszBuffer;
+	delete[] szBuffer;
+	return s;
+}
+
+#endif // _MSC_VER
