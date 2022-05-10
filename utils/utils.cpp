@@ -27,9 +27,9 @@ public:
 
 };
 
-CString GBK_to_utf8(const char* GBK)
+AString GBK_to_utf8(const char* GBK)
 {
-    CString str1;
+    AString str1;
     iconv_t icd = iconv_open("UTF-8", "GBK");
     if ((iconv_t)-1 == icd)
     {
@@ -54,11 +54,11 @@ CString GBK_to_utf8(const char* GBK)
     return str1;
 }
 
-CString get_exe_path()
+AString get_exe_path()
 {
     pid_t my_pid = getpid();
 
-    CString path("/proc/%d/exe", (int)my_pid);
+    AString path("/proc/%d/exe", (int)my_pid);
 
     char buf[PATH_MAX];
 
@@ -78,7 +78,7 @@ CString get_exe_path()
     return buf;
 }
 #else
-CString get_exe_path()
+AString get_exe_path()
 {
     char result[MAX_PATH];
     GetModuleFileNameA(NULL, result, MAX_PATH);
@@ -87,21 +87,21 @@ CString get_exe_path()
 }
 #endif
 
-CString get_exe_dir()
+AString get_exe_dir()
 {
     return dir_from_file_path(get_exe_path().c_str());
 }
 
 //不以‘/’结尾
-CString dir_from_file_path(const char * file_path)
+AString dir_from_file_path(const char * file_path)
 { 
-    CString path;
+    AString path;
 
     path = file_path;
 #ifdef __GNUC__
-    CString::size_type pos = path.find_last_of('/');
+    AString::size_type pos = path.find_last_of('/');
 #else
-    CString::size_type pos = path.find_last_of('\\');
+    AString::size_type pos = path.find_last_of('\\');
 #endif
 
     path.erase( pos , path.size() - pos  );
@@ -109,7 +109,7 @@ CString dir_from_file_path(const char * file_path)
 }
 
 #ifdef __GNUC__
-CString real_path(const char * path )
+AString real_path(const char * path )
 {
     char buf[PATH_MAX], *p;
 
@@ -216,7 +216,7 @@ int shell_cmd_no_wait(const char * cmd_line)
     exit(-1);
 }
 
-int shell_cmd(const char * cmd_line, CString& output )
+int shell_cmd(const char * cmd_line, AString& output )
 {
     FILE* f;
     if( ( f = popen( cmd_line, "r" ) ) == NULL ) {
@@ -272,7 +272,7 @@ int shell_cmd(const char * cmd_line, CString& output )
 }
 
 
-int shell_cmd_ml(const char * cmd_line, std::vector<CString>& output )
+int shell_cmd_ml(const char * cmd_line, std::vector<AString>& output )
 { 
     FILE* f;
     if( ( f = popen( cmd_line, "r" ) ) == NULL ) {
@@ -326,9 +326,9 @@ int shell_cmd_ml(const char * cmd_line, std::vector<CString>& output )
     return 3;
 }
 
-CString get_primary_mac()
+AString get_primary_mac()
 {
-    CString output;
+    AString output;
     int r;
     // 不正确配置的机器会有多条‘default gw’
     r = shell_cmd("cat /sys/class/net/`ip -o -4 route show to default | awk '{print $5}' | head -n 1`/address 2>&1" , output );
@@ -337,7 +337,7 @@ CString get_primary_mac()
         return "";
     }
 
-    std::vector<CString> lines;
+    std::vector<AString> lines;
     str_split(lines, output,  '\n');
 
     if (0 == lines.size())
@@ -349,11 +349,11 @@ CString get_primary_mac()
     return  lines[0];
 }
 
-CString get_ip_for_target(const char * target_addr)
+AString get_ip_for_target(const char * target_addr)
 {
-    CString cmd("ip route get %s | awk '{print $NF;exit}' 2>&1" , target_addr );
+    AString cmd("ip route get %s | awk '{print $NF;exit}' 2>&1" , target_addr );
   
-    CString output;
+    AString output;
     int r;
     r = shell_cmd( cmd.c_str(), output );
     if (r)
@@ -361,7 +361,7 @@ CString get_ip_for_target(const char * target_addr)
         return "";
     }
 
-    std::vector<CString> lines;
+    std::vector<AString> lines;
     str_split(lines, output,  '\n');
 
     if (0 == lines.size())
@@ -373,9 +373,9 @@ CString get_ip_for_target(const char * target_addr)
     return  lines[0];   
 }
 
-CString get_primary_ip()
+AString get_primary_ip()
 {
-    CString output;
+    AString output;
     int r;
     r = shell_cmd("ip route get 1.0.0.0  | awk '{print $NF;exit}' 2>&1" , output );
     if (r)
@@ -383,7 +383,7 @@ CString get_primary_ip()
         return "";
     }
 
-    std::vector<CString> lines;
+    std::vector<AString> lines;
     str_split(lines, output,  '\n');
 
     if (0 == lines.size())
@@ -395,9 +395,9 @@ CString get_primary_ip()
     return  lines[0];
 }
 
-CString get_hostname()
+AString get_hostname()
 { 
-    CString output;
+    AString output;
     int r;
     r = shell_cmd("hostname 2>&1" , output );
     if (r)
@@ -405,7 +405,7 @@ CString get_hostname()
         return "";
     }
 
-    std::vector<CString> lines;
+    std::vector<AString> lines;
     str_split(lines, output,  '\n');
 
     if (0 == lines.size())
@@ -486,9 +486,9 @@ int is_leap_year(int y)
     return 0;
 }
 
-CString hex_dump(const unsigned char * buf, int buf_len, int pad_lf )
+AString hex_dump(const unsigned char * buf, int buf_len, int pad_lf )
 {
-    CString s;
+    AString s;
     for (int i = 0; i < buf_len; i++)
     {
         if ( 0 == i )
@@ -509,9 +509,9 @@ CString hex_dump(const unsigned char * buf, int buf_len, int pad_lf )
     return s;
 }
 
-CString put_lines_together(const std::vector<CString>& lines )
+AString put_lines_together(const std::vector<AString>& lines )
 {
-    CString s;
+    AString s;
     for (auto && one: lines)
     {
         s += one;
@@ -520,12 +520,12 @@ CString put_lines_together(const std::vector<CString>& lines )
     return s;
 }
 
-void parse_key_value_lines(const std::vector<CString>& lines, Map2<CString, CString>& dict  )
+void parse_key_value_lines(const std::vector<AString>& lines, Map2<AString, AString>& dict  )
 { 
     dict.clear();
     for (auto && one: lines)
     {
-        CString key, value;
+        AString key, value;
         size_t r= str_split2( one.c_str(), key, value, '=');
 
         if (2 == r)

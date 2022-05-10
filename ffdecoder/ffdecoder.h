@@ -223,7 +223,7 @@ public:
     int64_t cursor_last_shown;
     int cursor_hidden;
 
-    CString window_title;
+    AString window_title;
     
     friend AudioDecoder; friend VideoDecoder; friend SimpleAVDecoder;
     Render();
@@ -403,7 +403,7 @@ protected:
     static int decode_interrupt_cb(void* ctx); // Chance for 'avformat' to 'break reading' 
 
     AVInputFormat* iformat;   // 命令行指定容器格式，ref only
-    CString file_to_play; // 播放的文件 or url
+    AString file_to_play; // 播放的文件 or url
   
     // format status section {{
     int paused;
