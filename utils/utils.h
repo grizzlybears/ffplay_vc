@@ -30,7 +30,7 @@ extern SharedFile  g_main_logger;
         struct tm  __now ; \
         tnow = time(NULL); \
         localtime_r(&tnow, &__now ); \
-        CAtlStringA the_message; \
+        AString the_message; \
 		the_message.Format(format, ## __VA_ARGS__); \
         LOCK_LOG_FILE; fprintf(stderr,"[%d-%d-%d %02d:%02d:%02d] %s" \
                 , __now.tm_year+1900 \
@@ -67,7 +67,7 @@ extern SharedFile  g_main_logger;
 class SimpleException: public std::exception 
 {
 public:
-    SimpleException(const CAtlStringA& str):_mess(str) {}
+    SimpleException(const AString& str):_mess(str) {}
     SimpleException(const std::string& str):_mess(str) {}
     
     explicit SimpleException(const char * fmt, ...) /* __attribute__((format(printf,2,3))) */
@@ -83,7 +83,7 @@ public:
     virtual const char* what() const throw () {return _mess.c_str();}
 
 protected:
-    CAtlStringA  _mess;
+    AString  _mess;
 };
 
 #define LOG_THEN_THROW(format, ...) \
@@ -461,16 +461,16 @@ int32_t inline  parse_int(const char* buf, size_t buf_size)
 
 
 //取本进程exe全路径
-CString get_exe_path();
+AString get_exe_path();
 
 //不以‘/’结尾
-CString dir_from_file_path(const char * file_path);
+AString dir_from_file_path(const char * file_path);
 
 //取本进程exe所在目录，不以‘/’结尾
-CString get_exe_dir();
+AString get_exe_dir();
 
 // realpath 的wrapper
-CString real_path(const char * path );
+AString real_path(const char * path );
 
 // aka.  /bin/bash -c ${cmd_line} 
 int shell_cmd_no_wait(const char * cmd_line);
@@ -481,26 +481,26 @@ int shell_cmd_wait(const char * cmd_line);
 
 // exec shell cmd, get stdout as string
 // return 0 if cmd success; return > 0 if 'cmd' fails; return < 0  if this api fails.
-int shell_cmd(const char * cmd_line, CString& output );
+int shell_cmd(const char * cmd_line, AString& output );
 
-int shell_cmd_ml(const char * cmd_line, std::vector<CString>& output );
+int shell_cmd_ml(const char * cmd_line, std::vector<AString>& output );
 
-CString put_lines_together(const std::vector<CString>& lines );
-void parse_key_value_lines(const std::vector<CString>& lines, Map2<CString, CString>& dict  );
+AString put_lines_together(const std::vector<AString>& lines );
+void parse_key_value_lines(const std::vector<AString>& lines, Map2<AString, AString>& dict  );
 struct tm* date_add_ym(struct tm* date, int y, int m);
 
 int get_ym_days(int y, int m); // 'm':  The number of months since January, in the range 0 to 11.
 
-CString hex_dump(const unsigned char * buf, int buf_len, int pad_lf );
+AString hex_dump(const unsigned char * buf, int buf_len, int pad_lf );
 
-CString get_primary_mac();
-CString get_primary_ip();
-CString get_ip_for_target(const char * target_addr);
+AString get_primary_mac();
+AString get_primary_ip();
+AString get_ip_for_target(const char * target_addr);
 
-CString get_hostname();
+AString get_hostname();
 
 //GBK转UTF8
-CString GBK_to_utf8(const char* GBK);
+AString GBK_to_utf8(const char* GBK);
 
 time_t str_to_time(const char * yyyy_mm_dd_hh_mm_ss);
 
