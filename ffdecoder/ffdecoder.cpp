@@ -234,11 +234,6 @@ void VideoDecoder::on_got_new_frame(AVFrame* frame)
 void VideoDecoder::decoder_destroy() {
     MyBase::decoder_destroy();
 
-    if (this->img_convert_ctx)
-    {
-        sws_freeContext(this->img_convert_ctx);
-        this->img_convert_ctx = NULL;
-    }
 }
 
 int AudioDecoder::decoder_init(AVCodecContext* avctx, const StreamParam* extra_para)
@@ -292,8 +287,8 @@ int AudioDecoder::decoder_init(AVCodecContext* avctx, const StreamParam* extra_p
     //    this->start_pts = stream_param.start_time ;
     //    this->start_pts_timebase = stream_param.time_base ;         
     //}
-
-    SDL_PauseAudioDevice(this->_av_decoder->render.audio_dev, 0);
+    
+    this->get_render()-> pause_audio(0);
     
     if (decoder_start())
     {
@@ -357,6 +352,7 @@ Render::Render()
     window_shown = 0;
     cursor_hidden = 0; 
     cursor_last_shown = 0;
+    img_convert_ctx = NULL;
 }
 int Render::init(int audio_disable, int alwaysontop)
 {
@@ -413,12 +409,12 @@ int Render::init(int audio_disable, int alwaysontop)
     return 0;
 }
 
-void Render::show_window(const char* window_title, int w, int h, int left, int top, int should_fullscreen)
+void Render::show_window(int should_fullscreen)
 {
     SDL_SetWindowTitle(this->window, window_title);
 
-    SDL_SetWindowSize(this->window, w, h);
-    SDL_SetWindowPosition(this->window, left, top);
+    SDL_SetWindowSize(this->window, screen_width, screen_height);
+    SDL_SetWindowPosition(this->window, screen_left, screen_top);
     if (should_fullscreen)
     {
         SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
@@ -478,6 +474,17 @@ void Render::draw_render()
     SDL_RenderPresent(renderer);
 }
 
+void Render::pause_audio(int pause_on )
+{ 
+    if (!audio_dev > 0)
+    {
+        LOG_WARN("Audio not opened yet.\n");
+        return;
+    }
+    
+    SDL_PauseAudioDevice(audio_dev, pause_on);
+}
+
 void Render::close_audio()
 {
     if (audio_dev > 0)
@@ -490,7 +497,13 @@ void Render::close_audio()
 
 void Render::safe_release()
 {
-    close_audio();
+    close_audio(); 
+    
+    if (this->img_convert_ctx)
+    {
+        sws_freeContext(this->img_convert_ctx);
+        this->img_convert_ctx = NULL;
+    }
 
     if (this->vid_texture)
     {
@@ -692,6 +705,23 @@ void Render::show_texture(const Frame* video_frame, const SDL_Rect& rect, int sh
     }
 }
 
+void Render::upload_and_draw_frame(Frame* vp)
+{
+    SDL_Rect rect; 
+    
+    Render::calculate_display_rect(&rect, 0, 0 , screen_width, screen_height 
+            , vp->width, vp->height, vp->sample_aspect_ratio); 
+    
+    if (!vp->uploaded) {
+        if (upload_texture(&vid_texture, vp->frame, &img_convert_ctx) < 0)
+            return;
+        vp->uploaded = 1;
+        vp->flip_v = vp->frame->linesize[0] < 0;
+    }
+
+    show_texture(vp, rect,  0);
+}
+
 //  }}} render section 
 
 
@@ -699,22 +729,9 @@ void Render::show_texture(const Frame* video_frame, const SDL_Rect& rect, int sh
 void VideoDecoder::video_image_display()
 {
     Frame *vp;
-
-    SDL_Rect rect;
-
     vp = this->frame_q.frame_queue_peek_last();
+    get_render()->upload_and_draw_frame(vp);
 
-    Render::calculate_display_rect(&rect, 0, 0,  get_render()->screen_width, get_render()->screen_height 
-            , vp->width, vp->height, vp->sample_aspect_ratio);
-
-    if (!vp->uploaded) {
-        if (get_render()->upload_texture(&get_render()->vid_texture, vp->frame, &this->img_convert_ctx) < 0)
-            return;
-        vp->uploaded = 1;
-        vp->flip_v = vp->frame->linesize[0] < 0;
-    }
-
-    this->get_render()->show_texture(vp, rect,  0);
 }
 
 
@@ -762,12 +779,7 @@ void VideoState::close_input_stream()
 
 int VideoDecoder::video_open()
 {
-    Render* render = get_render();
-
-    render->show_window(render->window_title.GetString()
-        , render->screen_width, render->screen_height, render->screen_left, render->screen_top
-        , 0);
-    
+    get_render()->show_window(0);
     return 0;
 }
 

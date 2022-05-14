@@ -114,7 +114,6 @@ public:
     typedef Decoder MyBase;
     VideoDecoder(SimpleAVDecoder* av_decoder):MyBase(av_decoder)
     {
-        img_convert_ctx = NULL;
         stream_param.guessed_vframe_rate = av_make_q(25, 1); 
         frame_timer = 0;
     }
@@ -136,7 +135,6 @@ protected:
     
     virtual  ThreadRetType  thread_main();  // BaseThread method 
     
-    struct SwsContext* img_convert_ctx; 
     void video_display(); // display the current picture, if any  
     
     int get_video_frame( AVFrame* frame);  // 返回 <0 表示退出解码线程
@@ -192,11 +190,11 @@ protected:
     /* current context */
     int64_t audio_callback_time;
 
+    // {{ todo: move into 'Redner'
     int audio_open(void* opaque, int64_t wanted_channel_layout, int wanted_nb_channels, int wanted_sample_rate, struct AudioParams* audio_hw_params);
-    /* prepare a new audio buffer */
-    static void sdl_audio_callback(void* opaque, Uint8* stream, int len);
-
+    static void sdl_audio_callback(void* opaque, Uint8* stream, int len);// prepare a new audio buffer 
     void handle_sdl_audio_cb(Uint8* stream, int len);
+    // }} todo: move into 'Redner'
     
     /**
      * Decode one audio frame and return its uncompressed size.
@@ -212,9 +210,36 @@ protected:
     virtual  ThreadRetType thread_main();  // BaseThread method 
 };
 
-class Render
+class RenderBase
 {
-public:
+public:   
+    RenderBase()
+    {
+    }
+
+    virtual ~RenderBase()
+    {
+    }
+    
+    virtual int init(int audio_disable, int alwaysontop) = 0;
+    virtual void safe_release() = 0;
+
+    virtual void toggle_full_screen() = 0;
+    virtual int  is_window_shown()const {return window_shown;}
+    virtual int create_window(const char* title, int x, int y, int w, int h, Uint32 flags) = 0;
+    virtual void show_window(int fullscreen) = 0;
+    virtual void set_default_window_size(int width, int height, AVRational sar) = 0;
+ 
+    
+    virtual void clear_render() = 0;
+    virtual void draw_render()  = 0;    
+    virtual void upload_and_draw_frame(Frame* video_frame) = 0;
+
+    virtual void pause_audio(int pause_on ) = 0;
+    virtual void close_audio() = 0;
+    
+    AString window_title;
+    
     int screen_width;
     int screen_height;
     int screen_left;
@@ -222,24 +247,25 @@ public:
 
     int64_t cursor_last_shown;
     int cursor_hidden;
+protected:
+    int fullscreen;
+    int window_shown;
+ 
+};
 
-    AString window_title;
-    
-    friend AudioDecoder; friend VideoDecoder; friend SimpleAVDecoder;
+class Render: public RenderBase
+{
+public:
+   
     Render();
-
-    ~Render()
+    virtual ~Render()
     {
-        safe_release();
     }
 
-    int init(int audio_disable, int alwaysontop);
+    virtual int init(int audio_disable, int alwaysontop);
 
-    void toggle_full_screen();
-
-    int  is_window_shown()const {return window_shown;}
-
-    void safe_release();
+    virtual void toggle_full_screen();
+    virtual void safe_release();
 
     static void get_sdl_pix_fmt_and_blendmode(int format, Uint32* sdl_pix_fmt, SDL_BlendMode* sdl_blendmode);
     static void set_sdl_yuv_conversion_mode(AVFrame* frame);
@@ -248,29 +274,33 @@ public:
         int scr_xleft, int scr_ytop, int scr_width, int scr_height,
         int pic_width, int pic_height, AVRational pic_sar);
 
+    virtual void pause_audio(int pause_on );
+    virtual void close_audio();
+
+    virtual void clear_render();
+    virtual void draw_render();
+    virtual void upload_and_draw_frame(Frame* video_frame);
+
+    virtual int create_window(const char* title, int x, int y, int w, int h, Uint32 flags);
+    virtual void show_window( int fullscreen);
+    virtual void set_default_window_size(int width, int height, AVRational sar);
+
+    SDL_AudioDeviceID audio_dev; // todo: play audio in render not 'AudioDecoder'
 protected:
     SDL_Window* window;
     SDL_Renderer* renderer;
     SDL_RendererInfo renderer_info;
-    SDL_AudioDeviceID audio_dev;
 
     SDL_Texture* sub_texture;   // 字幕画布
     SDL_Texture* vid_texture;   // 视频画布
     
-    int fullscreen;
+    struct SwsContext* img_convert_ctx; 
 
-    int create_window(const char* title, int x, int y, int w, int h, Uint32 flags);
-    int window_shown;
-    void show_window(const char* title, int w, int h, int left, int top, int fullscreen);
-    void set_default_window_size(int width, int height, AVRational sar);
     
-    void clear_render();
-    void draw_render();
     int upload_texture(SDL_Texture** tex, AVFrame* frame, struct SwsContext** img_convert_ctx);
     void show_texture(const Frame* video_frame, const SDL_Rect& rect, int show_subtitle);
     int realloc_texture(SDL_Texture** texture, Uint32 new_format, int new_width, int new_height, SDL_BlendMode blendmode, int init_texture);
     
-    void close_audio();
 };
 
 class SimpleAVDecoder
