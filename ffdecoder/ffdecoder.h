@@ -157,6 +157,8 @@ public:
     virtual int decoder_init(AVCodecContext* avctx, const StreamParam* extra_para);
     virtual void decoder_destroy();
 
+    void handle_sdl_audio_cb(Uint8* stream, int len);
+
 protected:
     int muted;
     int audio_volume;  //  volume [0 , 100]
@@ -187,12 +189,6 @@ protected:
 
     /* current context */
     int64_t audio_callback_time;
-
-    // {{ todo: move into 'Redner'
-    int audio_open(void* opaque, int64_t wanted_channel_layout, int wanted_nb_channels, int wanted_sample_rate, struct AudioParams* audio_hw_params);
-    static void sdl_audio_callback(void* opaque, Uint8* stream, int len);// prepare a new audio buffer 
-    void handle_sdl_audio_cb(Uint8* stream, int len);
-    // }} todo: move into 'Redner'
     
     /**
      * Decode one audio frame and return its uncompressed size.
@@ -233,6 +229,10 @@ public:
     virtual void draw_render()  = 0;    
     virtual void upload_and_draw_frame(Frame* video_frame) = 0;
 
+    virtual int open_audio( AudioDecoder* decoder, int64_t wanted_channel_layout, int wanted_nb_channels, int wanted_sample_rate, struct AudioParams* audio_hw_params) = 0;
+    static void sdl_audio_callback(void* opaque, Uint8* stream, int len);// prepare a new audio buffer 
+
+    virtual void mix_audio( uint8_t * dst, const uint8_t * src, uint8_t len, int volume /* [0 - 100]*/ ) = 0;
     virtual void pause_audio(int pause_on ) = 0;
     virtual void close_audio() = 0;
     
@@ -271,7 +271,9 @@ public:
     static void calculate_display_rect(SDL_Rect* rect,
         int scr_xleft, int scr_ytop, int scr_width, int scr_height,
         int pic_width, int pic_height, AVRational pic_sar);
-
+    
+    virtual int open_audio( AudioDecoder* decoder, int64_t wanted_channel_layout, int wanted_nb_channels, int wanted_sample_rate, struct AudioParams* audio_hw_params);
+    virtual void mix_audio( uint8_t * dst, const uint8_t * src, uint8_t len, int volume /* [0 - 100]*/ ) ;
     virtual void pause_audio(int pause_on );
     virtual void close_audio();
 
