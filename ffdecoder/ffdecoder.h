@@ -2,7 +2,6 @@
 
 #include "SimpleAvCommon.h"
 
-#include <SDL.h>
 
 typedef struct AudioParams {
     int freq;
@@ -21,7 +20,7 @@ enum {
 
 class VideoState;
 class SimpleAVDecoder;
-class Render;
+class RenderBase;
 
 typedef enum      // SimpleAVDecoder内定: V流id是 1, A流id是 2
 {
@@ -81,7 +80,7 @@ protected:
     PacketQueue packet_q;       // 原 VideoState:: videoq/audioq/subtitleq
     Clock       stream_clock;   // 原 VideoState:: vidclk/audclk/(null)
 
-    Render* get_render();
+    RenderBase* get_render();
     
     AVPacket pending_pkt;  // avcodec_send_packet 遇到E_AGAIN，需要暂存
     int is_packet_pending;
@@ -157,7 +156,7 @@ public:
     virtual int decoder_init(AVCodecContext* avctx, const StreamParam* extra_para);
     virtual void decoder_destroy();
 
-    void handle_sdl_audio_cb(Uint8* stream, int len);
+    void handle_audio_cb(uint8_t* stream, int len);
 
 protected:
     int muted;
@@ -214,13 +213,15 @@ public:
     virtual ~RenderBase()
     {
     }
+
+    static  RenderBase* create_sdl_render();
     
     virtual int init(int audio_disable, int alwaysontop) = 0;
     virtual void safe_release() = 0;
 
     virtual void toggle_full_screen() = 0;
     virtual int  is_window_shown()const {return window_shown;}
-    virtual int create_window(const char* title, int x, int y, int w, int h, Uint32 flags) = 0;
+    virtual int create_window(const char* title, int x, int y, int w, int h, uint32_t flags) = 0;
     virtual void show_window(int fullscreen) = 0;
     virtual void set_default_window_size(int width, int height, AVRational sar) = 0;
  
@@ -230,7 +231,7 @@ public:
     virtual void upload_and_draw_frame(Frame* video_frame) = 0;
 
     virtual int open_audio( AudioDecoder* decoder, int64_t wanted_channel_layout, int wanted_nb_channels, int wanted_sample_rate, struct AudioParams* audio_hw_params) = 0;
-    static void sdl_audio_callback(void* opaque, Uint8* stream, int len);// prepare a new audio buffer 
+    static void sdl_audio_callback(void* opaque, uint8_t* stream, int len);// prepare a new audio buffer 
 
     virtual void mix_audio( uint8_t * dst, const uint8_t * src, uint8_t len, int volume /* [0 - 100]*/ ) = 0;
     virtual void pause_audio(int pause_on ) = 0;
@@ -251,57 +252,6 @@ protected:
  
 };
 
-class Render: public RenderBase
-{
-public:
-   
-    Render();
-    virtual ~Render()
-    {
-    }
-
-    virtual int init(int audio_disable, int alwaysontop);
-
-    virtual void toggle_full_screen();
-    virtual void safe_release();
-
-    static void get_sdl_pix_fmt_and_blendmode(int format, Uint32* sdl_pix_fmt, SDL_BlendMode* sdl_blendmode);
-    static void set_sdl_yuv_conversion_mode(AVFrame* frame);
-    
-    static void calculate_display_rect(SDL_Rect* rect,
-        int scr_xleft, int scr_ytop, int scr_width, int scr_height,
-        int pic_width, int pic_height, AVRational pic_sar);
-    
-    virtual int open_audio( AudioDecoder* decoder, int64_t wanted_channel_layout, int wanted_nb_channels, int wanted_sample_rate, struct AudioParams* audio_hw_params);
-    virtual void mix_audio( uint8_t * dst, const uint8_t * src, uint8_t len, int volume /* [0 - 100]*/ ) ;
-    virtual void pause_audio(int pause_on );
-    virtual void close_audio();
-
-    virtual void clear_render();
-    virtual void draw_render();
-    virtual void upload_and_draw_frame(Frame* video_frame);
-
-    virtual int create_window(const char* title, int x, int y, int w, int h, Uint32 flags);
-    virtual void show_window( int fullscreen);
-    virtual void set_default_window_size(int width, int height, AVRational sar);
-
-    SDL_AudioDeviceID audio_dev; // todo: play audio in render not 'AudioDecoder'
-protected:
-    SDL_Window* window;
-    SDL_Renderer* renderer;
-    SDL_RendererInfo renderer_info;
-
-    SDL_Texture* sub_texture;   // 字幕画布
-    SDL_Texture* vid_texture;   // 视频画布
-    
-    struct SwsContext* img_convert_ctx; 
-
-    
-    int upload_texture(SDL_Texture** tex, AVFrame* frame, struct SwsContext** img_convert_ctx);
-    void show_texture(const Frame* video_frame, const SDL_Rect& rect, int show_subtitle);
-    int realloc_texture(SDL_Texture** texture, Uint32 new_format, int new_width, int new_height, SDL_BlendMode blendmode, int init_texture);
-    
-};
 
 class SimpleAVDecoder
 {
@@ -315,12 +265,14 @@ public:
         force_refresh = 0;
         realtime = 0;
         show_status = -1;
-        decoder_reorder_pts = -1;
-    }
+        decoder_reorder_pts = -1;  
+        render = NULL;
+    } 
+    virtual ~SimpleAVDecoder();
 
     friend AudioDecoder; friend  VideoDecoder;
 
-    Render render;
+    RenderBase*  render;
     
     // 返回 bit0 代表V opened ， bit1 代表A opened 
     int   open_stream_from_avformat(AVFormatContext* format_context,  int* vstream_id, int* astream_id);
@@ -456,6 +408,7 @@ protected:
     int is_pkt_in_play_range( AVPacket* pkt);
     double stream_ts_to_second(int64_t ts, int stream_index);
 
+    void quit_main_loop(); // todo: still ref 'SDL'
     // }}} 'reader thread' section
 };
 

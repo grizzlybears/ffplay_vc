@@ -8,6 +8,9 @@ sample_dir=samples
 decoder_src=$(wildcard ffdecoder/*.cpp)
 decoder_objs:=$(patsubst %.cpp,%.o,$(decoder_src)) 
 
+render_src=$(wildcard sdl_render/*.cpp)
+render_objs:=$(patsubst %.cpp,%.o,$(render_src)) 
+
 main_src:=$(wildcard src/*.cpp)
 main_objs:=$(patsubst %.cpp,%.o,$(main_src)) 
  
@@ -18,7 +21,7 @@ util_src=$(wildcard utils/*.cpp)
 util_objs:=$(patsubst %.cpp,%.o,$(util_src)) 
 
 
-Objs:= $(decoder_objs) $(main_objs) $(util_objs) $(picked_objs)
+Objs:= $(decoder_objs) $(main_objs) $(util_objs) $(picked_objs) $(render_objs)
 
 #      以下摘自 `info make`
 #
