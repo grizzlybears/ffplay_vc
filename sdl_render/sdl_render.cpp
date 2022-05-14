@@ -25,10 +25,10 @@
 
 RenderBase* RenderBase::create_sdl_render()
 {
-    return new Render();
+    return new RenderSDL();
 }
 
-Render::Render()
+RenderSDL::RenderSDL()
 {
     window = NULL;
     renderer = NULL;
@@ -47,7 +47,8 @@ Render::Render()
     cursor_last_shown = 0;
     img_convert_ctx = NULL;
 }
-int Render::init(int audio_disable, int alwaysontop)
+
+int RenderSDL::init(int audio_disable, int alwaysontop)
 {
     int sdl_flags;
     sdl_flags = SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER;
@@ -102,7 +103,7 @@ int Render::init(int audio_disable, int alwaysontop)
     return 0;
 }
 
-void Render::show_window(int should_fullscreen)
+void RenderSDL::show_window(int should_fullscreen)
 {
     SDL_SetWindowTitle(this->window, window_title);
 
@@ -117,7 +118,7 @@ void Render::show_window(int should_fullscreen)
     window_shown = 1;
 }
 
-int Render::create_window(const char* title, int x, int y, int w, int h, uint32_t flags)
+int RenderSDL::create_window(const char* title, int x, int y, int w, int h, uint32_t flags)
 {
     window = SDL_CreateWindow(title, x, y, w, h, flags);    
     if (!window)
@@ -150,24 +151,24 @@ int Render::create_window(const char* title, int x, int y, int w, int h, uint32_
     return 0;
 }
 
-void Render::toggle_full_screen()
+void RenderSDL::toggle_full_screen()
 {
     fullscreen = !fullscreen;
     SDL_SetWindowFullscreen(window, fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
 }
 
-void Render::clear_render()
+void RenderSDL::clear_render()
 {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
 }
 
-void Render::draw_render()
+void RenderSDL::draw_render()
 {
     SDL_RenderPresent(renderer);
 }
 
-void Render::pause_audio(int pause_on )
+void RenderSDL::pause_audio(int pause_on )
 { 
     if (!audio_dev > 0)
     {
@@ -178,7 +179,7 @@ void Render::pause_audio(int pause_on )
     SDL_PauseAudioDevice(audio_dev, pause_on);
 }
 
-void Render::close_audio()
+void RenderSDL::close_audio()
 {
     if (audio_dev > 0)
     {
@@ -188,7 +189,7 @@ void Render::close_audio()
     audio_dev = 0;
 }
 
-void Render::safe_release()
+void RenderSDL::safe_release()
 {
     close_audio(); 
     
@@ -223,7 +224,7 @@ void Render::safe_release()
 
 }
 
-void Render::set_default_window_size(int width, int height, AVRational sar)
+void RenderSDL::set_default_window_size(int width, int height, AVRational sar)
 {
     SDL_Rect rect;
     int max_width = this->screen_width ? this->screen_width : INT_MAX;
@@ -237,7 +238,7 @@ void Render::set_default_window_size(int width, int height, AVRational sar)
     screen_height = rect.h;
 }
 
-int Render::realloc_texture(SDL_Texture **texture, Uint32 new_format, int new_width, int new_height, SDL_BlendMode blendmode, int init_texture)
+int RenderSDL::realloc_texture(SDL_Texture **texture, Uint32 new_format, int new_width, int new_height, SDL_BlendMode blendmode, int init_texture)
 {
     Uint32 format;
     int access, w, h;
@@ -261,7 +262,7 @@ int Render::realloc_texture(SDL_Texture **texture, Uint32 new_format, int new_wi
     return 0;
 }
 
-void Render::calculate_display_rect(SDL_Rect* rect,
+void RenderSDL::calculate_display_rect(SDL_Rect* rect,
     int scr_xleft, int scr_ytop, int scr_width, int scr_height,
     int pic_width, int pic_height, AVRational pic_sar)
 {
@@ -298,7 +299,7 @@ void Render::calculate_display_rect(SDL_Rect* rect,
     rect->h = FFMAX((int)height, 1);
 }
 
-void Render::get_sdl_pix_fmt_and_blendmode(int format, Uint32* sdl_pix_fmt, SDL_BlendMode* sdl_blendmode)
+void RenderSDL::get_sdl_pix_fmt_and_blendmode(int format, Uint32* sdl_pix_fmt, SDL_BlendMode* sdl_blendmode)
 {
     unsigned int i;
     *sdl_blendmode = SDL_BLENDMODE_NONE;
@@ -316,11 +317,11 @@ void Render::get_sdl_pix_fmt_and_blendmode(int format, Uint32* sdl_pix_fmt, SDL_
     }
 }
 
-int Render::upload_texture(SDL_Texture** tex, AVFrame* frame, struct SwsContext** img_convert_ctx) {
+int RenderSDL::upload_texture(SDL_Texture** tex, AVFrame* frame, struct SwsContext** img_convert_ctx) {
     int ret = 0;
     Uint32 sdl_pix_fmt;
     SDL_BlendMode sdl_blendmode;
-    Render::get_sdl_pix_fmt_and_blendmode(frame->format, &sdl_pix_fmt, &sdl_blendmode);
+    get_sdl_pix_fmt_and_blendmode(frame->format, &sdl_pix_fmt, &sdl_blendmode);
     if (realloc_texture(tex, sdl_pix_fmt == SDL_PIXELFORMAT_UNKNOWN ? SDL_PIXELFORMAT_ARGB8888 : sdl_pix_fmt, frame->width, frame->height, sdl_blendmode, 0) < 0)
         return -1;
     switch (sdl_pix_fmt) {
@@ -371,7 +372,7 @@ int Render::upload_texture(SDL_Texture** tex, AVFrame* frame, struct SwsContext*
     return ret;
 }
 
-void Render::set_sdl_yuv_conversion_mode(AVFrame* frame)
+void RenderSDL::set_sdl_yuv_conversion_mode(AVFrame* frame)
 {
 #if SDL_VERSION_ATLEAST(2,0,8)
     SDL_YUV_CONVERSION_MODE mode = SDL_YUV_CONVERSION_AUTOMATIC;
@@ -387,22 +388,22 @@ void Render::set_sdl_yuv_conversion_mode(AVFrame* frame)
 #endif
 }
 
-void Render::show_texture(const Frame* video_frame, const SDL_Rect& rect, int show_subtitle)
+void RenderSDL::show_texture(const Frame* video_frame, const SDL_Rect& rect, int show_subtitle)
 {
-    Render::set_sdl_yuv_conversion_mode(video_frame->frame);
+    set_sdl_yuv_conversion_mode(video_frame->frame);
     SDL_RenderCopyEx(this->renderer, this->vid_texture, NULL, &rect, 0, NULL, (SDL_RendererFlip)(video_frame->flip_v ? SDL_FLIP_VERTICAL : 0));
-    Render::set_sdl_yuv_conversion_mode(NULL);
+    set_sdl_yuv_conversion_mode(NULL);
 
     if (show_subtitle) {
         SDL_RenderCopy(this->renderer, this->sub_texture, NULL, &rect);
     }
 }
 
-void Render::upload_and_draw_frame(Frame* vp)
+void RenderSDL::upload_and_draw_frame(Frame* vp)
 {
     SDL_Rect rect; 
     
-    Render::calculate_display_rect(&rect, 0, 0 , screen_width, screen_height 
+    calculate_display_rect(&rect, 0, 0 , screen_width, screen_height 
             , vp->width, vp->height, vp->sample_aspect_ratio); 
     
     if (!vp->uploaded) {
@@ -415,13 +416,13 @@ void Render::upload_and_draw_frame(Frame* vp)
     show_texture(vp, rect,  0);
 }
 
-void Render::mix_audio( uint8_t * dst, const uint8_t * src, uint8_t len, int volume /* [0 - 100]*/ )
+void RenderSDL::mix_audio( uint8_t * dst, const uint8_t * src, uint8_t len, int volume /* [0 - 100]*/ )
 {
     int sdl_volume =  SDL_MIX_MAXVOLUME * volume / 100;
     SDL_MixAudioFormat( dst,src, AUDIO_S16SYS, len, sdl_volume);
 }
 
-int Render::open_audio(AudioDecoder* decoder, int64_t wanted_channel_layout, int wanted_nb_channels, int wanted_sample_rate, struct AudioParams *audio_hw_params)
+int RenderSDL::open_audio(AudioDecoder* decoder, int64_t wanted_channel_layout, int wanted_nb_channels, int wanted_sample_rate, struct AudioParams *audio_hw_params)
 {
     SDL_AudioSpec wanted_spec, spec;
     const char *env;

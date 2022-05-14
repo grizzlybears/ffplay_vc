@@ -3,12 +3,12 @@
 
 #include "ffdecoder/ffdecoder.h"
 
-class Render: public RenderBase
+class RenderSDL: public RenderBase
 {
 public:
    
-    Render();
-    virtual ~Render()
+    RenderSDL();
+    virtual ~RenderSDL()
     {
         safe_release();
     }
