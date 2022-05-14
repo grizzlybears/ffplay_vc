@@ -86,11 +86,11 @@ void event_loop(VideoState *cur_stream)
                 break;
             case SDLK_KP_MULTIPLY:
             case SDLK_0:
-                cur_stream->av_decoder.update_volume( 1, SDL_VOLUME_STEP);
+                cur_stream->av_decoder.update_volume( 10);
                 break;
             case SDLK_KP_DIVIDE:
             case SDLK_9:
-                cur_stream->av_decoder.update_volume( -1, SDL_VOLUME_STEP);
+                cur_stream->av_decoder.update_volume( -10);
                 break;
             case SDLK_s: // S: Step to next frame
                 cur_stream->step_to_next_frame();

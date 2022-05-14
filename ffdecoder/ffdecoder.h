@@ -3,7 +3,6 @@
 #include "SimpleAvCommon.h"
 
 #include <SDL.h>
-#include <SDL_thread.h>
 
 typedef struct AudioParams {
     int freq;
@@ -174,13 +173,12 @@ protected:
    
     int audio_hw_buf_size;
     uint8_t* audio_buf;
-    uint8_t* audio_buf1;
+    uint8_t* audio_buf1;    // if 'convertion' is needed,  here is the converted audio buf
     unsigned int audio_buf_size; /* in bytes */
     unsigned int audio_buf1_size;
-    unsigned int audio_buf_index; /* in bytes */
-    int audio_write_buf_size;
+    unsigned int audio_buf_index; // in bytes, 'written head' in audio_buf */
     
-    struct AudioParams audio_tgt;  // audio_open 返回，环境要求的audio params
+    struct AudioParams audio_tgt;  // filled by 'audio_open', hw env demanded 'audio params'
     struct SwrContext* swr_ctx;
 
     int16_t sample_array[SAMPLE_ARRAY_SIZE];
@@ -354,7 +352,7 @@ public:
     void toggle_step(int step_mode);
     void toggle_mute();
     int is_paused() const { return this->paused; }
-    void update_volume(int sign, double step);
+    void update_volume(int delta );
     // }} decoder status section
 
     void discard_buffer(double seek_target = NAN); // 用于在seek后清cache。如果是按时间seek，则应顺手给出 seek_target (以秒为单位)

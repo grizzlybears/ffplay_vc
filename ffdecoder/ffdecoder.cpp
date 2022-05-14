@@ -252,7 +252,6 @@ int AudioDecoder::decoder_init(AVCodecContext* avctx, const StreamParam* extra_p
     //////////////////////////////////////////////////////////////////////////
     
     this->audio_volume = av_clip(this->audio_volume, 0, 100);
-    this->audio_volume = av_clip(SDL_MIX_MAXVOLUME * this->audio_volume / 100, 0, SDL_MIX_MAXVOLUME);
 
     this->muted = 0;
 
@@ -903,11 +902,9 @@ void SimpleAVDecoder::toggle_step(int step_mode)
     this->step = step_mode;
 }
 
-void SimpleAVDecoder::update_volume( int sign, double step)
+void SimpleAVDecoder::update_volume( int delta )
 {
-    double volume_level = this->auddec.audio_volume ? (20 * log(this->auddec.audio_volume / (double)SDL_MIX_MAXVOLUME) / log(10)) : -1000.0;
-    int new_volume = lrint(SDL_MIX_MAXVOLUME * pow(10.0, (volume_level + sign * step) / 20.0));
-    this->auddec.audio_volume = av_clip(this->auddec.audio_volume == new_volume ? (this->auddec.audio_volume + sign) : new_volume, 0, SDL_MIX_MAXVOLUME);
+    auddec.audio_volume = av_clip(auddec.audio_volume + delta , 0 , 100);
 }
 
 void VideoState::step_to_next_frame()
@@ -1473,25 +1470,31 @@ void AudioDecoder::handle_sdl_audio_cb(Uint8* stream, int len)
         len1 = this->audio_buf_size - this->audio_buf_index;
         if (len1 > len)
             len1 = len;
-        if (!this->muted && this->audio_buf && this->audio_volume == SDL_MIX_MAXVOLUME)
+        if (!this->muted && this->audio_buf && this->audio_volume == 100)
             memcpy(stream, (uint8_t *)this->audio_buf + this->audio_buf_index, len1);
         else {
             memset(stream, 0, len1);
             if (!this->muted && this->audio_buf)
-                SDL_MixAudioFormat(stream, (uint8_t *)this->audio_buf + this->audio_buf_index, AUDIO_S16SYS, len1, this->audio_volume);
+            {
+                int sdl_volume =  SDL_MIX_MAXVOLUME * this->audio_volume / 100;
+                SDL_MixAudioFormat(stream, (uint8_t *)this->audio_buf + this->audio_buf_index, AUDIO_S16SYS, len1, sdl_volume);
+            }
         }
         len -= len1;
         stream += len1;
         this->audio_buf_index += len1;
     }
-    this->audio_write_buf_size = this->audio_buf_size - this->audio_buf_index;
+    
+    int audio_buf_available_for_wr = this->audio_buf_size - this->audio_buf_index;  
+    
+    if (isnan(this->audio_clock)) 
+        return;  
+    
     /* Let's assume the audio driver that is used by SDL has two periods. */
-    if (!isnan(this->audio_clock)) {
-        this->stream_clock.set_clock_at(this->audio_clock - (double)(2 * this->audio_hw_buf_size + this->audio_write_buf_size) / this->audio_tgt.bytes_per_sec
+    this->stream_clock.set_clock_at(this->audio_clock - (double)(2 * this->audio_hw_buf_size + audio_buf_available_for_wr ) / this->audio_tgt.bytes_per_sec
             , this->audio_clock_serial
             , this->audio_callback_time / 1000000.0);
-        this->_av_decoder->extclk.sync_clock_to_slave( &this->stream_clock);
-    }
+    this->_av_decoder->extclk.sync_clock_to_slave( &this->stream_clock);
 }
 
 int AudioDecoder::audio_open(void *opaque, int64_t wanted_channel_layout, int wanted_nb_channels, int wanted_sample_rate, struct AudioParams *audio_hw_params)
