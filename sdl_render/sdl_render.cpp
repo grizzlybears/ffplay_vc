@@ -170,7 +170,7 @@ void RenderSDL::draw_render()
 
 void RenderSDL::pause_audio(int pause_on )
 { 
-    if (!audio_dev > 0)
+    if (!audio_dev )
     {
         LOG_WARN("Audio not opened yet.\n");
         return;

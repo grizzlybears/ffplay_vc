@@ -167,6 +167,7 @@
   <ItemGroup>
     <ClCompile Include="ffdecoder\ffdecoder.cpp" />
     <ClCompile Include="ffdecoder\SimpleAvCommon.cpp" />
+    <ClCompile Include="sdl_render\sdl_render.cpp" />
     <ClCompile Include="src\cmdutils.c" />
     <ClCompile Include="src\ffplay.cpp" />
     <ClCompile Include="utils\thread_utils.cpp" />
@@ -175,6 +176,7 @@
   <ItemGroup>
     <ClInclude Include="ffdecoder\ffdecoder.h" />
     <ClInclude Include="ffdecoder\SimpleAvCommon.h" />
+    <ClInclude Include="sdl_render\sdl_render.h" />
     <ClInclude Include="src\cmdutils.h" />
     <ClInclude Include="utils\CStringWrapper.h" />
     <ClInclude Include="utils\thread_utils.h" />
