@@ -17,6 +17,9 @@
     <Filter Include="utils">
       <UniqueIdentifier>{f1ab76eb-9b00-43ae-8a09-abadab0187b2}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Player\ffdecoder">
+      <UniqueIdentifier>{c4fa27c5-ab28-43ab-aed6-16026118228a}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="src_vc\ffplayer_vc.rc">
@@ -63,6 +66,15 @@
     <ClInclude Include="utils\utils.h">
       <Filter>utils</Filter>
     </ClInclude>
+    <ClInclude Include="ffdecoder\ffdecoder.h">
+      <Filter>Player\ffdecoder</Filter>
+    </ClInclude>
+    <ClInclude Include="ffdecoder\SimpleAvCommon.h">
+      <Filter>Player\ffdecoder</Filter>
+    </ClInclude>
+    <ClInclude Include="src\cmdutils.h">
+      <Filter>Globals</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src_vc\main.cpp">
@@ -82,6 +94,15 @@
     </ClCompile>
     <ClCompile Include="utils\utils.cpp">
       <Filter>utils</Filter>
+    </ClCompile>
+    <ClCompile Include="ffdecoder\ffdecoder.cpp">
+      <Filter>Player\ffdecoder</Filter>
+    </ClCompile>
+    <ClCompile Include="ffdecoder\SimpleAvCommon.cpp">
+      <Filter>Player\ffdecoder</Filter>
+    </ClCompile>
+    <ClCompile Include="src\cmdutils.c">
+      <Filter>Globals</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

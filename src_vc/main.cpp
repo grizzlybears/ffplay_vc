@@ -8,12 +8,20 @@
 #include "UI/MainDlg.h"
 #include "VERSION"
 
+#include "ffdecoder/ffdecoder.h"
+
 #ifdef _VLD
 #include <vld.h> //  need to install vld-2.6.0-setup.exe.
 #endif 
 CAppModule _Module;
 
 SharedFile  g_main_logger;  // on Windows, 'FILE*' is not thread-safe.
+
+
+extern "C" const char g_program_name[] = "ffplay_vc";
+extern "C" const int program_birth_year = 2003;
+extern "C" void just_show_banner();
+extern "C" void show_help_default(const char *opt, const char *arg);
 
 typedef std::vector<CAtlStringA> StringArray;
 void get_argv(StringArray& argv)
@@ -105,6 +113,14 @@ int main(int argc, char* argv[])
 	hRes = _Module.Init(NULL, hInstance);
 	ATLASSERT(SUCCEEDED(hRes));
 
+	av_log_set_flags(AV_LOG_SKIP_REPEATED);
+	/* register all codecs, demux and protocols */
+#if CONFIG_AVDEVICE
+	avdevice_register_all();
+#endif
+	avformat_network_init();
+	just_show_banner();
+
 	int nRet = Run();
 
 	LOG_INFO("Exiting...\n");
@@ -112,6 +128,7 @@ int main(int argc, char* argv[])
 	_Module.Term();
 	::CoUninitialize();
 	
+	avformat_network_deinit();
 
 	return nRet;
 }
@@ -126,4 +143,8 @@ void enable_crt_heap_dbg()
 
 	// Set flag to the new value.
 	_CrtSetDbgFlag(tmpFlag);
+}
+
+void show_help_default(const char *opt, const char *arg)
+{
 }

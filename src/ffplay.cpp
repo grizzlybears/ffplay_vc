@@ -30,6 +30,7 @@ extern "C" {
 #include <signal.h>
 
 #include <SDL.h>
+#include "cmdutils.h"
 #include "ffdecoder/ffdecoder.h"
 
 const char g_program_name[] = "ffplay";

@@ -1566,3 +1566,11 @@ void print_error(const char* filename, int err)
         errbuf_ptr = strerror(AVUNERROR(err));
     av_log(NULL, AV_LOG_ERROR, "%s: %s\n", filename, errbuf_ptr);
 }
+
+
+#ifdef FFPLAY_VC
+void VideoState::quit_main_loop()
+{
+}
+#endif
+
