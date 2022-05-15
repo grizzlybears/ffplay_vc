@@ -75,6 +75,12 @@
     <ClInclude Include="src\cmdutils.h">
       <Filter>Globals</Filter>
     </ClInclude>
+    <ClInclude Include="src_vc\player\FFMpegWrapper.h">
+      <Filter>Player</Filter>
+    </ClInclude>
+    <ClInclude Include="src_vc\player\win_render.h">
+      <Filter>Player</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src_vc\main.cpp">
@@ -103,6 +109,12 @@
     </ClCompile>
     <ClCompile Include="src\cmdutils.c">
       <Filter>Globals</Filter>
+    </ClCompile>
+    <ClCompile Include="src_vc\player\FFMpegWrapper.cpp">
+      <Filter>Player</Filter>
+    </ClCompile>
+    <ClCompile Include="src_vc\player\win_render.cpp">
+      <Filter>Player</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

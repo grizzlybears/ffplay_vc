@@ -148,7 +148,9 @@
     <ClInclude Include="src_vc\player\BaseDecoder.h" />
     <ClInclude Include="src_vc\player\BasePlayer.h" />
     <ClInclude Include="src_vc\player\common_def.h" />
+    <ClInclude Include="src_vc\player\FFMpegWrapper.h" />
     <ClInclude Include="src_vc\player\SingleFilePlayer.h" />
+    <ClInclude Include="src_vc\player\win_render.h" />
     <ClInclude Include="src_vc\resource.h" />
     <ClInclude Include="src_vc\stdafx.h" />
     <ClInclude Include="src_vc\UI\AboutDlg.h" />
@@ -163,7 +165,9 @@
     <ClCompile Include="ffdecoder\SimpleAvCommon.cpp" />
     <ClCompile Include="src\cmdutils.c" />
     <ClCompile Include="src_vc\main.cpp" />
+    <ClCompile Include="src_vc\player\FFMpegWrapper.cpp" />
     <ClCompile Include="src_vc\player\SingleFilePlayer.cpp" />
+    <ClCompile Include="src_vc\player\win_render.cpp" />
     <ClCompile Include="src_vc\stdafx.cpp" />
     <ClCompile Include="src_vc\UI\MainDlg.cpp" />
     <ClCompile Include="utils\thread_utils.cpp" />

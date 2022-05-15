@@ -73,7 +73,7 @@ int SingleFilePlayer::open_file(const char* media_file)
 		close_file();
 	}
 	
-	_driver = create_simple(this);
+	_driver = create_ffmpeg_wrapper(this);
 	int r = _driver->Init(this);
 	if (r)
 	{
@@ -517,14 +517,6 @@ void SingleFilePlayer::on_picture_size_got(int w, int h)
 }
 
 
-
-#define VIDEO_WATER_MARK_FONTFACE_NAME		L"新宋体"
-#define VIDEO_WATER_MARK_STANDARD_CHAR		L"国"		//用于计算单个汉字大小的字
-#define WATER_MAKR_MAGIC_SCALE_AXIS			64			//字体像素相对于斜边的值
-#define WATER_MAKR_MAGIC_SCALE_HORIZ		64			//字体像素相对于宽边的值
-
-void DrawOppositeAnglesWaterText(HDC hDc, const WCHAR* fontname, const WCHAR* text, COLORREF color, int rectWidth, int rectHeight);
-
 int SingleFilePlayer::is_custom_draw_present()
 {
 	return 0;
@@ -536,7 +528,3 @@ void SingleFilePlayer::on_custom_draw(HDC hDc)
 
 }
 
-BaseDecoder* create_simple(DecoderEventCB* cb)
-{
-	return NULL;
-}

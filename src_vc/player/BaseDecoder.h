@@ -113,5 +113,6 @@ protected:
 	
 };
 
-BaseDecoder* create_simple(DecoderEventCB* cb); 
+BaseDecoder* create_dummy(DecoderEventCB* cb); 
+BaseDecoder* create_ffmpeg_wrapper(DecoderEventCB* cb);
 

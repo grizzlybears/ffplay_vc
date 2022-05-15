@@ -355,6 +355,9 @@ public:
     
     void close_input_stream(); 
 
+	int just_open_input_stream(const char* filename);
+	int start_stream_parser();
+
     // {{{ stream operation section
     void stream_seek( int64_t pos, int64_t rel, int seek_by_bytes);
 

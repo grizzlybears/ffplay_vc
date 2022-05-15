@@ -27,7 +27,6 @@ typedef std::vector<CAtlStringA> StringArray;
 void get_argv(StringArray& argv)
 {
 	// parse cmdline
-
 	LPWSTR* szArglist;
 	int nArgs;
 	int i;
@@ -48,13 +47,6 @@ void get_argv(StringArray& argv)
 
 	// Free memory allocated for CommandLineToArgvW arguments.
 	LocalFree(szArglist);
-
-	//printf("\n\n");
-	//StringArray::iterator it;
-	//for (it = argv.begin(); it != argv.end(); it++)
-	//{
-	//	printf("%s\n", it->GetString());
-	//}
 }
 
 
@@ -120,6 +112,7 @@ int main(int argc, char* argv[])
 #endif
 	avformat_network_init();
 	just_show_banner();
+	Decoder::onetime_global_init();
 
 	int nRet = Run();
 

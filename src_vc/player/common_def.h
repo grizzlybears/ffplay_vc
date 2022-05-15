@@ -1,7 +1,7 @@
 #pragma once
 
 
-// 所有接口成功都返回0，失败返回错误码，‘ -1 ’ 表示‘不支持’
+// All API returns '0' when sucesses; returns error code when fails, ‘ -1 ’ : ‘not supported’
 
 #define DEC_OK				(0)
 #define DEC_NOT_SUPPORTED   (-1)
