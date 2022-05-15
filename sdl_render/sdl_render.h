@@ -54,5 +54,10 @@ protected:
     void show_texture(const Frame* video_frame, const SDL_Rect& rect, int show_subtitle);
     int realloc_texture(SDL_Texture** texture, Uint32 new_format, int new_width, int new_height, SDL_BlendMode blendmode, int init_texture);
     
+    struct SwsContext* sws_ctx_for_rgb; 
+
 };
+
+int save_frame_to_rgb24(const AVFrame* frame, struct SwsContext** sws_ctx);
+void save_rgb_frame_to_file(const char* filename, AVFrame *pFrame, int width, int height);
 

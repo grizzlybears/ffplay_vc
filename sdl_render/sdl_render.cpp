@@ -45,7 +45,9 @@ RenderSDL::RenderSDL()
     window_shown = 0;
     cursor_hidden = 0; 
     cursor_last_shown = 0;
-    img_convert_ctx = NULL;
+    img_convert_ctx = NULL; 
+    
+    sws_ctx_for_rgb = NULL;
 }
 
 int RenderSDL::init(int audio_disable, int alwaysontop)
@@ -220,6 +222,12 @@ void RenderSDL::safe_release()
     {
         SDL_DestroyWindow(window);
         window = NULL;
+    } 
+    
+    if (this-> sws_ctx_for_rgb)
+    {
+        sws_freeContext(this->sws_ctx_for_rgb);
+        this-> sws_ctx_for_rgb = NULL;
     }
 
 }
@@ -317,6 +325,80 @@ void RenderSDL::get_sdl_pix_fmt_and_blendmode(int format, Uint32* sdl_pix_fmt, S
     }
 }
 
+int save_frame_to_rgb24(AVFrame* frame, struct SwsContext** sws_ctx)
+{
+    static int frame_num = 0;
+    if (! ( 0 == (frame_num % 10) && frame_num < 100 ) )
+    {
+        frame_num ++;
+        return 0;
+    }
+    frame_num ++;
+    LOG_DEBUG("save frame #%02d.\n", frame_num );
+
+    *sws_ctx = sws_getCachedContext(*sws_ctx ,
+            frame->width, frame->height, (enum AVPixelFormat)frame->format
+            , frame->width, frame->height , AV_PIX_FMT_RGB24
+            , SWS_BICUBIC , NULL, NULL, NULL);
+    if (! *sws_ctx)
+    {
+        LOG_ERROR("Cannot initialize the conversion context\n");
+        return 1;
+    }
+
+
+
+    AVFrame *pFrameRGB = av_frame_alloc(); 
+    if (!pFrameRGB )
+    {
+        LOG_ERROR("Alloc frame failed!\n");
+        return -1;
+    } 
+    
+    int rgb_buffer_size = av_image_get_buffer_size(AV_PIX_FMT_RGB24, frame->width,  frame->height, 1);
+    uint8_t * rgb_buffer = (uint8_t *)av_malloc(rgb_buffer_size );
+
+    av_image_fill_arrays(pFrameRGB->data, pFrameRGB->linesize
+            , rgb_buffer, AV_PIX_FMT_RGB24
+            , frame->width, frame->height , 1);
+
+    sws_scale(*sws_ctx
+            , (const unsigned char* const*) frame->data, frame->linesize
+            , 0, frame->height
+            , pFrameRGB->data, pFrameRGB->linesize);
+
+    AString filename("frame.%02d.ppm" , frame_num );
+    save_rgb_frame_to_file( filename, pFrameRGB , frame->width,  frame->height);
+
+    av_frame_free(&pFrameRGB);
+    av_free(rgb_buffer);
+
+    return 0;
+}
+
+void save_rgb_frame_to_file(const char* filename, AVFrame *pFrame, int width, int height)
+{
+    FILE *pFile = NULL;
+    int y = 0;
+    
+    pFile = fopen( filename, "wb");
+    if (NULL == pFile)
+    {
+        LOG_ERROR("failed to open %s for wr.\n" ,  filename);
+        return;
+    }
+    
+    // Write header
+    fprintf(pFile, "P6\n%d %d\n255\n", width, height);
+    
+    // Write pixel data
+    for (y = 0; y < height; y++)
+        fwrite(pFrame->data[0] + y * pFrame->linesize[0], 1, width * 3, pFile);
+    
+    fclose(pFile);
+}
+
+
 int RenderSDL::upload_texture(SDL_Texture** tex, AVFrame* frame, struct SwsContext** img_convert_ctx) {
     int ret = 0;
     Uint32 sdl_pix_fmt;
@@ -407,6 +489,7 @@ void RenderSDL::upload_and_draw_frame(Frame* vp)
             , vp->width, vp->height, vp->sample_aspect_ratio); 
     
     if (!vp->uploaded) {
+        save_frame_to_rgb24(vp->frame, &sws_ctx_for_rgb);
         if (upload_texture(&vid_texture, vp->frame, &img_convert_ctx) < 0)
             return;
         vp->uploaded = 1;
