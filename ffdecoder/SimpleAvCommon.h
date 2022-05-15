@@ -72,9 +72,6 @@ extern "C"
 /* Calculate actual buffer size keeping in mind not cause too frequent audio callbacks */
 #define SDL_AUDIO_MAX_CALLBACKS_PER_SEC 30
 
-/* Step size for volume control in dB */
-#define SDL_VOLUME_STEP (0.75)
-
 /* no AV sync correction is done if below the minimum AV sync threshold */
 #define AV_SYNC_THRESHOLD_MIN 0.04
 /* AV sync correction is done if above the maximum AV sync threshold */
@@ -267,7 +264,7 @@ protected:
 
 };
 
-CString av_strerror2(int err);
+AString av_strerror2(int err);
 
 int is_realtime(AVFormatContext* s);
 
@@ -276,5 +273,5 @@ inline int compute_mod(int a, int b)
     return a < 0 ? a % b + b : a % b;
 }
 
-CString codec_para_2_str(const AVCodecParameters * codec_para);
+AString codec_para_2_str(const AVCodecParameters * codec_para);
 

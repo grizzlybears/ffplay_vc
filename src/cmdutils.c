@@ -55,12 +55,14 @@
 #include "libavutil/ffversion.h"
 #include "libavutil/version.h"
 #include "cmdutils.h"
-#if HAVE_SYS_RESOURCE_H
+#if defined(_GNUC_) && HAVE_SYS_RESOURCE_H
 #include <sys/time.h>
 #include <sys/resource.h>
 #endif
+
 #ifdef _WIN32
 #include <windows.h>
+#include <time.h>
 #endif
 
 static int init_report(const char *env);
@@ -1083,7 +1085,7 @@ int opt_max_alloc(void *optctx, const char *opt, const char *arg)
 
 int opt_timelimit(void *optctx, const char *opt, const char *arg)
 {
-#if HAVE_SETRLIMIT
+#if defined(_GNUC_) && HAVE_SETRLIMIT
     int lim = parse_number_or_die(opt, arg, OPT_INT64, 0, INT_MAX);
     struct rlimit rl = { lim, lim + 1 };
     if (setrlimit(RLIMIT_CPU, &rl))

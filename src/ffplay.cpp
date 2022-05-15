@@ -29,7 +29,7 @@ extern "C" {
 #include <assert.h>
 #include <signal.h>
 
-
+#include <SDL.h>
 #include "ffdecoder/ffdecoder.h"
 
 const char g_program_name[] = "ffplay";
@@ -42,9 +42,9 @@ void refresh_loop_wait_event(SimpleAVDecoder * av_decoder, SDL_Event *event) {
     double remaining_time = 0.0;
     SDL_PumpEvents();
     while (!SDL_PeepEvents(event, 1, SDL_GETEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT)) {
-        if (! av_decoder->render.cursor_hidden && av_gettime_relative() - av_decoder->render.cursor_last_shown > CURSOR_HIDE_DELAY) {
+        if (! av_decoder->render->cursor_hidden && av_gettime_relative() - av_decoder->render->cursor_last_shown > CURSOR_HIDE_DELAY) {
             SDL_ShowCursor(0);
-            av_decoder->render.cursor_hidden = 1;
+            av_decoder->render->cursor_hidden = 1;
         }
         if (remaining_time > 0.0)
             av_usleep((unsigned int)(remaining_time * 1000000.0));
@@ -70,11 +70,11 @@ void event_loop(VideoState *cur_stream)
                 return;
             }
             // If we don't yet have a window, skip all key events, because read_thread might still be initializing...
-            if (!cur_stream->av_decoder.render.is_window_shown() )
+            if (!cur_stream->av_decoder.render->is_window_shown() )
                 continue;
             switch (event.key.keysym.sym) {
             case SDLK_f:
-                cur_stream->av_decoder.render.toggle_full_screen();
+                cur_stream->av_decoder.render->toggle_full_screen();
                 cur_stream->av_decoder.toggle_need_drawing (1);
                 break;
             case SDLK_p:
@@ -86,11 +86,11 @@ void event_loop(VideoState *cur_stream)
                 break;
             case SDLK_KP_MULTIPLY:
             case SDLK_0:
-                cur_stream->av_decoder.update_volume( 1, SDL_VOLUME_STEP);
+                cur_stream->av_decoder.update_volume( 10);
                 break;
             case SDLK_KP_DIVIDE:
             case SDLK_9:
-                cur_stream->av_decoder.update_volume( -1, SDL_VOLUME_STEP);
+                cur_stream->av_decoder.update_volume( -10);
                 break;
             case SDLK_s: // S: Step to next frame
                 cur_stream->step_to_next_frame();
@@ -140,7 +140,7 @@ void event_loop(VideoState *cur_stream)
             if (event.button.button == SDL_BUTTON_LEFT) {
                 static int64_t last_mouse_left_click = 0;
                 if (av_gettime_relative() - last_mouse_left_click <= 500000) {
-                    cur_stream->av_decoder.render.toggle_full_screen();
+                    cur_stream->av_decoder.render->toggle_full_screen();
                     cur_stream->av_decoder.toggle_need_drawing (1);
                     last_mouse_left_click = 0;
                 } else {
@@ -148,11 +148,11 @@ void event_loop(VideoState *cur_stream)
                 }
             }
         case SDL_MOUSEMOTION:
-            if (cur_stream->av_decoder.render.cursor_hidden) {
+            if (cur_stream->av_decoder.render->cursor_hidden) {
                 SDL_ShowCursor(1);
-                cur_stream->av_decoder.render.cursor_hidden = 0;
+                cur_stream->av_decoder.render->cursor_hidden = 0;
             }
-            cur_stream->av_decoder.render.cursor_last_shown = av_gettime_relative();
+            cur_stream->av_decoder.render->cursor_last_shown = av_gettime_relative();
             if (event.type == SDL_MOUSEBUTTONDOWN) {
                 if (event.button.button != SDL_BUTTON_RIGHT)
                     break;
@@ -164,7 +164,7 @@ void event_loop(VideoState *cur_stream)
             }
                 if (cur_stream->format_context->duration <= 0) {
                     uint64_t size =  avio_size(cur_stream->format_context->pb);
-                    cur_stream->stream_seek( (int64_t)( size * x / cur_stream->av_decoder.render.screen_width), 0, 1);
+                    cur_stream->stream_seek( (int64_t)( size * x / cur_stream->av_decoder.render->screen_width), 0, 1);
                 } else {
                     int64_t ts;
                     int ns, hh, mm, ss;
@@ -173,7 +173,7 @@ void event_loop(VideoState *cur_stream)
                     thh  = tns / 3600;
                     tmm  = (tns % 3600) / 60;
                     tss  = (tns % 60);
-                    frac = x / cur_stream->av_decoder.render.screen_width ;
+                    frac = x / cur_stream->av_decoder.render->screen_width ;
                     ns   = (int)(frac * tns);
                     hh   = ns / 3600;
                     mm   = (ns % 3600) / 60;
@@ -190,8 +190,8 @@ void event_loop(VideoState *cur_stream)
         case SDL_WINDOWEVENT:
             switch (event.window.event) {
                 case SDL_WINDOWEVENT_SIZE_CHANGED:
-                    cur_stream->av_decoder.render.screen_width  = event.window.data1;
-                    cur_stream->av_decoder.render.screen_height = event.window.data2;
+                    cur_stream->av_decoder.render->screen_width  = event.window.data1;
+                    cur_stream->av_decoder.render->screen_height = event.window.data2;
                     
                 case SDL_WINDOWEVENT_EXPOSED:
                     cur_stream->av_decoder.toggle_need_drawing (1);
@@ -258,6 +258,7 @@ void opt_input_file(void *optctx, const char *filename)
 static int dummy;
 
 static const OptionDef options[] = {
+#if defined(__GNUC__) || ( _MSC_VER >= 1920)
     CMDUTILS_COMMON_OPTIONS
     { "s", HAS_ARG | OPT_VIDEO, { .func_arg = opt_frame_size }, "set frame size (WxH or abbreviation)", "size" },
     { "ss", HAS_ARG, { .func_arg = opt_seek }, "seek to a given position in seconds", "pos" },
@@ -267,6 +268,7 @@ static const OptionDef options[] = {
     { "sync", HAS_ARG | OPT_EXPERT, { .func_arg = opt_sync }, "set audio-video sync. type (type=audio/video/ext)", "type" },
     { "autoexit", OPT_BOOL | OPT_EXPERT, { &opt_autoexit }, "exit at the end", "" },
     { "i", OPT_BOOL, { &dummy}, "read specified file", "input_file"},    
+#endif
     { NULL, },
 };
 
@@ -314,7 +316,6 @@ SharedFile  g_main_logger;  // on Windows, 'FILE*' is not thread-safe.
 /* Called from the main */
 int main(int argc, char **argv)
 {
-    
     av_log_set_flags(AV_LOG_SKIP_REPEATED);
     parse_loglevel(argc, argv, options);
 
@@ -354,11 +355,18 @@ int main(int argc, char **argv)
     is->streamopt_autoexit = opt_autoexit;
     
     // init decoder
-    if (is->av_decoder.render.init(0 /*audio disable*/, 0 /*alwaysontop*/))
+    is->av_decoder.render = RenderBase::create_sdl_render() ;
+    if (!is->av_decoder.render)
+    {
+        LOG_ERROR("Failed in creating render.\n");
+        goto EXIT;
+    }
+
+    if (is->av_decoder.render->init(0 /*audio disable*/, 0 /*alwaysontop*/))
     {
         goto EXIT;
     }
-    is->av_decoder.render.window_title = opt_input_filename;
+    is->av_decoder.render->window_title = opt_input_filename;
     is->av_decoder.show_status = opt_show_status;
     is->av_decoder.set_master_sync_type(opt_av_sync_type);
     is->av_decoder.decoder_reorder_pts = opt_decoder_reorder_pts;
@@ -378,7 +386,6 @@ EXIT:
     if (is)
     {
         is->close_input_stream();
-        is->av_decoder.render.safe_release();
         delete is;
     }
 
@@ -398,4 +405,12 @@ void sigterm_handler(int sig)
 
     SDL_PushEvent(&event);
 
+}
+
+void VideoState::quit_main_loop() 
+{
+    SDL_Event event;
+    event.type = FF_QUIT_EVENT;
+    event.user.data1 = this;
+    SDL_PushEvent(&event);
 }

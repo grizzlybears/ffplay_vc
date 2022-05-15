@@ -1,4 +1,4 @@
-#ifndef  _CSTRING__H_
+﻿#ifndef  _CSTRING__H_
 #define  _CSTRING__H_
 
 #include <stdlib.h>
@@ -23,11 +23,11 @@
 #endif
 
 typedef const char * LPCTSTR;
-class CString:
+class AString:
 	public std::string
 {
 public:
-	explicit CString(LPCTSTR pszFormat, ...) attr_printf23
+	explicit AString(LPCTSTR pszFormat, ...) attr_printf23
 	{
 		va_list pArg;
 		va_start(pArg, pszFormat);    
@@ -36,44 +36,44 @@ public:
 		va_end(pArg);
 	}
 
-	CString(LPCTSTR pszFormat, va_list  pArg)
+	AString(LPCTSTR pszFormat, va_list  pArg)
 	{
 		FormatV(pszFormat, pArg);
 	}
 
-	CString()
+	AString()
 		:std::string()
 	{
 	}
 
-	CString(const char * a)
+	AString(const char * a)
 		:std::string(a)
 	{
 	}
     
-    CString(const std::string&  a)
+    AString(const std::string&  a)
 		:std::string(a)
 	{
 	}
     
-    CString(int i )
+    AString(int i )
     {
         Format("%d",i);
     }
     
-    CString(unsigned long l )
+    AString(unsigned long l )
     {
         Format("%lu",l);
     }
 
 #ifdef __GNUC__    
-    CString(long long ll )
+    AString(long long ll )
     {
         Format("%lld",ll);
     }
 #endif
 
-	CString(time_t t )
+	AString(time_t t )
 	{
 		struct tm the_time;
 #ifdef __GNUC__
@@ -100,7 +100,7 @@ public:
 		clear();
 	}		
 #ifdef _MSC_VER
-    int vasprintf(char** pbuffer, const char* format, va_list args)
+	static int vasprintf(char** pbuffer, const char* format, va_list args)
     {
         int     len;
         len = _vscprintf(format, args) + 1; // _vscprintf doesn't count terminating '\0'
@@ -175,13 +175,13 @@ public:
 		}
 	}
 
-	CString&  operator=(const char * __s)
+	AString&  operator=(const char * __s)
 	{ 
 		this->assign(__s); 
 		return *this;
 	}
     
-    CString&  operator=(const std::string&  __s)
+    AString&  operator=(const std::string&  __s)
 	{
         if (this == & __s)
             return *this;
@@ -223,7 +223,7 @@ public:
     }
  
     // 如果以'\n' or '\r'结尾，则删之。
-    CString& remove_tail_crln()
+    AString& remove_tail_crln()
     {
         if (this->empty())
         {
@@ -247,7 +247,7 @@ public:
     }
 
     // 如果以'/'结尾，则删之。
-    CString& remove_tail_slash()
+    AString& remove_tail_slash()
     {
         if (this->empty())
         {
@@ -271,7 +271,7 @@ public:
     }
 
     // 如果不以'/'结尾，则加之。
-    CString& makesure_tail_slash()
+    AString& makesure_tail_slash()
     {
         /* gcc++ 4.4.3 不支持 back/pop_back ...
         if (this->empty() || '/' != this->back())
@@ -297,7 +297,7 @@ public:
     }
 
     
-    CString& replace_them_all(char find_this, char replace_with)
+    AString& replace_them_all(char find_this, char replace_with)
     {
         iterator iter;
         for (iter=begin(); iter!=end();iter++)
@@ -309,7 +309,7 @@ public:
         return *this;
     }
     
-    CString& replace_them_all(const char * find_this, const char * replace_with)
+    AString& replace_them_all(const char * find_this, const char * replace_with)
     {
         size_t pos =0;
         size_t len = strlen(find_this);
@@ -330,13 +330,13 @@ public:
     }
     
     //just do " -> \" , no more , no USC32 encoding!!
-    CString& simple_json_str_esc()
+    AString& simple_json_str_esc()
     {
         return replace_them_all("\"", "\\\"");
     }
     
     // in mysql syntax, '\'' and '\\' are special.    
-    CString& mysql_esc_with_sq(const char * to_esc)
+    AString& mysql_esc_with_sq(const char * to_esc)
     {
         this->clear();
         
@@ -360,20 +360,20 @@ public:
         return *this;
     }
     
-    CString& mysql_esc_with_sq()
+    AString& mysql_esc_with_sq()
     {
-        CString temp(*this);        
+        AString temp(*this);        
         return mysql_esc_with_sq(temp.c_str());
     }
     
-    CString mysql_esc_with_sq_dup() const
+    AString mysql_esc_with_sq_dup() const
     {
-        CString temp(*this);        
+        AString temp(*this);        
         return temp.mysql_esc_with_sq();
     }
     
     
-    CString& mysql_esc(const char * to_esc)
+    AString& mysql_esc(const char * to_esc)
     {
         this->clear();
         const char * walker;
@@ -394,25 +394,25 @@ public:
         return *this;
     }
     
-    CString& mysql_esc()
+    AString& mysql_esc()
     {
-        CString temp(*this);        
+        AString temp(*this);        
         return mysql_esc(temp.c_str());
     }
     
-    CString shell_arg_esc_str() const
+    AString shell_arg_esc_str() const
     {
-        CString temp(*this);
+        AString temp(*this);
         return temp.shell_arg_esc();
     }
 
-    CString& shell_arg_esc()
+    AString& shell_arg_esc()
     {
-        CString temp(*this);
+        AString temp(*this);
         return shell_arg_esc(temp.c_str());
     }
 
-    CString& shell_arg_esc(const char * to_esc)
+    AString& shell_arg_esc(const char * to_esc)
     {
         this->clear();
         const char * walker;
@@ -431,7 +431,7 @@ public:
         return *this;
     }
 
-    CString& gmtime(time_t now)
+    AString& gmtime(time_t now)
     {
         this->clear();
         struct tm the_time;
@@ -480,7 +480,7 @@ public:
         
     };
     
-    CString& unicode_to_utf8(const wchar_t* unicode)
+    AString& unicode_to_utf8(const wchar_t* unicode)
     {
         // what a pity!
         // We can not use std::codecvt or boost::locale + boost::iostreams::code_coverter
@@ -520,10 +520,10 @@ public:
 
 };
 
-typedef CString CAtlStringA;
-typedef CString CAtlString;
+//typedef AString CAtlStringA;
+//typedef AString CAtlString;
 
-inline size_t str_split(std::vector<CString>& result, const char *str, char c = ' ')
+inline size_t str_split(std::vector<AString>& result, const char *str, char c = ' ')
 {
     do
     {
@@ -537,9 +537,9 @@ inline size_t str_split(std::vector<CString>& result, const char *str, char c = 
     return result.size();
 }
 
-inline int parse_addr_port(const char * addr_port, CString& addr, int* port)
+inline int parse_addr_port(const char * addr_port, AString& addr, int* port)
 { 
-    std::vector<CString> tokens;
+    std::vector<AString> tokens;
     size_t i = str_split(tokens, addr_port, ':');
     if (2 != i)
     {
@@ -552,7 +552,7 @@ inline int parse_addr_port(const char * addr_port, CString& addr, int* port)
     return 0;
 }
 
-inline size_t str_split2( const char *str, CString& part1, CString& part2, char c = '.')
+inline size_t str_split2( const char *str, AString& part1, AString& part2, char c = '.')
 {
     part1 = part2 = ""; 
 

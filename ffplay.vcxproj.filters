@@ -19,6 +19,9 @@
     <Filter Include="ffdecoder">
       <UniqueIdentifier>{d1597394-1dcf-4246-97b7-d2239480693e}</UniqueIdentifier>
     </Filter>
+    <Filter Include="sdl_render">
+      <UniqueIdentifier>{cf84da94-4531-40cf-a61a-519d24d27baa}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ffplay.cpp">
@@ -39,6 +42,9 @@
     <ClCompile Include="ffdecoder\SimpleAvCommon.cpp">
       <Filter>ffdecoder</Filter>
     </ClCompile>
+    <ClCompile Include="sdl_render\sdl_render.cpp">
+      <Filter>sdl_render</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="utils\thread_utils.h">
@@ -55,6 +61,12 @@
     </ClInclude>
     <ClInclude Include="ffdecoder\SimpleAvCommon.h">
       <Filter>ffdecoder</Filter>
+    </ClInclude>
+    <ClInclude Include="utils\CStringWrapper.h">
+      <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="sdl_render\sdl_render.h">
+      <Filter>sdl_render</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

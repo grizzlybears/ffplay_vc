@@ -351,7 +351,7 @@ void Clock::sync_clock_to_slave(Clock* slave)
 // }}} Clock section 
 
 
-CString av_strerror2(int err)
+AString av_strerror2(int err)
 {
     char errbuf[128];
     const char* errbuf_ptr = errbuf;
@@ -398,15 +398,15 @@ void AutoReleasePtr<AVFormatContext>::release()
     me = NULL;
 }
 
-CString decode_codec_tag(uint32_t  codec_tag);
-CString codec_para_2_str (const AVCodecParameters * codec_para)
+AString decode_codec_tag(uint32_t  codec_tag);
+AString codec_para_2_str (const AVCodecParameters * codec_para)
 {
     //ref: 
     //  libavformat/dump.c  dump_stream_format()
     //  libavcodec/utils.c  avcodec_string()
 
-    CString vcodec_para_2_str (const AVCodecParameters * codec_para);
-    CString acodec_para_2_str (const AVCodecParameters * codec_para);
+    AString vcodec_para_2_str (const AVCodecParameters * codec_para);
+    AString acodec_para_2_str (const AVCodecParameters * codec_para);
 
     if ( AVMEDIA_TYPE_VIDEO == codec_para->codec_type)
     {
@@ -439,9 +439,9 @@ CString codec_para_2_str (const AVCodecParameters * codec_para)
 }
 
 
-CString vcodec_para_2_str (const AVCodecParameters * codec_para)
+AString vcodec_para_2_str (const AVCodecParameters * codec_para)
 {
-    CString codec_desc;
+    AString codec_desc;
     const AVCodecDescriptor * descriptor = avcodec_descriptor_get(codec_para->codec_id);
     if (descriptor)
     { 
@@ -459,7 +459,7 @@ CString vcodec_para_2_str (const AVCodecParameters * codec_para)
                 );
     }
 
-    CString s;
+    AString s;
     s.Format(" %s, [%dx%d] sar %d:%d, field_order: %d, %d kb/s"
             , av_get_pix_fmt_name((AVPixelFormat)codec_para->format) 
             , codec_para-> width, codec_para->height
@@ -468,12 +468,12 @@ CString vcodec_para_2_str (const AVCodecParameters * codec_para)
             , (int)(codec_para->bit_rate /1000)
             );
 
-    return CString("%s\n  %s", codec_desc.c_str(), s.c_str());
+    return AString("%s\n  %s", codec_desc.c_str(), s.c_str());
 }
 
-CString acodec_para_2_str (const AVCodecParameters * codec_para)
+AString acodec_para_2_str (const AVCodecParameters * codec_para)
 {
-    CString codec_desc;
+    AString codec_desc;
     const AVCodecDescriptor * descriptor = avcodec_descriptor_get(codec_para->codec_id);
     if (descriptor)
     {
@@ -494,7 +494,7 @@ CString acodec_para_2_str (const AVCodecParameters * codec_para)
     char layout[100];
     av_get_channel_layout_string( layout, sizeof(layout), codec_para->channels, codec_para->channel_layout);
 
-    CString s;
+    AString s;
     s.Format(" %s (%d bits), layout: %s, %d Hz, %d kb/s"
             , av_get_sample_fmt_name((AVSampleFormat)codec_para->format)
             , av_get_bytes_per_sample((AVSampleFormat)codec_para->format) * 8 
@@ -503,10 +503,10 @@ CString acodec_para_2_str (const AVCodecParameters * codec_para)
             , (int) (codec_para->bit_rate / 1000)
             );
 
-    return CString("%s\n  %s", codec_desc.c_str(), s.c_str());
+    return AString("%s\n  %s", codec_desc.c_str(), s.c_str());
 }
 
-CString decode_codec_tag(uint32_t  codec_tag)
+AString decode_codec_tag(uint32_t  codec_tag)
 {
     if (!codec_tag)
     {
@@ -516,6 +516,6 @@ CString decode_codec_tag(uint32_t  codec_tag)
     char buf[AV_FOURCC_MAX_STRING_SIZE] = {0};
     av_fourcc_make_string(buf, codec_tag );
 
-    return CString( "/%s", buf);
+	return AString ("/%s", (const char*)buf);
 }
 

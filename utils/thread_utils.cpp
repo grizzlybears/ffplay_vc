@@ -55,7 +55,7 @@ int BaseThread::wait_thread_quit()
 
 #else
 	BOOL b = WaitForSingleObject(_thread_handle, MAX_WAIT_THREAD_END_MS);
-    CloseHanle(_thread_handle);
+    CloseHandle(_thread_handle);
 	_thread_handle = NULL;
 	return !b;
 #endif
