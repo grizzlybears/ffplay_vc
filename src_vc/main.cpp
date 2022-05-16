@@ -15,6 +15,10 @@
 #endif 
 CAppModule _Module;
 
+#if defined(_WIN32) && defined(_DEBUG) 
+#define new DEBUG_NEW
+#endif
+
 SharedFile  g_main_logger;  // on Windows, 'FILE*' is not thread-safe.
 
 

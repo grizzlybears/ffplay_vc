@@ -9,6 +9,13 @@
 #include <stdlib.h>
 #include <crtdbg.h>
 
+#ifdef _DEBUG
+#define DEBUG_NEW  new ( _NORMAL_BLOCK , __FILE__ , __LINE__ )
+// Replace _NORMAL_BLOCK with _CLIENT_BLOCK if you want the allocations to be of _CLIENT_BLOCK type
+#else
+#define DEBUG_NEW new
+#endif
+
 // Change these values to use different versions
 #define WINVER		0x0601
 #define _WIN32_WINNT	0x0601

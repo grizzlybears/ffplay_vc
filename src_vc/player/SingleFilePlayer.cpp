@@ -122,6 +122,9 @@ int SingleFilePlayer::close_file()
 	_media_file = "";
 
 	switch_state(PS_NOFILE);
+	
+	_driver->Release();
+	
 
 	return 0;
 }

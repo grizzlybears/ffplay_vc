@@ -2,6 +2,12 @@
 
 #include "FFMpegWrapper.h"
 #include "ffdecoder/ffdecoder.h"
+#include "win_render.h"
+
+#if defined(_WIN32) && defined(_DEBUG) 
+#define new DEBUG_NEW
+#endif
+
 
 BaseDecoder* create_ffmpeg_wrapper(DecoderEventCB* cb)
 {
@@ -25,13 +31,35 @@ int  DecoderFFMpegWrapper::Init(DecoderEventCB* event_cb)
 		return 0;
 	}
 
-	this->vs = new VideoState();
+	VideoState* vs = new VideoState();
 	if (!vs)
 	{
 		LOG_ERROR( "Failed to create VideoState.\n");
 		return 1;
 	}
+	AutoReleasePtr<VideoState> guard1;
 
+	RenderBase* render = new WinRender();
+	if (!render)
+	{
+		LOG_ERROR("Failed to create WinRender.\n");
+		return 2;
+	}
+	AutoReleasePtr<RenderBase> guard2;
+	
+	if (render->init(0, 0))
+	{
+		LOG_ERROR("Failed to init WinRender.\n");
+		return 3;
+	}
+
+	vs->av_decoder.render = render;
+	vs->av_decoder.set_master_sync_type(AV_SYNC_AUDIO_MASTER);
+
+
+	guard2.dismiss();
+	guard1.dismiss();
+	this->vs = vs;
 	_inited = 1;
 	return 0;
 }
@@ -48,23 +76,39 @@ void DecoderFFMpegWrapper::Release(void)
 	_inited = 0;
 }
 
+#define CHECK_IF_INITED(r) \
+	if (!_inited) \
+	{ \
+		LOG_ERROR("Not initialzied.\n"); \
+		return r; \
+	}
+
 int  DecoderFFMpegWrapper::Open(const char* fileName)	
 {
+	CHECK_IF_INITED(1);
+
 	_width = 0;
 	_height = 0;
 
 	_speed = 0;
-	LOG_ERROR("Not implemented\n");
-	return 1;
+
+	// open media
+	if (vs->open_input_stream(fileName, NULL, 1)) 
+	{
+		LOG_ERROR( "Failed to open '%s'.\n", fileName);
+		return 1;
+	}
+	return 0;
 }
 
 void DecoderFFMpegWrapper::Close(void)
 {
-	
+	CHECK_IF_INITED();
 	_speed = 0;
 	_width = 0;
 	_height = 0;
 
+	vs->close_input_stream();
 }
 
 
@@ -135,8 +179,23 @@ int  DecoderFFMpegWrapper::FrameBack(void)    //单帧向后
 
 int DecoderFFMpegWrapper::GetPlayedTime(int* time_point)		//获取文件当前播放位置（秒）
 {
-	LOG_ERROR("Not implemented\n");
-	return 1;
+	CHECK_IF_INITED(1);
+	if (!vs->format_context)
+	{
+		*time_point = 0;
+		return 0;
+	}
+
+	double ts = vs->av_decoder.get_master_clock();
+	if (isnan(ts))
+	{
+		*time_point = 0;
+	}
+	else
+	{ 
+		*time_point = (int)ts;
+	}
+	return 0;
 }
 
 int DecoderFFMpegWrapper::SetPlayedTime(int  time_point)		//设置文件当前播放位置（秒）
@@ -165,22 +224,18 @@ int DecoderFFMpegWrapper::GetPictureSize(int* width, int* height)      // 获得图
 
 int  DecoderFFMpegWrapper::OpenSound()
 {
-	LOG_ERROR("Not implemented\n");
-	return 1;
-
+	return 0;
 }
 
 int  DecoderFFMpegWrapper::CloseSound()
 {
-	LOG_ERROR("Not implemented\n");
-	return 1;
+	return 0;
 }
 
 int DecoderFFMpegWrapper::GetVolume(unsigned short* vol)
 {
-	LOG_ERROR("Not implemented\n");
-	return 1;
-	
+	*vol = 100;
+	return 0;
 }
 
 int DecoderFFMpegWrapper::SetVolume(unsigned short  vol)

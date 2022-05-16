@@ -25,6 +25,11 @@
 
 #include "ffdecoder.h"
 
+#if defined(_WIN32) && defined(_DEBUG) 
+#define new DEBUG_NEW
+#endif
+
+
 //     decoder section {{{
 void Decoder::onetime_global_init()
 {

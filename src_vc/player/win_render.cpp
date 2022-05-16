@@ -1,6 +1,10 @@
 #include "stdafx.h"
 #include "win_render.h"
 
+#if defined(_WIN32) && defined(_DEBUG) 
+#define new DEBUG_NEW
+#endif
+
 WinRender::WinRender()
 {
 	canvas = NULL;
