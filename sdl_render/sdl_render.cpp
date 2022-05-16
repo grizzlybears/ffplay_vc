@@ -45,7 +45,7 @@ RenderSDL::RenderSDL()
     window_shown = 0;
     cursor_hidden = 0; 
     cursor_last_shown = 0;
-    img_convert_ctx = NULL;
+    img_convert_ctx = NULL; 
 }
 
 int RenderSDL::init(int audio_disable, int alwaysontop)
@@ -86,6 +86,7 @@ int RenderSDL::init(int audio_disable, int alwaysontop)
     {
         return 3;
     }
+    
 
     int default_display = 0;
     SDL_DisplayMode dm;
@@ -100,6 +101,9 @@ int RenderSDL::init(int audio_disable, int alwaysontop)
 
     }
 
+    SDL_ShowWindow(window); 
+    
+    inited = 1;
     return 0;
 }
 
@@ -114,7 +118,12 @@ void RenderSDL::show_window(int should_fullscreen)
         SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
         this->fullscreen = 1;
     }
-    SDL_ShowWindow(window);    
+
+    Uint32 flags = SDL_GetWindowFlags( window);
+    if (! SDL_WINDOW_SHOWN & flags )
+    {
+        SDL_ShowWindow(window); 
+    }
     window_shown = 1;
 }
 
@@ -221,7 +230,7 @@ void RenderSDL::safe_release()
         SDL_DestroyWindow(window);
         window = NULL;
     }
-
+    inited = 0;
 }
 
 void RenderSDL::set_default_window_size(int width, int height, AVRational sar)

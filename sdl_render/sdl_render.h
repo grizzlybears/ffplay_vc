@@ -14,10 +14,9 @@ public:
     }
 
     virtual int init(int audio_disable, int alwaysontop);
-
-    virtual void toggle_full_screen();
     virtual void safe_release();
 
+    virtual void toggle_full_screen();
     static void get_sdl_pix_fmt_and_blendmode(int format, Uint32* sdl_pix_fmt, SDL_BlendMode* sdl_blendmode);
     static void set_sdl_yuv_conversion_mode(AVFrame* frame);
     

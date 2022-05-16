@@ -70,8 +70,11 @@ void event_loop(VideoState *cur_stream)
             if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_q) {
                 return;
             }
+
+
             // If we don't yet have a window, skip all key events, because read_thread might still be initializing...
-            if (!cur_stream->av_decoder.render->is_window_shown() )
+            //if (!cur_stream->av_decoder.render->is_window_shown() )
+            if (!cur_stream->av_decoder.render->is_initialized())
                 continue;
             switch (event.key.keysym.sym) {
             case SDLK_f:

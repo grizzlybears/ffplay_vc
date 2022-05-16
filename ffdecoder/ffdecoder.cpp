@@ -366,18 +366,11 @@ void VideoState::close_input_stream()
     avformat_close_input(&this->format_context);
 }
 
-
-int VideoDecoder::video_open()
-{
-    get_render()->show_window(0);
-    return 0;
-}
-
 /* display the current picture, if any */
 void VideoDecoder::video_display()
 {
     if (! get_render()->is_window_shown())
-        this->video_open();
+        get_render()->show_window(0);
 
     get_render()->clear_render();
     
@@ -1393,13 +1386,13 @@ ThreadRetType  VideoState::thread_main()
         if (this->abort_request)
             break;
        
-        // 3.2 处理pause
+        // 3.2 'pause' ?
         LOOP_CHECK( read_loop_check_pause());        
 
-        // 3.3 处理seek
+        // 3.3 hanle 'seek' request
         LOOP_CHECK(read_loop_check_seek());
 
-        // 3.4 准备读入packet
+        // 3.4 now we r going to read packet
 
         /* if the queue are full, no need to read more */
         if  (infinite_buffer <1 && this->av_decoder.is_buffer_full())
@@ -1496,7 +1489,7 @@ void AutoReleasePtr<VideoState>::release()
     //外界会delete
 }
 
-int VideoState::open_input_stream(const char *filename, AVInputFormat *iformat)
+int VideoState::open_input_stream(const char *filename, AVInputFormat *iformat, int pause_now)
 {
     AutoReleasePtr<VideoState> close_if_failed(this);
 
@@ -1518,6 +1511,11 @@ int VideoState::open_input_stream(const char *filename, AVInputFormat *iformat)
     {
         av_log(NULL, AV_LOG_FATAL, "Failed to open file '%s'.\n",  this->file_to_play.GetString());
         return 6;
+    }
+
+    if ( pause_now)
+    {
+        this->toggle_pause();
     }
 
     this->create_thread(); // 启动读流线程

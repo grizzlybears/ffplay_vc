@@ -123,7 +123,6 @@ public:
 protected:
     
     virtual void on_got_new_frame(AVFrame* frame);
-    int video_open(); // open the window for showing video
     void video_image_display(); 
     
     double frame_timer; // frame_timer 是‘当前显示帧’,理论上应该‘上屏’的时刻。 
@@ -207,7 +206,8 @@ class RenderBase
 {
 public:   
     RenderBase()
-    {
+    { 
+        inited = 0;
     }
 
     virtual ~RenderBase()
@@ -216,7 +216,12 @@ public:
 
     static  RenderBase* create_sdl_render();
     
-    virtual int init(int audio_disable, int alwaysontop) = 0;
+    virtual int init(int audio_disable, int alwaysontop) = 0; 
+    virtual int is_initialized() const
+    {
+        return inited;
+    }
+    int inited;
     virtual void safe_release() = 0;
 
     virtual void toggle_full_screen() = 0;
@@ -351,12 +356,9 @@ class VideoState
 public:
     VideoState();
 
-    int open_input_stream(const char* filename, AVInputFormat* iformat);
+    int open_input_stream(const char* filename, AVInputFormat* iformat, int paused = 0);
     
     void close_input_stream(); 
-
-	int just_open_input_stream(const char* filename);
-	int start_stream_parser();
 
     // {{{ stream operation section
     void stream_seek( int64_t pos, int64_t rel, int seek_by_bytes);
