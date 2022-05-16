@@ -1100,7 +1100,6 @@ int VideoState::open_stream_file()
         av_log(NULL, AV_LOG_FATAL, "Could not allocate context.\n");
         return  AVERROR(ENOMEM);        
     }
-    AutoReleasePtr<AVFormatContext> guard(format_context);
 
     format_context->interrupt_callback.callback = decode_interrupt_cb;
     format_context->interrupt_callback.opaque = this;
@@ -1108,11 +1107,12 @@ int VideoState::open_stream_file()
     err = avformat_open_input(&format_context, this->file_to_play, this->iformat, NULL);
     if (err < 0) {
         print_error(this->file_to_play, err);
+        avformat_free_context(format_context);
+        format_context = NULL;
         return -1;
     }
 
     this->format_context = format_context;
-    guard.dismiss();
 
     av_format_inject_global_side_data(format_context);
 
