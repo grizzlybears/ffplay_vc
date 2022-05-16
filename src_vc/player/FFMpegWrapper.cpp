@@ -39,7 +39,7 @@ int  DecoderFFMpegWrapper::Init(DecoderEventCB* event_cb)
 	}
 	AutoReleasePtr<VideoState> guard1;
 
-	RenderBase* render = new WinRender();
+	RenderBase* render = new WinRender(&vs->av_decoder);
 	if (!render)
 	{
 		LOG_ERROR("Failed to create WinRender.\n");
@@ -54,8 +54,8 @@ int  DecoderFFMpegWrapper::Init(DecoderEventCB* event_cb)
 	}
 
 	vs->av_decoder.render = render;
-	vs->av_decoder.set_master_sync_type(AV_SYNC_AUDIO_MASTER);
-
+	// vs->av_decoder.set_master_sync_type(AV_SYNC_AUDIO_MASTER);  wait for our audio implementation
+	vs->av_decoder.set_master_sync_type(AV_SYNC_VIDEO_MASTER);
 
 	guard2.dismiss();
 	guard1.dismiss();
@@ -123,18 +123,19 @@ void DecoderFFMpegWrapper::handle_eof(DWORD nPort)
 
 int  DecoderFFMpegWrapper::Play(HWND  screen)
 {
-	LOG_ERROR("Not implemented\n");
-	return 1;
+	vs->toggle_pause();
+	return 0;
 }
 
 int  DecoderFFMpegWrapper::Pause()  
 {
-	LOG_ERROR("Not implemented\n");
-	return 1;
+	vs->toggle_pause();
+	return 0;
 }
 int  DecoderFFMpegWrapper::Resume()   
 {
-	return 1;
+	vs->toggle_pause();
+	return 0;
 }
 int  DecoderFFMpegWrapper::Stop()	
 {

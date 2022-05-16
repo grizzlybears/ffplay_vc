@@ -5,17 +5,20 @@
 
 #include "ffdecoder/ffdecoder.h"
 
-class WinRender: public RenderBase
+class WinRender : public RenderBase
+	, public BaseThread
 {
 public:
-   
-	WinRender();
+	WinRender(SimpleAVDecoder* decoder);
     virtual ~WinRender()
     {
         safe_release();
     }
 
+	// {{  RenderBase section
+
     virtual int init(int audio_disable, int alwaysontop);
+	SimpleAVDecoder* associated_decoder; //just ref, doesn't take ownership
 
 	virtual void toggle_full_screen()
 	{
@@ -47,7 +50,14 @@ public:
     virtual void set_default_window_size(int width, int height, AVRational sar)
 	{
 	}
-
+	// }}  RenderBase section
+	
+	// {{ SDL section
+	virtual  ThreadRetType thread_main();  //  we are 'BaseThread'
+	void sql_event_loop(); 
+	static void refresh_loop_wait_event(SimpleAVDecoder * av_decoder, /*SDL_Event*/ void *event);
+	void quit_main_loop();
+	// }} SDL section
 
 	// todo: we may need to subclass the windows, handle WM_PAINT/WM_SIZE ...
 	void attach_to_window(HWND  hWnd); 
