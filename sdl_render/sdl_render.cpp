@@ -1,4 +1,8 @@
 #include "sdl_render.h"
+struct TextureFormatEntry {
+    enum AVPixelFormat format;
+    int texture_fmt;
+} ;
 
  const struct TextureFormatEntry sdl_texture_format_map[] = {
     { AV_PIX_FMT_RGB8,           SDL_PIXELFORMAT_RGB332 },

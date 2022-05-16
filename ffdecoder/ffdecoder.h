@@ -2,7 +2,6 @@
 
 #include "SimpleAvCommon.h"
 
-
 typedef struct AudioParams {
     int freq;
     int channels;
@@ -22,16 +21,17 @@ class VideoState;
 class SimpleAVDecoder;
 class RenderBase;
 
-typedef enum      // SimpleAVDecoderÄÚ¶¨: VÁ÷idÊÇ 1, AÁ÷idÊÇ 2
+typedef enum   // SimpleAVDecoder spec : V stream is 1, A stream is 2
 {
     PSI_BAD   =  0,
     PSI_VIDEO =  1,
     PSI_AUDIO =  2,
 }PsuedoStreamId ; 
 
-struct AVPacketExtra  // ÎªÁË parser Óë decoder ·ÖÀë£¬ÐèÒªÎ¹ AVPacketµÄÊ±ºò£¬´øÉÏÒ»Ð©À©Õ¹ÐÅÏ¢ 
+struct AVPacketExtra  // 'decoder' could be seperated from 'parser'.
+                      // we may need some extra info when feeding AVPacket to 'decoder'
 {
-    int v_or_a; // ±ØÐëÊÇ PsuedoStreamId 
+    int v_or_a; // must be PsuedoStreamId 
 
     AVPacketExtra()
         : v_or_a(PSI_BAD)
@@ -42,9 +42,9 @@ struct AVPacketExtra  // ÎªÁË parser Óë decoder ·ÖÀë£¬ÐèÒªÎ¹ AVPacketµÄÊ±ºò£¬´øÉ
 struct StreamParam // cache some initial param from AVStream
 {
 public:
-    AVRational  time_base;      // ×îÐ¡Ê±¼äµ¥Î»
+    AVRational  time_base;      // min time unit, from ffmoeg
     int64_t     start_time;
-    AVRational  guessed_vframe_rate;  // Ö»ÓÐVÁ÷ÓÃµ½
+    AVRational  guessed_vframe_rate;  // only used in V stream
 };
 
 class Decoder 
@@ -76,15 +76,15 @@ protected:
     SimpleAVDecoder* _av_decoder; 
     AVCodecContext* avctx; // take owner ship
     
-    FrameQueue  frame_q;        // Ô­ VideoState:: pictq/sampq/subpq
-    PacketQueue packet_q;       // Ô­ VideoState:: videoq/audioq/subtitleq
-    Clock       stream_clock;   // Ô­ VideoState:: vidclk/audclk/(null)
+    FrameQueue  frame_q;        //  VideoState:: pictq/sampq/subpq
+    PacketQueue packet_q;       //  VideoState:: videoq/audioq/subtitleq
+    Clock       stream_clock;   //  VideoState:: vidclk/audclk/(null)
 
     RenderBase* get_render();
     
-    AVPacket pending_pkt;  // avcodec_send_packet Óöµ½E_AGAIN£¬ÐèÒªÔÝ´æ
+    AVPacket pending_pkt;  // when avcodec_send_packet returns E_AGAIN£¬we need to hold the pkt.
     int is_packet_pending;
-    int pkt_serial;        // µ±Ç°pktµÄserial 
+    int pkt_serial;        // 'serial' of current pkt  
     int finished;
     
     int64_t start_pts; 
@@ -416,14 +416,6 @@ protected:
     void quit_main_loop(); // todo: still ref 'SDL'
     // }}} 'reader thread' section
 };
-
-
-#define FF_QUIT_EVENT    (SDL_USEREVENT + 2)
-
-extern const struct TextureFormatEntry {
-    enum AVPixelFormat format;
-    int texture_fmt;
-} sdl_texture_format_map[];
 
 
 /**

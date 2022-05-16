@@ -36,6 +36,8 @@ extern "C" {
 const char g_program_name[] = "ffplay";
 const int program_birth_year = 2003;
 
+#define FF_QUIT_EVENT    (SDL_USEREVENT + 2)
+
 void sigterm_handler(int sig);
 
 // keep refreshing video until any SDL_Event occurs
