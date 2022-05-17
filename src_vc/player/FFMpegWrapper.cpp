@@ -83,6 +83,21 @@ void DecoderFFMpegWrapper::Release(void)
 		return r; \
 	}
 
+#define CHECK_IF_MEDIA_PRESENT(r) \
+	if (!_inited) \
+	{ \
+		LOG_ERROR("Not initialzied.\n"); \
+		return r; \
+	} \
+	if (!vs->format_context) \
+	{ \
+		LOG_ERROR("No media present.\n"); \
+		return r; \
+	}
+
+
+
+
 int  DecoderFFMpegWrapper::Open(const char* fileName)	
 {
 	CHECK_IF_INITED(1);
@@ -123,6 +138,7 @@ void DecoderFFMpegWrapper::handle_eof(DWORD nPort)
 
 int  DecoderFFMpegWrapper::Play(HWND  screen)
 {
+	CHECK_IF_MEDIA_PRESENT(1);
 	WinRender* render = (WinRender*)vs->av_decoder.render;
 	render-> attach_to_window(screen);
 
@@ -132,18 +148,29 @@ int  DecoderFFMpegWrapper::Play(HWND  screen)
 
 int  DecoderFFMpegWrapper::Pause()  
 {
+	CHECK_IF_MEDIA_PRESENT(1);
 	vs->toggle_pause();
 	return 0;
 }
 int  DecoderFFMpegWrapper::Resume()   
 {
+	CHECK_IF_MEDIA_PRESENT(1);
 	vs->toggle_pause();
 	return 0;
 }
 int  DecoderFFMpegWrapper::Stop()	
 {
-	LOG_ERROR("Not implemented\n");
-	return 1;
+	CHECK_IF_MEDIA_PRESENT(1);
+	if (!vs->av_decoder.is_paused())
+	{
+		vs->toggle_pause();
+	}
+	vs->stream_seek(0, 0, 0);
+
+	WinRender* render = (WinRender*)vs->av_decoder.render;
+	render->dettach_from_window();
+	
+	return 0;
 }
 
 int  DecoderFFMpegWrapper::Faster()	 //加速一档	
@@ -183,12 +210,7 @@ int  DecoderFFMpegWrapper::FrameBack(void)    //单帧向后
 
 int DecoderFFMpegWrapper::GetPlayedTime(int* time_point)		//获取文件当前播放位置（秒）
 {
-	CHECK_IF_INITED(1);
-	if (!vs->format_context)
-	{
-		*time_point = 0;
-		return 0;
-	}
+	CHECK_IF_MEDIA_PRESENT(1);
 
 	double ts = vs->av_decoder.get_master_clock();
 	if (isnan(ts))
@@ -204,18 +226,25 @@ int DecoderFFMpegWrapper::GetPlayedTime(int* time_point)		//获取文件当前播放位置
 
 int DecoderFFMpegWrapper::SetPlayedTime(int  time_point)		//设置文件当前播放位置（秒）
 {
-	LOG_ERROR("Not implemented\n");
-	return 1;
+	CHECK_IF_MEDIA_PRESENT(1);
+
+	double pos = vs->av_decoder.get_master_clock();
+	if (isnan(pos))
+		pos = (double)0;
+
+	int64_t  cur = (int64_t)(pos * AV_TIME_BASE);
+
+	int64_t delta = (int64_t)time_point * AV_TIME_BASE - cur;
+
+	vs->stream_seek(cur, delta, 0);
+	
+	
+	return 0;
 }
 
 int DecoderFFMpegWrapper::GetFileTotalTime(int* seconds)			//获取文件总时长（秒）
 {
-	CHECK_IF_INITED(1);
-	if (!vs->format_context)
-	{
-		LOG_ERROR("No media opened.\n");
-		return 1;
-	}
+	CHECK_IF_MEDIA_PRESENT(1);
 
 	int64_t duration = vs->format_context->duration / AV_TIME_BASE;
 	*seconds = (int)duration;

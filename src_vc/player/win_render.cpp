@@ -168,6 +168,15 @@ void WinRender::upload_and_draw_frame(Frame* vp)
 
 	AVFrame* frame = vp->frame;
 
+	if (need_pic_size)
+	{
+		if (_event_cb)
+		{
+			_event_cb->on_picture_size_got(frame->width, frame->height);
+		}
+
+		need_pic_size = 0;
+	}
 	sws_ctx_for_rgb = sws_getCachedContext(sws_ctx_for_rgb,
 		frame->width, frame->height, (enum AVPixelFormat)frame->format
 		, frame->width, frame->height, AV_PIX_FMT_RGB24
