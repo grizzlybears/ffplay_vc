@@ -4,12 +4,13 @@
 #include <atlwin.h>
 
 #include "ffdecoder/ffdecoder.h"
+#include "BaseDecoder.h"
 
 class WinRender : public RenderBase
 	, public BaseThread
 {
 public:
-	WinRender(SimpleAVDecoder* decoder);
+	WinRender(SimpleAVDecoder* decoder, DecoderEventCB* e);
     virtual ~WinRender()
     {
         safe_release();
@@ -18,7 +19,8 @@ public:
 	// {{  RenderBase section
 
     virtual int init(int audio_disable, int alwaysontop);
-	SimpleAVDecoder* associated_decoder; //just ref, doesn't take ownership
+	SimpleAVDecoder* associated_decoder;  //just ref, doesn't take ownership
+	DecoderEventCB* _event_cb;            //just ref, doesn't take ownership
 
 	virtual void toggle_full_screen()
 	{
@@ -37,7 +39,7 @@ public:
 	virtual void draw_render()
 	{
 	}
-    virtual void upload_and_draw_frame(Frame* video_frame);
+    virtual void upload_and_draw_frame(Frame* video_frame);// called from 'render thread'
 
 	virtual int create_window(const char* title, int x, int y, int w, int h, uint32_t flags)
 	{
@@ -55,19 +57,21 @@ public:
 	// {{ SDL section
 	virtual  ThreadRetType thread_main();  //  we are 'BaseThread'
 	void sql_event_loop(); 
-	static void refresh_loop_wait_event(SimpleAVDecoder * av_decoder, /*SDL_Event*/ void *event);
+	void refresh_loop_wait_event(SimpleAVDecoder * av_decoder, /*SDL_Event*/ void *event, int& refresh_count);
 	void quit_main_loop();
 	// }} SDL section
 
 	// todo: we may need to subclass the windows, handle WM_PAINT/WM_SIZE ...
 	void attach_to_window(HWND  hWnd); 
 	void dettach_from_window();
+	void draw_frame_gdi(uint8_t * rgb_buffer, int width, int height, HWND  hWnd); // called from 'render thread'
 
 protected:
     struct SwsContext* img_convert_ctx; 
     struct SwsContext* sws_ctx_for_rgb; 
 
 	HWND  canvas;
+	int   need_pic_size;
 
 };
 

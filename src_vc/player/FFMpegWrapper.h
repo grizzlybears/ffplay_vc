@@ -72,7 +72,6 @@ public:
 	/// }}} BaseDecoder section
 	void handle_eof(DWORD nPort);
 
-protected:
 	VideoState* vs;
 	DecoderEventCB* _event_cb;
 

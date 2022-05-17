@@ -39,7 +39,7 @@ int  DecoderFFMpegWrapper::Init(DecoderEventCB* event_cb)
 	}
 	AutoReleasePtr<VideoState> guard1;
 
-	RenderBase* render = new WinRender(&vs->av_decoder);
+	RenderBase* render = new WinRender(&vs->av_decoder, event_cb);
 	if (!render)
 	{
 		LOG_ERROR("Failed to create WinRender.\n");
@@ -123,6 +123,9 @@ void DecoderFFMpegWrapper::handle_eof(DWORD nPort)
 
 int  DecoderFFMpegWrapper::Play(HWND  screen)
 {
+	WinRender* render = (WinRender*)vs->av_decoder.render;
+	render-> attach_to_window(screen);
+
 	vs->toggle_pause();
 	return 0;
 }
@@ -207,8 +210,17 @@ int DecoderFFMpegWrapper::SetPlayedTime(int  time_point)		//设置文件当前播放位置
 
 int DecoderFFMpegWrapper::GetFileTotalTime(int* seconds)			//获取文件总时长（秒）
 {
-	LOG_ERROR("Not implemented\n");
-	return 1;
+	CHECK_IF_INITED(1);
+	if (!vs->format_context)
+	{
+		LOG_ERROR("No media opened.\n");
+		return 1;
+	}
+
+	int64_t duration = vs->format_context->duration / AV_TIME_BASE;
+	*seconds = (int)duration;
+	
+	return 0;
 }
 
 int DecoderFFMpegWrapper::GetPictureSize(int* width, int* height)      // 获得图像尺寸
