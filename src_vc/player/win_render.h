@@ -5,6 +5,7 @@
 
 #include "ffdecoder/ffdecoder.h"
 #include "BaseDecoder.h"
+#include <SDL.h>
 
 class WinRender : public RenderBase
 	, public BaseThread
@@ -73,6 +74,8 @@ protected:
 
 	HWND  canvas;
 	int   need_pic_size;
+
+	SDL_AudioDeviceID audio_dev;
 
 };
 

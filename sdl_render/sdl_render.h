@@ -37,7 +37,7 @@ public:
     virtual void show_window( int fullscreen);
     virtual void set_default_window_size(int width, int height, AVRational sar);
 
-    SDL_AudioDeviceID audio_dev; // todo: play audio in render not 'AudioDecoder'
+    SDL_AudioDeviceID audio_dev; 
 protected:
     SDL_Window* window;
     SDL_Renderer* renderer;

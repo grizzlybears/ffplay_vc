@@ -54,8 +54,8 @@ int  DecoderFFMpegWrapper::Init(DecoderEventCB* event_cb)
 	}
 
 	vs->av_decoder.render = render;
-	// vs->av_decoder.set_master_sync_type(AV_SYNC_AUDIO_MASTER);  wait for our audio implementation
-	vs->av_decoder.set_master_sync_type(AV_SYNC_VIDEO_MASTER);
+	vs->av_decoder.set_master_sync_type(AV_SYNC_AUDIO_MASTER); 
+	//vs->av_decoder.set_master_sync_type(AV_SYNC_VIDEO_MASTER);
 
 	guard2.dismiss();
 	guard1.dismiss();
