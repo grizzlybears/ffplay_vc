@@ -466,6 +466,7 @@ void VideoState::stream_seek(int64_t pos, int64_t rel, int seek_by_bytes)
         this->seek_flags &= ~AVSEEK_FLAG_BYTE;
         if (seek_by_bytes)
             this->seek_flags |= AVSEEK_FLAG_BYTE;
+
         this->seek_req = 1;
     }
 }
@@ -1364,6 +1365,7 @@ VideoState::VideoState()
     paused = 0; 
     last_paused = 0;
     seek_req = 0;
+	seek_flags = 0;
     infinite_buffer = -1;
     streamopt_start_time = streamopt_duration = AV_NOPTS_VALUE;
     streamopt_autoexit = 0;

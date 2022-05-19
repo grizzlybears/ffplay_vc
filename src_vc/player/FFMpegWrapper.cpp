@@ -227,17 +227,8 @@ int DecoderFFMpegWrapper::GetPlayedTime(int* time_point)		//获取文件当前播放位置
 int DecoderFFMpegWrapper::SetPlayedTime(int  time_point)		//设置文件当前播放位置（秒）
 {
 	CHECK_IF_MEDIA_PRESENT(1);
-
-	double pos = vs->av_decoder.get_master_clock();
-	if (isnan(pos))
-		pos = (double)0;
-
-	int64_t  cur = (int64_t)(pos * AV_TIME_BASE);
-
-	int64_t delta = (int64_t)time_point * AV_TIME_BASE - cur;
-
-	vs->stream_seek(cur, delta, 0);
 	
+	vs->stream_seek((int64_t)time_point * AV_TIME_BASE,  AV_TIME_BASE, 0);
 	
 	return 0;
 }
