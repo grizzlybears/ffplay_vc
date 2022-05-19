@@ -68,13 +68,11 @@ public:
 
 protected:
     struct SwsContext* img_convert_ctx; 
-    struct SwsContext* sws_ctx_for_rgb; 
+	AVFrame *pFrameRGB;
+	uint8_t * rgb_buffer;
 
 	HWND  canvas;
 	int   need_pic_size;
 
 };
-
-int save_frame_to_rgb24(const AVFrame* frame, struct SwsContext** sws_ctx);
-void save_rgb_frame_to_file(const char* filename, AVFrame *pFrame, int width, int height);
 
