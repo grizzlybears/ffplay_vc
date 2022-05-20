@@ -126,6 +126,7 @@ public:
     static AVPacket flush_pkt;
 
     int static is_flush_pkt(const AVPacket& to_check);
+    int static is_null_pkt(const AVPacket& to_check);
 
     SimpleConditionVar cond;
 
@@ -140,10 +141,10 @@ public:
         abort_request = 1;
     }
 
-    // 接管pkt生命周期，put失败也释放掉
+    // take onwership of pkt. If failed to put, release it.
     int packet_queue_put(AVPacket* pkt);
 
-    // 清空queue
+    // clear the queue
     void packet_queue_flush();
 
     void packet_queue_destroy();
