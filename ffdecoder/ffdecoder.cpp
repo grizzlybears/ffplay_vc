@@ -1336,7 +1336,7 @@ int SimpleAVDecoder::is_buffer_full()
     }
     return 0;
 }
-void SimpleAVDecoder::feed_null_pkt() // todo: 作用不明，待研究
+void SimpleAVDecoder::feed_null_pkt() // 
 {
     if (this->viddec.is_inited())
         this->viddec.packet_q.packet_queue_put_nullpacket(0);
@@ -1369,6 +1369,7 @@ VideoState::VideoState()
     infinite_buffer = -1;
     streamopt_start_time = streamopt_duration = AV_NOPTS_VALUE;
     streamopt_autoexit = 0;
+	parser_cb = NULL;
 }
 #define LOOP_CHECK(func) \
 {\
@@ -1412,15 +1413,19 @@ ThreadRetType  VideoState::thread_main()
         ret = av_read_frame(format_context, pkt);
         if (ret < 0) {
             if ((ret == AVERROR_EOF || avio_feof(format_context->pb)) && !this->eof) {  
-                this->av_decoder.feed_null_pkt(); // todo: null pkt 作用不明
+                this->av_decoder.feed_null_pkt(); 
                 this->eof = 1;
-                // todo: 这里可以回调一下通知上层 EOF
+				
                 if (streamopt_autoexit)
                     goto fail;
 
             }
             if (format_context->pb && format_context->pb->error) {
-                // todo: 这里可以回调一下通知上层 I/O Error
+				if (this->parser_cb)
+				{
+					parser_cb->on_ioerror(file_to_play, format_context->pb->error);
+				}
+
                 if (streamopt_autoexit)
                     goto fail;
             }

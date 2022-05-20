@@ -350,6 +350,17 @@ protected:
     int synchronize_audio(int nb_samples);
 };
 
+class ParserCB
+{
+public:
+	virtual void on_eof(const char* file_Playing) {
+	}
+	virtual void on_ioerror(const char* file_Playing, int error_code) {
+	}
+};
+
+
+
 class VideoState
     :public BaseThread //  stream reader thread 
 {
@@ -359,6 +370,10 @@ public:
     int open_input_stream(const char* filename, AVInputFormat* iformat, int paused = 0);
     
     void close_input_stream(); 
+
+	void set_parser_cb(ParserCB * cb){
+		parser_cb = cb;
+	}
 
     // {{{ stream operation section
     void stream_seek( int64_t pos, int64_t rel, int seek_by_bytes);
@@ -381,8 +396,10 @@ public:
 
     AVFormatContext * format_context;
 protected:    
+	ParserCB  *parser_cb ;
     int eof;
     int abort_request;
+
     
     int infinite_buffer; 
 

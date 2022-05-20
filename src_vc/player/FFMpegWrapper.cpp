@@ -1,7 +1,7 @@
 #include "stdafx.h"
 
 #include "FFMpegWrapper.h"
-#include "ffdecoder/ffdecoder.h"
+
 #include "win_render.h"
 
 #if defined(_WIN32) && defined(_DEBUG) 
@@ -37,6 +37,8 @@ int  DecoderFFMpegWrapper::Init(DecoderEventCB* event_cb)
 		LOG_ERROR( "Failed to create VideoState.\n");
 		return 1;
 	}
+	vs->set_parser_cb(this);
+
 	AutoReleasePtr<VideoState> guard1;
 
 	RenderBase* render = new WinRender(&vs->av_decoder, event_cb);
@@ -127,7 +129,7 @@ void DecoderFFMpegWrapper::Close(void)
 }
 
 
-void DecoderFFMpegWrapper::handle_eof(DWORD nPort)
+void DecoderFFMpegWrapper::on_eof(const char* file_Playing)
 {
 	if (this->_event_cb)
 	{

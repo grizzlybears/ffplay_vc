@@ -3,11 +3,12 @@
 #include "utils/utils.h"
 
 #include "BaseDecoder.h"
+#include "ffdecoder/ffdecoder.h"
 
-class VideoState;
 class DecoderFFMpegWrapper
 	: public BaseDecoder
 	, public BaseThread
+	, public ParserCB
 {
 public:
 
@@ -67,10 +68,11 @@ public:
 	virtual int GetPictureSize(int* width, int* height);      // »ñµÃÍ¼Ïñ³ß´ç
 	int _width;
 	int _height;
+	// }}} BaseDecoder section
 
-	
-	/// }}} BaseDecoder section
-	void handle_eof(DWORD nPort);
+	// {{{ ParserCB section
+	virtual void on_eof(const char* file_Playing);
+	// }}} ParserCB section
 
 	VideoState* vs;
 	DecoderEventCB* _event_cb;
