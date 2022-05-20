@@ -122,8 +122,13 @@ int Decoder::decoder_decode_frame(AVFrame *frame, AVSubtitle *sub) {
                 break;
             av_packet_unref(&pkt);
         } while (1);
-
-        // 现在 ‘pkt’ 的serial符合要求
+        // now 'serail' of ‘pkt’ is suitable to play.
+ 
+        if (PacketQueue::is_null_pkt(pkt)) {
+            eos = 1; // end of input stream
+            av_packet_unref(&pkt);
+            continue;
+        }
 
         if (PacketQueue::is_flush_pkt(pkt)) {
             avcodec_flush_buffers(this->avctx);
@@ -134,9 +139,11 @@ int Decoder::decoder_decode_frame(AVFrame *frame, AVSubtitle *sub) {
             continue;
         }
         
-        
-        // 喂packet进codec
-
+        if (eos)
+        {
+            eos = 0;
+        }
+        // feed packet to codec
         if (avcodec_send_packet(this->avctx, &pkt) == AVERROR(EAGAIN)) 
         {
             //AVERROR(EAGAIN) : input is not accepted in the current state - user
@@ -1290,6 +1297,27 @@ void SimpleAVDecoder::discard_buffer(double seek_target ) // 用于在seek后清cache
     this->extclk.set_clock(seek_target, 0);    
 }
 
+int SimpleAVDecoder::is_stalled()
+{   
+    int codec_num =  0, eos_num = 0;
+
+    if (this->viddec.is_inited()) {
+        codec_num ++;
+        if ( viddec.eos)  {
+            eos_num ++;
+        }
+    }
+    
+    if (this->auddec.is_inited()) {
+        codec_num ++;
+        if ( auddec.eos) {
+            eos_num ++;
+        }
+    }
+
+    return eos_num == codec_num ;
+}
+
 int  VideoState::read_loop_check_seek()   // return: > 0 -- shoud 'continue', 0 -- go on current iteration, < 0 -- error exit loop
 {
     if (!this->seek_req)
@@ -1336,7 +1364,7 @@ int SimpleAVDecoder::is_buffer_full()
     }
     return 0;
 }
-void SimpleAVDecoder::feed_null_pkt() // todo: 作用不明，待研究
+void SimpleAVDecoder::feed_null_pkt()  
 {
     if (this->viddec.is_inited())
         this->viddec.packet_q.packet_queue_put_nullpacket(0);
@@ -1386,12 +1414,22 @@ ThreadRetType  VideoState::thread_main()
     AVPacket pkt1, *pkt = &pkt1;
     this->eof = 0;
 
+    int stalled = 0;
 
     // 3. real loop
     for (;;) {
         // 3.1  break 条件
         if (this->abort_request)
             break;
+
+        if (eof) 
+        {
+            if (!stalled && av_decoder.is_stalled())
+            {
+                stalled = 1;
+                debug_printf("          The end.\n");
+            }
+        }
        
         // 3.2 'pause' ?
         LOOP_CHECK( read_loop_check_pause());        
@@ -1412,9 +1450,8 @@ ThreadRetType  VideoState::thread_main()
         ret = av_read_frame(format_context, pkt);
         if (ret < 0) {
             if ((ret == AVERROR_EOF || avio_feof(format_context->pb)) && !this->eof) {  
-                this->av_decoder.feed_null_pkt(); // todo: null pkt 作用不明
+                this->av_decoder.feed_null_pkt(); 
                 this->eof = 1;
-                // todo: 这里可以回调一下通知上层 EOF
                 if (streamopt_autoexit)
                     goto fail;
 
@@ -1429,6 +1466,7 @@ ThreadRetType  VideoState::thread_main()
             continue;
         } else {
             this->eof = 0;
+            stalled = 0;
         }
         /* check if packet is in play range specified by user, then queue, otherwise discard */
         if (!is_pkt_in_play_range(pkt)) { 

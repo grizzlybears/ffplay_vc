@@ -55,7 +55,8 @@ public:
     {
         _av_decoder = av_decoder;
         inited = 0; 
-        avctx = NULL;
+        avctx = NULL; 
+        eos = 0;
     }
     virtual ~Decoder() {}
     friend SimpleAVDecoder;
@@ -63,7 +64,9 @@ public:
     static AVCodecContext* create_codec_directly( const AVCodecParameters * codec_para, const StreamParam* extra_para );
     virtual int decoder_init( AVCodecContext* avctx, const StreamParam* extra_para);
     virtual void decoder_destroy();
-   
+
+    int v_or_a; // must be PsuedoStreamId 
+    int eos;
     int is_inited() const
     {
         return inited;
@@ -113,7 +116,8 @@ public:
     VideoDecoder(SimpleAVDecoder* av_decoder):MyBase(av_decoder)
     {
         stream_param.guessed_vframe_rate = av_make_q(25, 1); 
-        frame_timer = 0;
+        frame_timer = 0; 
+        v_or_a = PSI_VIDEO;
     }
     friend SimpleAVDecoder;
 
@@ -150,6 +154,7 @@ public:
         swr_ctx = NULL;   
         audio_callback_time = 0;
         audio_volume = 100;
+        v_or_a = PSI_AUDIO;
     }
     friend SimpleAVDecoder;
     virtual int decoder_init(AVCodecContext* avctx, const StreamParam* extra_para);
@@ -279,13 +284,13 @@ public:
 
     RenderBase*  render;
     
-    // 返回 bit0 代表V opened ， bit1 代表A opened 
+    // mask:  bit0  -- V opened ， bit1 -- A opened 
     int   open_stream_from_avformat(AVFormatContext* format_context,  int* vstream_id, int* astream_id);
 
     // Return:  0 -- success, non-zero -- error.
     int   open_stream(const AVCodecParameters * codec_para, const StreamParam* extra_para); 
 
-    int   get_opened_streams_mask();   // 返回 bit0 代表V， bit1 代表A
+    int   get_opened_streams_mask();  // mask:  bit0  -- V opened ， bit1 -- A opened 
     void  close_all_stream();
     
     // called to display each frame (from event loop )
@@ -293,7 +298,7 @@ public:
 
     int  get_master_sync_type() const;
     void set_master_sync_type(int how);
-    int realtime;   // 是否是实时流
+    int realtime;   // is 'realtime' stream or not
 
     /* get the current master clock value */
     double get_master_clock();
@@ -302,7 +307,8 @@ public:
     int decoder_reorder_pts;
     int show_status;
     // }}  some ffplay cmd line opt  
-
+    
+    int is_stalled();
 
     // decoder status section {{
     int   is_drawing_needed() const{ return force_refresh;}  
@@ -316,7 +322,7 @@ public:
 
     void discard_buffer(double seek_target = NAN); // 用于在seek后清cache。如果是按时间seek，则应顺手给出 seek_target (以秒为单位)
     int  is_buffer_full();
-    void feed_null_pkt(); // todo: 作用不明，待研究
+    void feed_null_pkt(); // 
     void feed_pkt(AVPacket* pkt, const AVPacketExtra* extra  ); // 向解码器喂数据包, take ownership。如果不是感兴趣的包，则释放。
     
 protected:

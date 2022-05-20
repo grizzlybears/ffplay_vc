@@ -12,6 +12,11 @@ int PacketQueue::is_flush_pkt(const AVPacket& to_check)
     return to_check.data == flush_pkt.data;
 }
 
+int PacketQueue::is_null_pkt(const AVPacket& to_check)
+{
+    return to_check.data == NULL && 0 == to_check.size;
+}
+
 int PacketQueue::packet_queue_put_private(AVPacket* pkt)
 {
     MyAVPacketListNode* pkt1;
