@@ -75,7 +75,6 @@ void event_loop(VideoState *cur_stream)
 
 
             // If we don't yet have a window, skip all key events, because read_thread might still be initializing...
-            //if (!cur_stream->av_decoder.render->is_window_shown() )
             if (!cur_stream->av_decoder.render->is_initialized())
                 continue;
             switch (event.key.keysym.sym) {
@@ -104,10 +103,10 @@ void event_loop(VideoState *cur_stream)
            
             case SDLK_PAGEUP:
                 if (cur_stream->format_context->nb_chapters <= 1) {
-                    incr = 600.0;  // 以秒为单位的，相对当前位置的seek幅度
+                    incr = 600.0;  // seek  + 600(s) 
                     goto do_seek;
                 }
-                cur_stream->seek_chapter( 1);  // 下一章
+                cur_stream->seek_chapter( 1);  // to next  chapter
                 break;
             case SDLK_PAGEDOWN:
                 if (cur_stream->format_context->nb_chapters <= 1) {
@@ -117,16 +116,16 @@ void event_loop(VideoState *cur_stream)
                 cur_stream->seek_chapter( -1);
                 break;
             case SDLK_LEFT:
-                incr =  -10.0; // 以秒为单位的，相对当前位置的seek幅度
+                incr =  -10.0; // seek -10(s)
                 goto do_seek;
             case SDLK_RIGHT:
-                incr =  10.0; // 以秒为单位的，相对当前位置的seek幅度
+                incr =  10.0; // seek +10(s) 
                 goto do_seek;
             case SDLK_UP:
-                incr = 60.0;  // 以秒为单位的，相对当前位置的seek幅度
+                incr = 60.0;  
                 goto do_seek;
             case SDLK_DOWN:
-                incr = -60.0; // 以秒为单位的，相对当前位置的seek幅度
+                incr = -60.0; 
             do_seek:
                     {
                         pos = cur_stream->av_decoder.get_master_clock();

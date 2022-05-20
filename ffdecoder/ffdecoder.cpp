@@ -93,10 +93,9 @@ int Decoder::decoder_decode_frame(AVFrame *frame, AVSubtitle *sub) {
                 if (this->packet_q.abort_request)
                     return -1;
 
-                // 在音视频流中顺序解码
+                // check if frame available
                 ret = avcodec_receive_frame(this->avctx, frame);
-                if (ret >= 0) {
-                    // 成功解得frame
+                if (ret >= 0) {  // yes we've got a frame
                     on_got_new_frame(frame);
                     return 1;
                 }                
@@ -447,19 +446,19 @@ void SimpleAVDecoder::check_external_clock_speed() {
    if ( (this->viddec.is_inited() && this->viddec.packet_q.nb_packets <= EXTERNAL_CLOCK_MIN_FRAMES) ||
         (this->auddec.is_inited() && this->auddec.packet_q.nb_packets <= EXTERNAL_CLOCK_MIN_FRAMES) )
    {
-       // 降速一档
+       // slower
        this->extclk.set_clock_speed( FFMAX(EXTERNAL_CLOCK_SPEED_MIN, this->extclk.get_clock_speed() - EXTERNAL_CLOCK_SPEED_STEP));  
    }
    else if (( !this->viddec.is_inited()  || this->viddec.packet_q.nb_packets > EXTERNAL_CLOCK_MAX_FRAMES) &&
               ( !this->auddec.is_inited() || this->auddec.packet_q.nb_packets > EXTERNAL_CLOCK_MAX_FRAMES))
    {
-       // 加速一档
+       // faster
        this->extclk.set_clock_speed( FFMIN(EXTERNAL_CLOCK_SPEED_MAX, this->extclk.get_clock_speed() + EXTERNAL_CLOCK_SPEED_STEP));
    } 
    else 
    {
        double speed = this->extclk.get_clock_speed();
-       if (speed != 1.0)  // 向‘原速’靠近一档
+       if (speed != 1.0)  // closer to 'normal speed'
            this->extclk.set_clock_speed( speed + EXTERNAL_CLOCK_SPEED_STEP * (1.0 - speed) / fabs(1.0 - speed));
    }
 }
@@ -746,7 +745,7 @@ int VideoDecoder::queue_picture( AVFrame *src_frame, double pts, double duration
     return 0;
 }
 
-// 返回 <0 表示退出解码线程
+// returning negative value means 'quit decoder thread'
 int VideoDecoder::get_video_frame( AVFrame *frame)
 {
     int got_picture;
@@ -767,7 +766,7 @@ int VideoDecoder::get_video_frame( AVFrame *frame)
     //frame->sample_aspect_ratio = av_guess_sample_aspect_ratio(this->_vs->format_context, stream, frame); // 有点过于奥义，试着删掉看效果
 
     if (this->_av_decoder->get_master_sync_type() != AV_SYNC_VIDEO_MASTER) {
-        // 看看是否有必要抛弃帧
+        // check if we need to discard some frames here 
         if (frame->pts != AV_NOPTS_VALUE) {
             double diff = dpts - this->_av_decoder->get_master_clock();
             if (!isnan(diff) && fabs(diff) < AV_NOSYNC_THRESHOLD &&
@@ -775,7 +774,7 @@ int VideoDecoder::get_video_frame( AVFrame *frame)
                 pkt_serial == stream_clock.serial &&
                 packet_q.nb_packets) 
             {
-                // 抛弃帧
+                // discard the frame
                 this->_av_decoder->frame_drops_early++;
                 av_frame_unref(frame);
                 got_picture = 0;
@@ -1200,7 +1199,7 @@ int SimpleAVDecoder::open_stream(const AVCodecParameters * codec_para, const Str
     return 0 ;
 }
 
-// 返回 bit0 代表V opened ， bit1 代表A opened 
+// return a mask:  bit0  -- V opened, bit1 -- A opened 
 int SimpleAVDecoder::open_stream_from_avformat(AVFormatContext* format_context, int* vstream_id, int* astream_id)
 {
     // 1. some preparation
@@ -1284,10 +1283,12 @@ int VideoState::read_loop_check_pause() // return: nonzero -- shoud 'continue', 
     }
     return 0;
 }
-void SimpleAVDecoder::discard_buffer(double seek_target ) // 用于在seek后清cache。如果是按时间seek，则应顺手给出 seek_target (以秒为单位)
+
+// discard cache packets for 'seek'
+void SimpleAVDecoder::discard_buffer(double seek_target ) 
 {
     if (this->auddec.is_inited()) {
-        this->auddec.packet_q.packet_queue_flush();
+        this->auddec.packet_q.packet_queue_flush(); // discard cache
         this->auddec.packet_q.packet_queue_put(&PacketQueue::flush_pkt); // packet queue 的 serial ++
     }
     if (this->viddec.is_inited()) {
@@ -1374,7 +1375,7 @@ void SimpleAVDecoder::feed_null_pkt()
         this->auddec.packet_q.packet_queue_put_nullpacket(0);
 }
 
-void SimpleAVDecoder::feed_pkt(AVPacket* pkt, const AVPacketExtra* extra) // 向解码器喂数据包
+void SimpleAVDecoder::feed_pkt(AVPacket* pkt, const AVPacketExtra* extra) 
 {
     if (PSI_VIDEO == extra->v_or_a  ) {
         this->viddec.packet_q.packet_queue_put(pkt);
@@ -1421,7 +1422,7 @@ ThreadRetType  VideoState::thread_main()
 
     // 3. real loop
     for (;;) {
-        // 3.1  break 条件
+        // 3.1  break ?
         if (this->abort_request)
             break;
 
@@ -1516,7 +1517,7 @@ int VideoState::is_pkt_in_play_range( AVPacket* pkt)
 {
     if (this->streamopt_duration == AV_NOPTS_VALUE)
         return 1;
-    //todo: 如果是‘实况转播’，来包就放，也应该无条件返回1。
+    //todo: in case of 'live cast', we should 'return 1' too. 
 
     int64_t stream_start_time = format_context->streams[pkt->stream_index]->start_time;
     if (AV_NOPTS_VALUE == stream_start_time)
@@ -1555,14 +1556,13 @@ int VideoState::open_input_stream(const char *filename, AVInputFormat *iformat, 
     
     this->iformat = iformat;
 
-
-    // 打开文件，酌情seek   
+    // open 'avformat' for input file, 'seek' if need
     if (open_stream_file())
     {
         return 5;
     }
 
-    // 逐流打开解码器
+    // open 'avcodec' for each stream we interest in
     if (0 == this->av_decoder.open_stream_from_avformat(this->format_context, &last_video_stream, &last_audio_stream))
     {
         av_log(NULL, AV_LOG_FATAL, "Failed to open file '%s'.\n",  this->file_to_play.GetString());
@@ -1574,7 +1574,7 @@ int VideoState::open_input_stream(const char *filename, AVInputFormat *iformat, 
         this->toggle_pause();
     }
 
-    this->create_thread(); // 启动读流线程
+    this->create_thread(); // lauch the 'reader' thread
     
     close_if_failed.dismiss();
     return 0;

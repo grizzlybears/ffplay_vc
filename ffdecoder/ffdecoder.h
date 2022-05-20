@@ -28,7 +28,7 @@ typedef enum   // SimpleAVDecoder spec : V stream is 1, A stream is 2
     PSI_AUDIO =  2,
 }PsuedoStreamId ; 
 
-struct AVPacketExtra  // 'decoder' could be seperated from 'parser'.
+struct AVPacketExtra  // 'decoder' could be seperated from 'parser' (even on diff host).
                       // we may need some extra info when feeding AVPacket to 'decoder'
 {
     int v_or_a; // must be PsuedoStreamId 
@@ -129,16 +129,16 @@ protected:
     virtual void on_got_new_frame(AVFrame* frame);
     void video_image_display(); 
     
-    double frame_timer; // frame_timer 是‘当前显示帧’,理论上应该‘上屏’的时刻。 
-                        // 比如 根据pts, 当前帧应该在 00:05:38.04 显示，但实际上'刷新显示操作'发生在 00:05:38.05，即物理上该帧于00:05:38.05‘上屏’
-                        // 我们还是认为 frame_timer == 00:05:38.04
-
+    double frame_timer; // when SHOULD ‘current showing picture’ be put on screen.
+                        // i.e.  'pts' of ‘current showing picture’ is 00:05:38.04,
+                        // then even it was put on to screen at 00:05:38.05
+                        // still we have  frame_timer == 00:05:38.04
     
     virtual  ThreadRetType  thread_main();  // BaseThread method 
     
     void video_display(); // display the current picture, if any  
     
-    int get_video_frame( AVFrame* frame);  // 返回 <0 表示退出解码线程
+    int get_video_frame( AVFrame* frame);  //  <0 means 'quit decorder thread'
     int queue_picture(AVFrame* src_frame, double pts, double duration, int64_t pos, int serial);
 };
 
@@ -320,10 +320,10 @@ public:
     void update_volume(int delta );
     // }} decoder status section
 
-    void discard_buffer(double seek_target = NAN); // 用于在seek后清cache。如果是按时间seek，则应顺手给出 seek_target (以秒为单位)
+    void discard_buffer(double seek_target = NAN); // clear cach for 'seek'. If seek by time, also spec the 'seek_target'  ( in unit of 'second')
     int  is_buffer_full();
     void feed_null_pkt(); // 
-    void feed_pkt(AVPacket* pkt, const AVPacketExtra* extra  ); // 向解码器喂数据包, take ownership。如果不是感兴趣的包，则释放。
+    void feed_pkt(AVPacket* pkt, const AVPacketExtra* extra  ); // take ownership of 'pkt'
     
 protected:
     AudioDecoder    auddec;
@@ -331,7 +331,7 @@ protected:
 
     int av_sync_type;
     Clock extclk;
-    void check_external_clock_speed();  // 调节外部时钟速度以适应流速
+    void check_external_clock_speed();  // adjust external to sync to the speed of stream
 
     // decoder status section {{
     int force_refresh;   // is there 'frame' waiting for drawing?
