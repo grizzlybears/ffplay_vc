@@ -423,23 +423,23 @@ int SimpleAVDecoder::get_master_sync_type() const {
     }
 }
 
+Clock* SimpleAVDecoder::get_decoder_clock() // get the master clock itself
+{
+    switch (this->get_master_sync_type()) 
+    {
+    case AV_SYNC_VIDEO_MASTER:
+        return &viddec.stream_clock;
+    case AV_SYNC_AUDIO_MASTER:
+        return & auddec.stream_clock;
+    default:
+        return & extclk;
+    }
+}
+
 /* get the current master clock value */
 double SimpleAVDecoder::get_master_clock()
 {
-    double val;
-
-    switch (this->get_master_sync_type()) {
-        case AV_SYNC_VIDEO_MASTER:
-            val = this->viddec.stream_clock.get_clock();
-            break;
-        case AV_SYNC_AUDIO_MASTER:
-            val = this->auddec.stream_clock.get_clock();
-            break;
-        default:
-            val = this->extclk.get_clock();
-            break;
-    }
-    return val;
+    return get_decoder_clock()->get_clock();
 }
 
 void SimpleAVDecoder::check_external_clock_speed() {

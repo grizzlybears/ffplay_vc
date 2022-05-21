@@ -9,12 +9,12 @@
 ```
 on Windows:
     No extra dependencies is required, the working copy carries a set of ffmpeg+SDL2 in 'dep_on_windows'.
-    Just open the .sln with VC2017 or higher and build/run. There are to 'vcproj's, 'ffplay' is the 'classic' command line style 'ffplay', and 'ffplay_vc' is a windows GUI behaving as a simplest video player.
+    Just open the .sln with VC2017 or higher and build/run. There are two 'vcproj's, 'ffplay' is the 'classic' command line style 'ffplay', and 'ffplay_vc' is a windows GUI behaving as a simplest video player.
 ```
 
 ```
 on Linux:
-    At this time, I use system installed SDL2-devel, and refer my local source built ffmpeg. You may want to tweak the 'Makefile' to set FFCFLAGS/FFLDFLAGS match your evn.
+    At this time, I use system installed SDL2-devel, and refer my local source built ffmpeg. You may want to tweak the 'Makefile' to set FFCFLAGS/FFLDFLAGS match your environment.
     Then just 'make', 'make test' or 'make valgrind'
 ```
 

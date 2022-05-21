@@ -276,3 +276,8 @@ inline int compute_mod(int a, int b)
 
 AString codec_para_2_str(const AVCodecParameters * codec_para);
 
+inline int float_equal(double a, double b)
+{
+    return fabs( a - b ) < 0.00001;
+}
+

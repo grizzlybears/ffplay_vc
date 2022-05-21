@@ -89,6 +89,49 @@ void event_loop(VideoState *cur_stream)
             case SDLK_m:
                 cur_stream->av_decoder.toggle_mute();
                 break;
+            case SDLK_PLUS:
+            case SDLK_KP_PLUS:
+                {
+                    double cur_speed = cur_stream->av_decoder.get_decoder_clock()->get_clock_speed();
+                    double speed = 2 * cur_speed;
+                    debug_printf(" speed: %.2f -> %.2f\n", cur_speed,  speed );
+                    cur_stream->av_decoder.get_decoder_clock()->set_clock_speed( speed );
+
+                    if ( ! float_equal(speed, 1.0) )
+                    {
+                        cur_stream->av_decoder.mute( 1);
+	                    cur_stream->av_decoder.set_master_sync_type(AV_SYNC_EXTERNAL_CLOCK ); 
+                    }
+                    else
+                    { 
+                        cur_stream->av_decoder.mute(0);
+	                    cur_stream->av_decoder.set_master_sync_type(AV_SYNC_AUDIO_MASTER); 
+                    }
+
+                    cur_stream->av_decoder.get_decoder_clock()->set_clock_speed( speed );
+                }
+                break; 
+            case SDLK_MINUS:
+            case SDLK_KP_MINUS:
+                {
+                    double cur_speed = cur_stream->av_decoder.get_decoder_clock()->get_clock_speed();
+                    double speed =  cur_speed / 2;
+                    debug_printf(" speed: %.2f -> %.2f\n", cur_speed,  speed );
+
+                    if ( ! float_equal(speed, 1.0) )
+                    {
+                        cur_stream->av_decoder.mute( 1);
+	                    cur_stream->av_decoder.set_master_sync_type(AV_SYNC_EXTERNAL_CLOCK); 
+                    }
+                    else
+                    { 
+                        cur_stream->av_decoder.mute(0);
+	                    cur_stream->av_decoder.set_master_sync_type(AV_SYNC_AUDIO_MASTER); 
+                    }
+                    cur_stream->av_decoder.get_decoder_clock()->set_clock_speed( speed );
+                }
+                break;
+
             case SDLK_KP_MULTIPLY:
             case SDLK_0:
                 cur_stream->av_decoder.update_volume( 10);

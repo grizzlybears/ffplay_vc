@@ -300,8 +300,8 @@ public:
     void set_master_sync_type(int how);
     int realtime;   // is 'realtime' stream or not
 
-    /* get the current master clock value */
-    double get_master_clock();
+    double get_master_clock();  // get the time value of master clock 
+    Clock* get_decoder_clock(); // get the master clock itself
         
     // {{  some ffplay cmd line opt  
     int decoder_reorder_pts;
@@ -316,6 +316,12 @@ public:
     int internal_toggle_pause();
     void toggle_step(int step_mode);
     void toggle_mute();
+    void mute(int should_mute) {
+        auddec.muted =  should_mute;
+    }
+    int is_muted()  {
+        return auddec.muted;
+    }
     int is_paused() const { return this->paused; }
     void update_volume(int delta );
     // }} decoder status section
