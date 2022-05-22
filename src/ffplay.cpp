@@ -51,9 +51,12 @@ void refresh_loop_wait_event(SimpleAVDecoder * av_decoder, SDL_Event *event) {
         }
         if (remaining_time > 0.0)
             av_usleep((unsigned int)(remaining_time * 1000000.0));
-        remaining_time = REFRESH_RATE;
+        
+        double speed = av_decoder->get_decoder_clock()->get_clock_speed();
+        remaining_time = speed > 1 ?  0.001 * FFMAX(1,   10 -  speed ) :   REFRESH_RATE ;
         if ( !av_decoder->is_paused() || av_decoder->is_drawing_needed())
             av_decoder->video_refresh( &remaining_time);
+
         SDL_PumpEvents();
     }
 }
@@ -72,7 +75,6 @@ void event_loop(VideoState *cur_stream)
             if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_q) {
                 return;
             }
-
 
             // If we don't yet have a window, skip all key events, because read_thread might still be initializing...
             if (!cur_stream->av_decoder.render->is_initialized())
@@ -94,17 +96,15 @@ void event_loop(VideoState *cur_stream)
                 {
                     double cur_speed = cur_stream->av_decoder.get_decoder_clock()->get_clock_speed();
                     double speed = 2 * cur_speed;
-                    debug_printf(" speed: %.2f -> %.2f\n", cur_speed,  speed );
+                    debug_printf(" speed: %.3f -> %.3f\n", cur_speed,  speed );
                     cur_stream->av_decoder.get_decoder_clock()->set_clock_speed( speed );
 
                     if ( ! float_equal(speed, 1.0) )
                     {
-                        cur_stream->av_decoder.mute( 1);
 	                    cur_stream->av_decoder.set_master_sync_type(AV_SYNC_EXTERNAL_CLOCK ); 
                     }
                     else
                     { 
-                        cur_stream->av_decoder.mute(0);
 	                    cur_stream->av_decoder.set_master_sync_type(AV_SYNC_AUDIO_MASTER); 
                     }
 
@@ -116,16 +116,14 @@ void event_loop(VideoState *cur_stream)
                 {
                     double cur_speed = cur_stream->av_decoder.get_decoder_clock()->get_clock_speed();
                     double speed =  cur_speed / 2;
-                    debug_printf(" speed: %.2f -> %.2f\n", cur_speed,  speed );
+                    debug_printf(" speed: %.3f -> %.3f\n", cur_speed,  speed );
 
                     if ( ! float_equal(speed, 1.0) )
                     {
-                        cur_stream->av_decoder.mute( 1);
 	                    cur_stream->av_decoder.set_master_sync_type(AV_SYNC_EXTERNAL_CLOCK); 
                     }
                     else
                     { 
-                        cur_stream->av_decoder.mute(0);
 	                    cur_stream->av_decoder.set_master_sync_type(AV_SYNC_AUDIO_MASTER); 
                     }
                     cur_stream->av_decoder.get_decoder_clock()->set_clock_speed( speed );

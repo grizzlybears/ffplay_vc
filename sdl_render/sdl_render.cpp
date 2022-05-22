@@ -172,8 +172,9 @@ void RenderSDL::toggle_full_screen()
 
 void RenderSDL::clear_render()
 {
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderClear(renderer);
+    // this costs 10ms. since we always draw whole windows, we dont need to clear it first :)
+    //SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    //SDL_RenderClear(renderer);
 }
 
 void RenderSDL::draw_render()

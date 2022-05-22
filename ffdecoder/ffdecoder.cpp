@@ -531,14 +531,15 @@ double SimpleAVDecoder::compute_target_delay(double frame_duration)
 
         /* skip or repeat frame. We take into account the delay to compute the threshold. 
         I still don't know if it is the best guess */
-        sync_threshold = FFMAX(AV_SYNC_THRESHOLD_MIN, FFMIN(AV_SYNC_THRESHOLD_MAX, frame_duration));  // sync_threshold is in range [AV_SYNC_THRESHOLD_MIN, AV_SYNC_THRESHOLD_MAX]
+        // 0.02 : half frame duration in 25 fps
+        sync_threshold = get_decoder_clock()->get_clock_speed() > 1 ? 0.02 / get_decoder_clock()->get_clock_speed(): 0.02; 
         if (!isnan(diff) && fabs(diff) < this->max_frame_duration) { // diff 如果在 [-sync_threshold, +sync_threshold] 范围内，就不调整了
             if (diff <= -sync_threshold)
                 frame_duration = FFMAX(0, frame_duration + diff);   // V钟慢了(-diff) ，因此从‘应显示时间’里扣掉 (-diff))，即 +diff
             else if (diff >= sync_threshold && frame_duration > AV_SYNC_FRAMEDUP_THRESHOLD)
                 frame_duration = frame_duration + diff; // V钟快得很多，超过了AV_SYNC_FRAMEDUP_THRESHOLD，则一次性补足，即 +diff
             else if (diff >= sync_threshold) 
-                frame_duration = 2 * frame_duration; // V钟快了(diff)，但未超过AV_SYNC_FRAMEDUP_THRESHOLD，则原时长翻倍
+                frame_duration = frame_duration + diff ; // should last enough, or we lost sync at 1/4 or slower speed. 
         }
     }
 
@@ -943,6 +944,32 @@ int AudioDecoder::audio_decode_frame()
 
     if (this->_av_decoder->paused)
         return -1;
+
+    Clock* decoder_clock = this->_av_decoder->get_decoder_clock();
+    if ( ! float_equal(decoder_clock->get_clock_speed(),1 ) )
+    {
+        // we dont need to fill audio buf, just adjust my clock.
+        af = this->frame_q.frame_queue_peek_readable_nowait();
+        while (af && ( (af->pts + af->duration) < decoder_clock->get_clock()) )
+        {
+            this->frame_q.frame_queue_next();
+            af = this->frame_q.frame_queue_peek_readable_nowait();
+        }
+
+        if (af)
+        {
+            this->audio_clock_serial = af->serial;
+            if (!isnan(af->pts))
+                this->audio_clock = af->pts + (double) af->frame->nb_samples / af->frame->sample_rate;
+            else
+                this->audio_clock = NAN;
+        }
+        else
+        {
+            this->audio_clock = NAN;
+        }
+        return -1;
+    }
 
     do {
 #if defined(_WIN32)

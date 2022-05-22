@@ -226,6 +226,7 @@ public:
     Frame* frame_queue_peek_last();     // 无并发保护，逻辑上 ‘已经上屏的帧’
 
     Frame* frame_queue_peek_readable(); // 有并发保护
+    Frame* frame_queue_peek_readable_nowait(); // 有并发保护
 
     void frame_queue_next();        //  移动‘读头’，aka ‘出队列’
 

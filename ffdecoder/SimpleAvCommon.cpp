@@ -229,7 +229,7 @@ Frame* FrameQueue::frame_queue_peek_writable()
     {
         AutoLocker _yes_locked(this->fq_signal);
         while (this->size >= this->max_size 
-                && !this->pktq->abort_request)  // todo: 如果挂钩的packet queue 退了，怎么能 signal 本 FrameQueue的 cond?
+                && !this->pktq->abort_request)  
         {
             this->fq_signal.wait();
         }
@@ -241,13 +241,24 @@ Frame* FrameQueue::frame_queue_peek_writable()
     return &this->queue[this->windex];
 }
 
+Frame* FrameQueue::frame_queue_peek_readable_nowait()
+{ 
+    AutoLocker _yes_locked(this->fq_signal);
+    if  (this->size - this->rindex_shown <= 0 || this->pktq->abort_request )  
+    {
+        return NULL;
+    }
+    return &this->queue[(this->rindex + this->rindex_shown) % this->max_size];
+}
+
+
 Frame* FrameQueue::frame_queue_peek_readable()
 {
     /* wait until we have a readable a new frame */
     {
         AutoLocker _yes_locked(this->fq_signal);
         while (this->size - this->rindex_shown <= 0 &&
-            !this->pktq->abort_request) // todo: 如果挂钩的packet queue 退了，怎么能 signal 本 FrameQueue的 cond?
+            !this->pktq->abort_request) 
         {
             this->fq_signal.wait();
         }
