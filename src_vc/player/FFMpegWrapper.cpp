@@ -175,17 +175,60 @@ int  DecoderFFMpegWrapper::Stop()
 	return 0;
 }
 
-int  DecoderFFMpegWrapper::Faster()	 //加速一档	
+int  DecoderFFMpegWrapper::Faster()	 
 {
-	LOG_ERROR("Not implemented\n");
-	return 1;
+	if (_speed >= 4)
+	{
+		LOG_ERROR("speed randge [-4, +4]\n");
+		return 1;
+	}
+	_speed++;
+
+	double cur_speed = vs->av_decoder.get_decoder_clock()->get_clock_speed();
+	double speed = 2 * cur_speed;
+	debug_printf(" speed: %.3f -> %.3f\n", cur_speed, speed);
+	vs->av_decoder.get_decoder_clock()->set_clock_speed(speed);
+
+	if (!float_equal(speed, 1.0))
+	{
+		vs->av_decoder.set_master_sync_type(AV_SYNC_EXTERNAL_CLOCK);
+	}
+	else
+	{
+		vs->av_decoder.set_master_sync_type(AV_SYNC_AUDIO_MASTER);
+	}
+
+	vs->av_decoder.get_decoder_clock()->set_clock_speed(speed);
+	
+	return 0;
 }
 
-int  DecoderFFMpegWrapper::Slower()	 //降速一档	
+int  DecoderFFMpegWrapper::Slower()	 
 {
-	LOG_ERROR("Not implemented\n");
+	if (_speed <= -4)
+	{
+		LOG_ERROR("speed randge [-4, +4]\n");
+		return 1;
+	}
+	_speed--;
 
-	return 1;
+	double cur_speed = vs->av_decoder.get_decoder_clock()->get_clock_speed();
+	double speed = cur_speed / 2 ;
+	debug_printf(" speed: %.3f -> %.3f\n", cur_speed, speed);
+	vs->av_decoder.get_decoder_clock()->set_clock_speed(speed);
+
+	if (!float_equal(speed, 1.0))
+	{
+		vs->av_decoder.set_master_sync_type(AV_SYNC_EXTERNAL_CLOCK);
+	}
+	else
+	{
+		vs->av_decoder.set_master_sync_type(AV_SYNC_AUDIO_MASTER);
+	}
+
+	vs->av_decoder.get_decoder_clock()->set_clock_speed(speed);
+
+	return 0;
 }
 
 int  DecoderFFMpegWrapper::GetSpeed(int* speed)	// [-4, +4]
