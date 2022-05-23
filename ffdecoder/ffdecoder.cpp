@@ -1,4 +1,4 @@
-/*
+ï»¿/*
  * Copyright (c) 2003 Fabrice Bellard
  *
  * This file is part of FFmpeg.
@@ -121,7 +121,7 @@ int Decoder::decoder_decode_frame(AVFrame *frame, AVSubtitle *sub) {
                 break;
             av_packet_unref(&pkt);
         } while (1);
-        // now 'serail' of ¡®pkt¡¯ is suitable to play.
+        // now 'serail' of â€˜pktâ€™ is suitable to play.
  
         if (PacketQueue::is_null_pkt(pkt)) {
             eos = 1; // end of input stream
@@ -268,7 +268,7 @@ int AudioDecoder::decoder_init(AVCodecContext* avctx, const StreamParam* extra_p
 
     //if ((this->_av_decoder->vs->format_context->iformat->flags & (AVFMT_NOBINSEARCH | AVFMT_NOGENSEARCH | AVFMT_NO_BYTE_SEEK))
     //    && !this->_av_decoder->vs->format_context->iformat->read_seek)
-    //{   // Èç¹ûiformat²»Ö§³Öseek£¬ÄÇÃ´ÆğÊ¼Î»ÖÃ¾ÍÒÔAVStreamÀïËµµÄÎª×¼£¬·ñÔò»¹ÓĞ»ú»á¸ù¾İÃüÁîĞĞ-ssÀ´seek
+    //{   // å¦‚æœiformatä¸æ”¯æŒseekï¼Œé‚£ä¹ˆèµ·å§‹ä½ç½®å°±ä»¥AVStreamé‡Œè¯´çš„ä¸ºå‡†ï¼Œå¦åˆ™è¿˜æœ‰æœºä¼šæ ¹æ®å‘½ä»¤è¡Œ-ssæ¥seek
     //    this->start_pts = stream_param.start_time ;
     //    this->start_pts_timebase = stream_param.time_base ;         
     //}
@@ -336,7 +336,7 @@ void VideoDecoder::video_image_display()
 
 }
 
-int  SimpleAVDecoder::get_opened_streams_mask()   // ·µ»Ø bit0 ´ú±íV£¬ bit1 ´ú±íA
+int  SimpleAVDecoder::get_opened_streams_mask()   // è¿”å› bit0 ä»£è¡¨Vï¼Œ bit1 ä»£è¡¨A
 {
     int r = 0;
     if (this->viddec.is_inited())
@@ -372,7 +372,7 @@ void VideoState::close_input_stream()
     /* close each stream */
     this->av_decoder.close_all_stream();
     
-    // this->format_context->streams[stream_index]->discard = AVDISCARD_ALL;  // Ïà±ÈÔ­À´ffplay£¬Õâ¸ö²½ÖèÃ»×ö
+    // this->format_context->streams[stream_index]->discard = AVDISCARD_ALL;  // ç›¸æ¯”åŸæ¥ffplayï¼Œè¿™ä¸ªæ­¥éª¤æ²¡åš
 
     avformat_close_input(&this->format_context);
 }
@@ -533,11 +533,11 @@ double SimpleAVDecoder::compute_target_delay(double frame_duration)
         I still don't know if it is the best guess */
         // 0.02 : half frame duration in 25 fps
         sync_threshold = get_decoder_clock()->get_clock_speed() > 1 ? 0.02 / get_decoder_clock()->get_clock_speed(): 0.02; 
-        if (!isnan(diff) && fabs(diff) < this->max_frame_duration) { // diff Èç¹ûÔÚ [-sync_threshold, +sync_threshold] ·¶Î§ÄÚ£¬¾Í²»µ÷ÕûÁË
+        if (!isnan(diff) && fabs(diff) < this->max_frame_duration) { // diff å¦‚æœåœ¨ [-sync_threshold, +sync_threshold] èŒƒå›´å†…ï¼Œå°±ä¸è°ƒæ•´äº†
             if (diff <= -sync_threshold)
-                frame_duration = FFMAX(0, frame_duration + diff);   // VÖÓÂıÁË(-diff) £¬Òò´Ë´Ó¡®Ó¦ÏÔÊ¾Ê±¼ä¡¯Àï¿Ûµô (-diff))£¬¼´ +diff
+                frame_duration = FFMAX(0, frame_duration + diff);   // Vé’Ÿæ…¢äº†(-diff) ï¼Œå› æ­¤ä»â€˜åº”æ˜¾ç¤ºæ—¶é—´â€™é‡Œæ‰£æ‰ (-diff))ï¼Œå³ +diff
             else if (diff >= sync_threshold && frame_duration > AV_SYNC_FRAMEDUP_THRESHOLD)
-                frame_duration = frame_duration + diff; // VÖÓ¿ìµÃºÜ¶à£¬³¬¹ıÁËAV_SYNC_FRAMEDUP_THRESHOLD£¬ÔòÒ»´ÎĞÔ²¹×ã£¬¼´ +diff
+                frame_duration = frame_duration + diff; // Vé’Ÿå¿«å¾—å¾ˆå¤šï¼Œè¶…è¿‡äº†AV_SYNC_FRAMEDUP_THRESHOLDï¼Œåˆ™ä¸€æ¬¡æ€§è¡¥è¶³ï¼Œå³ +diff
             else if (diff >= sync_threshold) 
                 frame_duration = frame_duration + diff ; // should last enough, or we lost sync at 1/4 or slower speed. 
         }
@@ -552,7 +552,7 @@ double SimpleAVDecoder::vp_duration(Frame *vp, Frame *nextvp) {
     if (vp->serial == nextvp->serial) {
         double duration = nextvp->pts - vp->pts;
         if (isnan(duration) || duration <= 0 || duration > this->max_frame_duration)
-            return vp->duration; // Ç°ááƒÉ¬ptsµÄ¾àÀë²»ºÏÀí
+            return vp->duration; // å‰å¾Œå…©å¹€ptsçš„è·ç¦»ä¸åˆç†
         else
             return duration;
     } else {
@@ -603,7 +603,7 @@ void SimpleAVDecoder::prepare_picture_for_display(double* remaining_time)
         vp = this->viddec.frame_q.frame_queue_peek(); // the frame to be drawn 
 
         if (vp->serial != this->viddec.packet_q.serial) { 
-            // we are 'seeking'£¬and 'vp' was cacche before 'seek'
+            // we are 'seeking'ï¼Œand 'vp' was cacche before 'seek'
             this->viddec.frame_q.frame_queue_next();
             continue;
         }
@@ -617,12 +617,12 @@ void SimpleAVDecoder::prepare_picture_for_display(double* remaining_time)
         double time_now, last_duration, duration, delay;
 
         /* compute nominal last_duration */
-        last_duration = this->vp_duration(lastvp, vp); // ¸ù¾İpts¼ÆËã³öÃûÒåÉÏlastvpÓ¦¸ÃÏÔÊ¾¶à¾Ã
-        delay = this->compute_target_delay(last_duration);   // ¸ù¾İ¡®Ê±ÖÓÍ¬²½¡¯µÄÒªÇó£¬ÔÙµ÷Õû¡®last_duration¡¯,µÃµ½delay = ¡®lastvpÓ¦¸ÃÏÔÊ¾¶à¾Ã¡¯
+        last_duration = this->vp_duration(lastvp, vp); // æ ¹æ®ptsè®¡ç®—å‡ºåä¹‰ä¸Šlastvpåº”è¯¥æ˜¾ç¤ºå¤šä¹…
+        delay = this->compute_target_delay(last_duration);   // æ ¹æ®â€˜æ—¶é’ŸåŒæ­¥â€™çš„è¦æ±‚ï¼Œå†è°ƒæ•´â€˜last_durationâ€™,å¾—åˆ°delay = â€˜lastvpåº”è¯¥æ˜¾ç¤ºå¤šä¹…â€™
 
         time_now = av_gettime_relative() / 1000000.0;
         if (time_now < this->viddec.frame_timer + delay) {
-            *remaining_time = FFMIN(this->viddec.frame_timer + delay - time_now, *remaining_time);  //¡®µ±Ç°ÏÔÊ¾Ö¡¡¯»¹¿ÉÒÔÔÙ¼á³Ö¡®*remaining_time¡¯Ö®¾Ã
+            *remaining_time = FFMIN(this->viddec.frame_timer + delay - time_now, *remaining_time);  //â€˜å½“å‰æ˜¾ç¤ºå¸§â€™è¿˜å¯ä»¥å†åšæŒâ€˜*remaining_timeâ€™ä¹‹ä¹…
             return;
         }
 
@@ -634,7 +634,7 @@ void SimpleAVDecoder::prepare_picture_for_display(double* remaining_time)
         {
             AutoLocker yes_locked(this->viddec.frame_q.fq_signal);
             if (!isnan(vp->pts))
-                this->update_video_clock(vp->pts, vp->pos, vp->serial);  // ÆäÊµÊÇ¸üĞÂ vstreamµÄclock£¬ÒÔ¼°¡®Íâ²¿Ê±ÖÓ¡¯
+                this->update_video_clock(vp->pts, vp->pos, vp->serial);  // å…¶å®æ˜¯æ›´æ–° vstreamçš„clockï¼Œä»¥åŠâ€˜å¤–éƒ¨æ—¶é’Ÿâ€™
         }
 
         if (this->viddec.frame_q.frame_queue_nb_remaining() > 1) { 
@@ -643,10 +643,10 @@ void SimpleAVDecoder::prepare_picture_for_display(double* remaining_time)
             duration = this->vp_duration(vp, nextvp);
             if (!this->step &&
                     (get_master_sync_type() != AV_SYNC_VIDEO_MASTER) &&
-                    time_now > this->viddec.frame_timer + duration) // Ã»ÓĞÊ±¼äÁô¸ø'nextvp'ÏÔÊ¾£¬ËùÒÔÒªÌø¹ı'nextvp'¡£ 
+                    time_now > this->viddec.frame_timer + duration) // æ²¡æœ‰æ—¶é—´ç•™ç»™'nextvp'æ˜¾ç¤ºï¼Œæ‰€ä»¥è¦è·³è¿‡'nextvp'ã€‚ 
             {
                 this->frame_drops_late++;
-                this->viddec.frame_q.frame_queue_next();   // todo: Èç¹ûÎÒÃÇ¿ÉÒÔ¶¯Ì¬µ÷½Ú¡®ÏÔÊ¾Ë¢ĞÂ¡¯µÄ¼ä¸ô£¬ÄÇÃ´²»ÌøÖ¡£¬¶ø°Ñ¡®¼ä¸ô¡¯µ÷µ½×îĞ¡£¬Ó¦¸ÃÌá¸ßÌåÑé
+                this->viddec.frame_q.frame_queue_next();   // todo: å¦‚æœæˆ‘ä»¬å¯ä»¥åŠ¨æ€è°ƒèŠ‚â€˜æ˜¾ç¤ºåˆ·æ–°â€™çš„é—´éš”ï¼Œé‚£ä¹ˆä¸è·³å¸§ï¼Œè€ŒæŠŠâ€˜é—´éš”â€™è°ƒåˆ°æœ€å°ï¼Œåº”è¯¥æé«˜ä½“éªŒ
                 continue;
             }
         }
@@ -764,7 +764,7 @@ int VideoDecoder::get_video_frame( AVFrame *frame)
     if (frame->pts != AV_NOPTS_VALUE)
         dpts = av_q2d(this->stream_param.time_base ) * frame->pts;
 
-    //frame->sample_aspect_ratio = av_guess_sample_aspect_ratio(this->_vs->format_context, stream, frame); // ÓĞµã¹ıÓÚ°ÂÒå£¬ÊÔ×ÅÉ¾µô¿´Ğ§¹û
+    //frame->sample_aspect_ratio = av_guess_sample_aspect_ratio(this->_vs->format_context, stream, frame); // æœ‰ç‚¹è¿‡äºå¥¥ä¹‰ï¼Œè¯•ç€åˆ æ‰çœ‹æ•ˆæœ
 
     if (this->_av_decoder->get_master_sync_type() != AV_SYNC_VIDEO_MASTER) {
         // check if we need to discard some frames here 
@@ -835,15 +835,15 @@ ThreadRetType  AudioDecoder::thread_main()
 int Decoder::decoder_start()
 {
     packet_q.packet_queue_start();
-    create_thread(); // todo: Í³Ò» error report »úÖÆ
+    create_thread(); // todo: ç»Ÿä¸€ error report æœºåˆ¶
     return 0;
 }
 
 int Decoder::buffered_enough_packets() {
     if (!is_inited() || packet_q.abort_request)
         return 1;
-    return       //(stream->disposition & AV_DISPOSITION_ATTACHED_PIC) ||   // ²»¿¼ÂÇ¡°show¾²Ì¬Í¼Æ¬¡±µÄÇé¿ö
-        packet_q.nb_packets > QUEUE_ENOUGH_PKG && (!packet_q.total_duration    // Èç¹û total_duration ÊÇ0£¬ËµÃ÷pkt.durationÎŞĞ§£¬ÄÇ¾ÍÊÇÖ»¿´°üÊıÁ¿
+    return       //(stream->disposition & AV_DISPOSITION_ATTACHED_PIC) ||   // ä¸è€ƒè™‘â€œshowé™æ€å›¾ç‰‡â€çš„æƒ…å†µ
+        packet_q.nb_packets > QUEUE_ENOUGH_PKG && (!packet_q.total_duration    // å¦‚æœ total_duration æ˜¯0ï¼Œè¯´æ˜pkt.durationæ— æ•ˆï¼Œé‚£å°±æ˜¯åªçœ‹åŒ…æ•°é‡
                                             || av_q2d(this->stream_param.time_base) * packet_q.total_duration > QUEUE_ENOUGH_TIME);
             
 }
@@ -1316,7 +1316,7 @@ void SimpleAVDecoder::discard_buffer(double seek_target )
 {
     if (this->auddec.is_inited()) {
         this->auddec.packet_q.packet_queue_flush(); // discard cache
-        this->auddec.packet_q.packet_queue_put(&PacketQueue::flush_pkt); // packet queue µÄ serial ++
+        this->auddec.packet_q.packet_queue_put(&PacketQueue::flush_pkt); // packet queue çš„ serial ++
     }
     if (this->viddec.is_inited()) {
         this->viddec.packet_q.packet_queue_flush();
@@ -1365,7 +1365,7 @@ int  VideoState::read_loop_check_seek()   // return: > 0 -- shoud 'continue', 0 
             "%s: error while seeking\n", this->format_context->url);
     }
     else {
-        // seek³É¹¦£¬ÇåÏÖÓĞµÄ»º´æ  
+        // seekæˆåŠŸï¼Œæ¸…ç°æœ‰çš„ç¼“å­˜  
         this->av_decoder.discard_buffer( (this->seek_flags & AVSEEK_FLAG_BYTE) ?  NAN : seek_target / (double)AV_TIME_BASE);
     }
 
@@ -1509,7 +1509,7 @@ ThreadRetType  VideoState::thread_main()
         }
         /* check if packet is in play range specified by user, then queue, otherwise discard */
         if (!is_pkt_in_play_range(pkt)) { 
-            av_packet_unref(pkt); // todo: ²»µ½ start_point£¬»¹ÊÇ³¬¹ıduration£¬Ó¦¸ÃÓĞ²»Í¬´¦Àí
+            av_packet_unref(pkt); // todo: ä¸åˆ° start_pointï¼Œè¿˜æ˜¯è¶…è¿‡durationï¼Œåº”è¯¥æœ‰ä¸åŒå¤„ç†
             continue;
         }
         
@@ -1570,7 +1570,7 @@ void AutoReleasePtr<VideoState>::release()
     if (!me)
         return;
     me->close_input_stream();
-    //Íâ½ç»ádelete
+    //å¤–ç•Œä¼šdelete
 }
 
 int VideoState::open_input_stream(const char *filename, AVInputFormat *iformat, int pause_now)

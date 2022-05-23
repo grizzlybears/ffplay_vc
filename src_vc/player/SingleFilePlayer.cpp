@@ -1,4 +1,4 @@
-#include "stdafx.h"
+ï»¿#include "stdafx.h"
 #include "SingleFilePlayer.h"
 
 
@@ -221,7 +221,7 @@ int SingleFilePlayer::stop()
 }
 
 
-int SingleFilePlayer::get_played_time(int* seconds)	//»ñÈ¡ÎÄ¼şµ±Ç°²¥·ÅÎ»ÖÃ£¨Ãë£©	
+int SingleFilePlayer::get_played_time(int* seconds)	//è·å–æ–‡ä»¶å½“å‰æ’­æ”¾ä½ç½®ï¼ˆç§’ï¼‰	
 {
 	if (!is_loaded())
 	{
@@ -231,7 +231,7 @@ int SingleFilePlayer::get_played_time(int* seconds)	//»ñÈ¡ÎÄ¼şµ±Ç°²¥·ÅÎ»ÖÃ£¨Ãë£©
 	return _driver->GetPlayedTime(seconds);
 }
 
-int SingleFilePlayer::set_played_time(int seconds)	 //ÉèÖÃÎÄ¼şµ±Ç°²¥·ÅÎ»ÖÃ£¨Ãë£©	
+int SingleFilePlayer::set_played_time(int seconds)	 //è®¾ç½®æ–‡ä»¶å½“å‰æ’­æ”¾ä½ç½®ï¼ˆç§’ï¼‰	
 {
 	if (!is_loaded())
 	{
@@ -241,7 +241,7 @@ int SingleFilePlayer::set_played_time(int seconds)	 //ÉèÖÃÎÄ¼şµ±Ç°²¥·ÅÎ»ÖÃ£¨Ãë£©
 	return _driver->SetPlayedTime(seconds);
 }
 
-int SingleFilePlayer::get_picture_size(int* width, int* height)     // »ñµÃÍ¼Ïñ³ß´ç
+int SingleFilePlayer::get_picture_size(int* width, int* height)     // è·å¾—å›¾åƒå°ºå¯¸
 {
 	if (!is_loaded())
 	{
@@ -251,7 +251,7 @@ int SingleFilePlayer::get_picture_size(int* width, int* height)     // »ñµÃÍ¼Ïñ³
 	return _driver->GetPictureSize(width,  height);
 }
 
-int SingleFilePlayer::get_file_total_time(int* seconds)	//»ñÈ¡ÎÄ¼ş×ÜÊ±³¤£¨Ãë£©
+int SingleFilePlayer::get_file_total_time(int* seconds)	//è·å–æ–‡ä»¶æ€»æ—¶é•¿ï¼ˆç§’ï¼‰
 {
 	if (!is_loaded())
 	{
@@ -280,7 +280,7 @@ int SingleFilePlayer::play_sound()
 {
 	if (_sounding_ext)
 	{
-		// ¶ÔÍâÒÑÈ»ÔÚ²¥·ÅÉùÒô
+		// å¯¹å¤–å·²ç„¶åœ¨æ’­æ”¾å£°éŸ³
 
 		if (!is_loaded())
 		{
@@ -290,7 +290,7 @@ int SingleFilePlayer::play_sound()
 
 		if (ISS_PLAYING_SOUND == _sounding_internal)
 		{
-			// ÄÚ²¿Ò²ÔÚ·Å£¬ÎŞĞë¶¯×÷
+			// å†…éƒ¨ä¹Ÿåœ¨æ”¾ï¼Œæ— é¡»åŠ¨ä½œ
 			return 0;
 		}
 
@@ -308,7 +308,7 @@ int SingleFilePlayer::play_sound()
 	}
 	else
 	{
-		// ¶ÔÍâ´¦ÓÚÏûÒô×´Ì¬
+		// å¯¹å¤–å¤„äºæ¶ˆéŸ³çŠ¶æ€
 		_sounding_ext = 1;
 
 		if (!is_loaded())
@@ -364,7 +364,7 @@ int SingleFilePlayer::mute()
 {
 	if (_sounding_ext)
 	{
-		// ¶ÔÍâÒÑÈ»ÔÚ²¥·ÅÉùÒô
+		// å¯¹å¤–å·²ç„¶åœ¨æ’­æ”¾å£°éŸ³
 		_sounding_ext = 0;
 
 		if (!is_loaded())
@@ -377,7 +377,7 @@ int SingleFilePlayer::mute()
 	}
 	else
 	{
-		// ¶ÔÍâ´¦ÓÚÏûÒô×´Ì¬
+		// å¯¹å¤–å¤„äºæ¶ˆéŸ³çŠ¶æ€
 		if (!is_loaded())
 		{
 			_sounding_internal = ISS_NA;
@@ -400,7 +400,7 @@ int SingleFilePlayer::mute()
 }
 
 
-int  SingleFilePlayer::faster()  //¼ÓËÙÒ»µµ
+int  SingleFilePlayer::faster()  //åŠ é€Ÿä¸€æ¡£
 {
 	if ( PS_PLAYING != _state)
 	{
@@ -410,7 +410,7 @@ int  SingleFilePlayer::faster()  //¼ÓËÙÒ»µµ
 	return  _driver->Faster();
 }
 
-int  SingleFilePlayer::slower()	 //¼õËÙÒ»µµ
+int  SingleFilePlayer::slower()	 //å‡é€Ÿä¸€æ¡£
 {
 	if (PS_PLAYING != _state)
 	{
@@ -479,7 +479,7 @@ int SingleFilePlayer::step_back()
 	return 0;
 }
 
-int  SingleFilePlayer::get_volume(unsigned short* vol)  // »ñµÃÉù¿¨Êä³öµÄÖ÷ÒôÁ¿¡£ range: 0 - VOLUME_MAX	
+int  SingleFilePlayer::get_volume(unsigned short* vol)  // è·å¾—å£°å¡è¾“å‡ºçš„ä¸»éŸ³é‡ã€‚ range: 0 - VOLUME_MAX	
 {
 	if (!_driver)
 	{
@@ -491,7 +491,7 @@ int  SingleFilePlayer::get_volume(unsigned short* vol)  // »ñµÃÉù¿¨Êä³öµÄÖ÷ÒôÁ¿¡
 	return _driver->GetVolume(vol);
 }
 
-int  SingleFilePlayer::set_volume(unsigned short  vol)  // Éè¶¨Éù¿¨Êä³öµÄÖ÷ÒôÁ¿£¬»áÓ°Ïìµ½ÆäËûµÄÉùÒôÓ¦ÓÃ¡£   range: 0 - VOLUME_MAX
+int  SingleFilePlayer::set_volume(unsigned short  vol)  // è®¾å®šå£°å¡è¾“å‡ºçš„ä¸»éŸ³é‡ï¼Œä¼šå½±å“åˆ°å…¶ä»–çš„å£°éŸ³åº”ç”¨ã€‚   range: 0 - VOLUME_MAX
 {
 	if (!_driver)
 	{

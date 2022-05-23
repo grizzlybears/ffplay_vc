@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 
 #include "utils/utils.h"
 
@@ -22,7 +22,7 @@ public:
 		_canvas = NULL;
 	}
 
-	// ·µ»Ø PLAY_STATE ĞÍ
+	// è¿”å› PLAY_STATE å‹
 	virtual int get_state()
 	{
 		return _state;
@@ -37,21 +37,21 @@ public:
 	virtual int pause();
 	virtual int stop();
 
-	virtual int get_played_time(int* time_point);	//»ñÈ¡ÎÄ¼şµ±Ç°²¥·ÅÎ»ÖÃ£¨Ãë£©	
-	virtual int set_played_time(int time_point);	 //ÉèÖÃÎÄ¼şµ±Ç°²¥·ÅÎ»ÖÃ£¨Ãë£©	
-	virtual int get_file_total_time(int* seconds);	//»ñÈ¡ÎÄ¼ş×ÜÊ±³¤£¨Ãë£©
+	virtual int get_played_time(int* time_point);	//è·å–æ–‡ä»¶å½“å‰æ’­æ”¾ä½ç½®ï¼ˆç§’ï¼‰	
+	virtual int set_played_time(int time_point);	 //è®¾ç½®æ–‡ä»¶å½“å‰æ’­æ”¾ä½ç½®ï¼ˆç§’ï¼‰	
+	virtual int get_file_total_time(int* seconds);	//è·å–æ–‡ä»¶æ€»æ—¶é•¿ï¼ˆç§’ï¼‰
 
-	virtual int  faster();	 //¼ÓËÙÒ»µµ
-	virtual int  slower();	 //¼õËÙÒ»µµ
+	virtual int  faster();	 //åŠ é€Ÿä¸€æ¡£
+	virtual int  slower();	 //å‡é€Ÿä¸€æ¡£
 	virtual int  get_speed(int* speed); // [-4, +4]
 
 	virtual int step_forward();
 	virtual int step_back();
 
-	virtual int  get_volume(unsigned short* vol);  // »ñµÃÒôÁ¿¡£ range: 0 - VOLUME_MAX	
-	virtual int  set_volume(unsigned short  vol);  // Éè¶¨ÒôÁ¿¡£ range: 0 - VOLUME_MAX
+	virtual int  get_volume(unsigned short* vol);  // è·å¾—éŸ³é‡ã€‚ range: 0 - VOLUME_MAX	
+	virtual int  set_volume(unsigned short  vol);  // è®¾å®šéŸ³é‡ã€‚ range: 0 - VOLUME_MAX
 
-	virtual int get_picture_size(int* width, int* heighte);      // »ñµÃÍ¼Ïñ³ß´ç
+	virtual int get_picture_size(int* width, int* heighte);      // è·å¾—å›¾åƒå°ºå¯¸
 
 	virtual void on_progress(int  seconds);  // overides DecoderEventCB
 	virtual void on_eof(); // overides DecoderEventCB
@@ -85,8 +85,8 @@ protected:
 	
 	CAtlStringA _media_file;
 	int _total_length;
-	int _sounding_ext;  // ¶ÔÍâÁ½Ì¬ 
-	int _sounding_internal; // ÄÚ²¿ÈıÌ¬ 
+	int _sounding_ext;  // å¯¹å¤–ä¸¤æ€ 
+	int _sounding_internal; // å†…éƒ¨ä¸‰æ€ 
 	int mute_internal();
 
 	HWND _canvas;

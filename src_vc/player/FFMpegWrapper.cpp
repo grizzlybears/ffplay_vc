@@ -1,4 +1,4 @@
-#include "stdafx.h"
+ï»¿#include "stdafx.h"
 
 #include "FFMpegWrapper.h"
 
@@ -237,7 +237,7 @@ int  DecoderFFMpegWrapper::GetSpeed(int* speed)	// [-4, +4]
 	return 0;
 }
 
-int  DecoderFFMpegWrapper::FrameForward(void)  //µ¥Ö¡ÏòÇ°
+int  DecoderFFMpegWrapper::FrameForward(void)  //å•å¸§å‘å‰
 {
 	LOG_ERROR("Not implemented\n");
 	_speed = 0;
@@ -245,7 +245,7 @@ int  DecoderFFMpegWrapper::FrameForward(void)  //µ¥Ö¡ÏòÇ°
 }
 
 
-int  DecoderFFMpegWrapper::FrameBack(void)    //µ¥Ö¡Ïòºó	
+int  DecoderFFMpegWrapper::FrameBack(void)    //å•å¸§å‘å	
 {
 	LOG_ERROR("Not implemented\n");
 	_speed = 0;
@@ -253,7 +253,7 @@ int  DecoderFFMpegWrapper::FrameBack(void)    //µ¥Ö¡Ïòºó
 	
 }
 
-int DecoderFFMpegWrapper::GetPlayedTime(int* time_point)		//»ñÈ¡ÎÄ¼şµ±Ç°²¥·ÅÎ»ÖÃ£¨Ãë£©
+int DecoderFFMpegWrapper::GetPlayedTime(int* time_point)		//è·å–æ–‡ä»¶å½“å‰æ’­æ”¾ä½ç½®ï¼ˆç§’ï¼‰
 {
 	CHECK_IF_MEDIA_PRESENT(1);
 
@@ -269,7 +269,7 @@ int DecoderFFMpegWrapper::GetPlayedTime(int* time_point)		//»ñÈ¡ÎÄ¼şµ±Ç°²¥·ÅÎ»ÖÃ
 	return 0;
 }
 
-int DecoderFFMpegWrapper::SetPlayedTime(int  time_point)		//ÉèÖÃÎÄ¼şµ±Ç°²¥·ÅÎ»ÖÃ£¨Ãë£©
+int DecoderFFMpegWrapper::SetPlayedTime(int  time_point)		//è®¾ç½®æ–‡ä»¶å½“å‰æ’­æ”¾ä½ç½®ï¼ˆç§’ï¼‰
 {
 	CHECK_IF_MEDIA_PRESENT(1);
 	
@@ -278,7 +278,7 @@ int DecoderFFMpegWrapper::SetPlayedTime(int  time_point)		//ÉèÖÃÎÄ¼şµ±Ç°²¥·ÅÎ»ÖÃ
 	return 0;
 }
 
-int DecoderFFMpegWrapper::GetFileTotalTime(int* seconds)			//»ñÈ¡ÎÄ¼ş×ÜÊ±³¤£¨Ãë£©
+int DecoderFFMpegWrapper::GetFileTotalTime(int* seconds)			//è·å–æ–‡ä»¶æ€»æ—¶é•¿ï¼ˆç§’ï¼‰
 {
 	CHECK_IF_MEDIA_PRESENT(1);
 
@@ -288,7 +288,7 @@ int DecoderFFMpegWrapper::GetFileTotalTime(int* seconds)			//»ñÈ¡ÎÄ¼ş×ÜÊ±³¤£¨Ãë£
 	return 0;
 }
 
-int DecoderFFMpegWrapper::GetPictureSize(int* width, int* height)      // »ñµÃÍ¼Ïñ³ß´ç
+int DecoderFFMpegWrapper::GetPictureSize(int* width, int* height)      // è·å¾—å›¾åƒå°ºå¯¸
 {
 	if (!_width)
 	{

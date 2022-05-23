@@ -1,4 +1,4 @@
-#include "sdl_render.h"
+﻿#include "sdl_render.h"
 struct TextureFormatEntry {
     enum AVPixelFormat format;
     int texture_fmt;

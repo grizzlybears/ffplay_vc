@@ -1,4 +1,4 @@
-// MainDlg.h : interface of the CMainDlg class
+ï»¿// MainDlg.h : interface of the CMainDlg class
 //
 /////////////////////////////////////////////////////////////////////////////
 
@@ -195,11 +195,11 @@ public:
 
 	DECLARE_FRAME_WND_CLASS(NULL, IDR_MAINFRAME)
 
-	CSplitterWindow m_splitter_lr; // µÚÒ»²ã£¬×ó²àÖ÷ÇøÓò£¬ÓÒ²à²¥·ÅÁĞ±í
+	CSplitterWindow m_splitter_lr; // ç¬¬ä¸€å±‚ï¼Œå·¦ä¾§ä¸»åŒºåŸŸï¼Œå³ä¾§æ’­æ”¾åˆ—è¡¨
 	CPaneContainer m_playlist_pane;
 	CListViewCtrl  m_playlist;  
 
-	CHorSplitterWindow m_splitter_tb; // Ö÷ÇøÓòÉÏÏÂ·Ö¿ª£¬ÏÂÃæ¿ØÖÆÃæ°å£¬ÉÏÃæÊÓÆµ
+	CHorSplitterWindow m_splitter_tb; // ä¸»åŒºåŸŸä¸Šä¸‹åˆ†å¼€ï¼Œä¸‹é¢æ§åˆ¶é¢æ¿ï¼Œä¸Šé¢è§†é¢‘
 	
 	CCtrlPanel  m_ctrl_panel;
 	CVideoView m_view;

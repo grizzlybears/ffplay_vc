@@ -1,4 +1,4 @@
-// w2.cpp : main source file for w2.exe
+ï»¿// w2.cpp : main source file for w2.exe
 //
 
 #include "stdafx.h"
@@ -92,7 +92,7 @@ int main(int argc, char* argv[])
 {
 
 #ifndef _VLD 
-	// ÍË¶øÇóÆä´Î
+	// é€€è€Œæ±‚å…¶æ¬¡
 	void enable_crt_heap_dbg();
 	enable_crt_heap_dbg();
 #endif

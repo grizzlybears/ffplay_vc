@@ -1,4 +1,4 @@
-#include "SimpleAvCommon.h"
+ï»¿#include "SimpleAvCommon.h"
 #include "libavutil/pixdesc.h"
 #include "libavutil/avutil.h"
 ///////////// packet_queue section {{{
@@ -28,7 +28,7 @@ int PacketQueue::packet_queue_put_private(AVPacket* pkt)
     if (!pkt1)
         return -1;
 
-    pkt1->pkt = *pkt;   // Òªµã, ¡®pkt¡¯ ÒÑ¾­±» clone ½ø MyAVPacketList£¬ Òò´ËÎÞËùÎ½¡®pkt¡¯ÊÇÀ´×Ôheap/stack/global
+    pkt1->pkt = *pkt;   // è¦ç‚¹, â€˜pktâ€™ å·²ç»è¢« clone è¿› MyAVPacketListï¼Œ å› æ­¤æ— æ‰€è°“â€˜pktâ€™æ˜¯æ¥è‡ªheap/stack/global
     pkt1->next = NULL;
     if (pkt == &flush_pkt)
         this->serial++;
@@ -53,7 +53,7 @@ int PacketQueue::packet_queue_put_private(AVPacket* pkt)
     return 0;
 }
 
-// ½Ó¹ÜpktÉúÃüÖÜÆÚ£¬putÊ§°ÜÒ²ÊÍ·Åµô
+// æŽ¥ç®¡pktç”Ÿå‘½å‘¨æœŸï¼Œputå¤±è´¥ä¹Ÿé‡Šæ”¾æŽ‰
 int PacketQueue::packet_queue_put(AVPacket* pkt)
 {
     int ret;
@@ -132,17 +132,17 @@ int PacketQueue::packet_queue_get(AVPacket* pkt, int block, /*out*/ int* serial)
         pkt1 = this->first_pkt;
         if (pkt1) {
 
-            // ÍÆÒÆ list_header
+            // æŽ¨ç§» list_header
             this->first_pkt = pkt1->next;
             if (!this->first_pkt)
                 this->last_pkt = NULL;
 
-            // µ÷Õû ¡®queueÍ³¼Æ¡¯
+            // è°ƒæ•´ â€˜queueç»Ÿè®¡â€™
             this->nb_packets--;
             this->size -= pkt1->pkt.size + sizeof(*pkt1);
             this->total_duration -= pkt1->pkt.duration;
 
-            // output ½Úµã
+            // output èŠ‚ç‚¹
             *pkt = pkt1->pkt;
             if (serial)
                 *serial = pkt1->serial;
@@ -177,8 +177,8 @@ int FrameQueue::frame_queue_init(PacketQueue* pktq, int max_size, int keep_last)
 {
     int i;
 
-    rindex = 0 ;         // ×î³õµÄ¡®¶ÁÍ·¡¯
-    rindex_shown = 0;   // rindexÖ¸ÏòµÄÎ»ÖÃ£¬ÊÇ·ñÔø¾­±» shown¹ý
+    rindex = 0 ;         // æœ€åˆçš„â€˜è¯»å¤´â€™
+    rindex_shown = 0;   // rindexæŒ‡å‘çš„ä½ç½®ï¼Œæ˜¯å¦æ›¾ç»è¢« shownè¿‡
     windex = 0;
     size = 0;
 
@@ -287,7 +287,7 @@ void FrameQueue::frame_queue_next()
         this->rindex_shown = 1;
         return;
     }
-    unref_item(&this->queue[this->rindex]);  // ³ö¶ÓÁÐÇ°£¬ÏÈÊÍ·Å FrameÄÚ´øµÄdata
+    unref_item(&this->queue[this->rindex]);  // å‡ºé˜Ÿåˆ—å‰ï¼Œå…ˆé‡Šæ”¾ Frameå†…å¸¦çš„data
     if (++this->rindex == this->max_size)
         this->rindex = 0;
 

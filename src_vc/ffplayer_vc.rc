@@ -13,11 +13,11 @@
 #undef APSTUDIO_READONLY_SYMBOLS
 
 /////////////////////////////////////////////////////////////////////////////
-// Chinese (Simplified) resources
+// English (United States) resources
 
-#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_CHS)
-LANGUAGE LANG_CHINESE, SUBLANG_NEUTRAL
-#pragma code_page(936)
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -78,33 +78,23 @@ END
 
 IDR_MAINFRAME MENU
 BEGIN
-    POPUP "&文件"
+    POPUP "&File"
     BEGIN
-        MENUITEM "&打开\tCtrl+O",                 ID_FILE_OPEN
+        MENUITEM "&Open\tCtrl+O",                 ID_FILE_OPEN
         MENUITEM SEPARATOR
-        MENUITEM "&退出",                         ID_APP_EXIT
+        MENUITEM "&Exit",                         ID_APP_EXIT
     END
-    POPUP "&视图"
+    POPUP "&View"
     BEGIN
-        MENUITEM "状态栏(&S)",                     ID_VIEW_STATUS_BAR
-        MENUITEM "播放列表( &P)",                   ID_VIEW_LISTPANE
+        MENUITEM "StatusBar(&S)",                   ID_VIEW_STATUS_BAR
+        MENUITEM "PlayList( &P)",                   ID_VIEW_LISTPANE
     END
-    POPUP "&帮助"
+    POPUP "&Help"
     BEGIN
-        MENUITEM "&关于 w1",                      ID_APP_ABOUT
+        MENUITEM "&About ffplay_vc",                ID_APP_ABOUT
     END
 END
 
-#endif    // Chinese (Simplified) resources
-/////////////////////////////////////////////////////////////////////////////
-
-
-/////////////////////////////////////////////////////////////////////////////
-// Chinese (Simplified, PRC) resources
-
-#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_CHS)
-LANGUAGE LANG_CHINESE, SUBLANG_CHINESE_SIMPLIFIED
-#pragma code_page(936)
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -185,16 +175,11 @@ IDB_BMP_STEP_FULLSCREEN BITMAP                  "res\\FullScreen.bmp"
 
 IDB_BMP_PAUSE           BITMAP                  "res\\pause.bmp"
 
-#endif    // Chinese (Simplified, PRC) resources
-/////////////////////////////////////////////////////////////////////////////
-
 
 /////////////////////////////////////////////////////////////////////////////
-// English (United States) resources
 
-#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
-LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
-#pragma code_page(1252)
+
+
 
 #ifdef APSTUDIO_INVOKED
 /////////////////////////////////////////////////////////////////////////////

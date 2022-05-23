@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 #include "common_def.h"
 
 // usually comes from worker thread (other than UI thread)
@@ -9,11 +9,11 @@ public:
 	virtual void on_picture_size_got(int w, int h) = 0;
 	virtual void on_eof() = 0;
 
-	virtual void on_custom_draw(HDC hDc)		// ÏÔÊ¾´°¿Úµş¼Ó×Ô»æ£¬Í¨³£ÓÃÓÚ»­Ë®Ó¡
+	virtual void on_custom_draw(HDC hDc)		// æ˜¾ç¤ºçª—å£å åŠ è‡ªç»˜ï¼Œé€šå¸¸ç”¨äºç”»æ°´å°
 	{
 	}
 
-	virtual int is_custom_draw_present()		// ÊÇ·ñĞèÒª×Ô»æ
+	virtual int is_custom_draw_present()		// æ˜¯å¦éœ€è¦è‡ªç»˜
 	{
 		return 0;	
 	}
@@ -28,22 +28,22 @@ public:
 	}
 	
 	// don't 'LOG_XXX' in ctor. We may statically create instance. call 'Init' instead.
-	virtual int  Init(DecoderEventCB* event_cb) = 0;	//³õÊ¼»¯
-	virtual void Release(void) = 0;	    //ÊÍ·Å
+	virtual int  Init(DecoderEventCB* event_cb) = 0;	//åˆå§‹åŒ–
+	virtual void Release(void) = 0;	    //é‡Šæ”¾
 
-	virtual int  Open(const char* fileName) = 0;	 //´ò¿ªÎÄ¼ş
-	virtual void Close(void) = 0;              //¹Ø±ÕÎÄ¼ş
+	virtual int  Open(const char* fileName) = 0;	 //æ‰“å¼€æ–‡ä»¶
+	virtual void Close(void) = 0;              //å…³é—­æ–‡ä»¶
 
-	virtual int  Play(HWND  screen) = 0;	 //²¥·Å
-	virtual int  Pause() = 0;      //ÔİÍ£
-	virtual int  Resume() = 0;     //»Ö¸´
-	virtual int  Stop() = 0;	   //Í£Ö¹
+	virtual int  Play(HWND  screen) = 0;	 //æ’­æ”¾
+	virtual int  Pause() = 0;      //æš‚åœ
+	virtual int  Resume() = 0;     //æ¢å¤
+	virtual int  Stop() = 0;	   //åœæ­¢
 
-	virtual int  Faster()	 //¼ÓËÙÒ»µµ
+	virtual int  Faster()	 //åŠ é€Ÿä¸€æ¡£
 	{
 		return DEC_NOT_SUPPORTED;
 	}
-	virtual int  Slower()	 //½µËÙÒ»µµ
+	virtual int  Slower()	 //é™é€Ÿä¸€æ¡£
 	{
 		return DEC_NOT_SUPPORTED;
 	}
@@ -53,29 +53,29 @@ public:
 	}
 	
 		
-	//virtual int SetPlayPos(int  percentage);        //ÉèÖÃÎÄ¼şµ±Ç°²¥·ÅÎ»ÖÃ£¨°Ù·Ö±È£©
-	//virtual int GetPlayPos(int *percentage);        //»ñÈ¡ÎÄ¼şµ±Ç°²¥·ÅÎ»ÖÃ£¨°Ù·Ö±È£©
+	//virtual int SetPlayPos(int  percentage);        //è®¾ç½®æ–‡ä»¶å½“å‰æ’­æ”¾ä½ç½®ï¼ˆç™¾åˆ†æ¯”ï¼‰
+	//virtual int GetPlayPos(int *percentage);        //è·å–æ–‡ä»¶å½“å‰æ’­æ”¾ä½ç½®ï¼ˆç™¾åˆ†æ¯”ï¼‰
 
-	virtual int GetPlayedTime(int* time_point)					//»ñÈ¡ÎÄ¼şµ±Ç°²¥·ÅÎ»ÖÃ£¨Ãë£©
+	virtual int GetPlayedTime(int* time_point)					//è·å–æ–‡ä»¶å½“å‰æ’­æ”¾ä½ç½®ï¼ˆç§’ï¼‰
 	{
 		return DEC_NOT_SUPPORTED;
 	}
-	virtual int SetPlayedTime(int  time_point)					//ÉèÖÃÎÄ¼şµ±Ç°²¥·ÅÎ»ÖÃ£¨Ãë£©
-	{
-		return DEC_NOT_SUPPORTED;
-	}
-
-	virtual int GetFileTotalTime(int* seconds)				//»ñÈ¡ÎÄ¼ş×ÜÊ±³¤£¨Ãë£©
+	virtual int SetPlayedTime(int  time_point)					//è®¾ç½®æ–‡ä»¶å½“å‰æ’­æ”¾ä½ç½®ï¼ˆç§’ï¼‰
 	{
 		return DEC_NOT_SUPPORTED;
 	}
 
-	virtual int GetPictureSize(int* width, int* heighte)      // »ñµÃÍ¼Ïñ³ß´ç
+	virtual int GetFileTotalTime(int* seconds)				//è·å–æ–‡ä»¶æ€»æ—¶é•¿ï¼ˆç§’ï¼‰
 	{
 		return DEC_NOT_SUPPORTED;
 	}
 
-	virtual int CapturePic(const char* strPicName)       //×¥Í¼
+	virtual int GetPictureSize(int* width, int* heighte)      // è·å¾—å›¾åƒå°ºå¯¸
+	{
+		return DEC_NOT_SUPPORTED;
+	}
+
+	virtual int CapturePic(const char* strPicName)       //æŠ“å›¾
 	{
 		return DEC_NOT_SUPPORTED;
 	}
@@ -87,27 +87,27 @@ public:
 		return DEC_NOT_SUPPORTED;
 	}
 
-	// »ñµÃÒôÁ¿¡£ range: 0 - MAX_VOLUME
+	// è·å¾—éŸ³é‡ã€‚ range: 0 - MAX_VOLUME
 	virtual int  GetVolume(unsigned short * vol) {
 		return DEC_NOT_SUPPORTED;
 	}
 
-	// Éè¶¨ÒôÁ¿¡£   range: 0 - MAX_VOLUME
+	// è®¾å®šéŸ³é‡ã€‚   range: 0 - MAX_VOLUME
 	virtual int  SetVolume(unsigned short   vol) {
 		return DEC_NOT_SUPPORTED;
 	}
 
-	virtual int  FrameBack(void)    //µ¥Ö¡Ïòºó
+	virtual int  FrameBack(void)    //å•å¸§å‘å
 	{
 		return DEC_NOT_SUPPORTED;
 	}
 
-	virtual int  FrameForward(void) 		 //µ¥Ö¡ÏòÇ°
+	virtual int  FrameForward(void) 		 //å•å¸§å‘å‰
 	{
 		return DEC_NOT_SUPPORTED;
 	}
 
-	//virtual void poll_while_playing();  //²¥·Å¹ı³ÌÖĞ£¬Íâ½çĞèÒª¶¨ÆÚµ÷ÓÃ´Ëº¯Êı
+	//virtual void poll_while_playing();  //æ’­æ”¾è¿‡ç¨‹ä¸­ï¼Œå¤–ç•Œéœ€è¦å®šæœŸè°ƒç”¨æ­¤å‡½æ•°
 
 protected:
 	

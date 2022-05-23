@@ -1,4 +1,4 @@
-#pragma  once
+ï»¿#pragma  once
 /*
  * Copyright (c) 2003 Fabrice Bellard
  *
@@ -107,7 +107,7 @@ extern "C"
 
 
 
-typedef struct MyAVPacketListNode {  // À©Õ¹ÁË AVPacket£¬Ôö¼Óserial£¬ ½«À´¿ÉÒÔ¿¼ÂÇ¸Ä³É¼Ì³Ğ AVPacke£¬ÔÙÌ×Ò»¸östd::list
+typedef struct MyAVPacketListNode {  // æ‰©å±•äº† AVPacketï¼Œå¢åŠ serialï¼Œ å°†æ¥å¯ä»¥è€ƒè™‘æ”¹æˆç»§æ‰¿ AVPackeï¼Œå†å¥—ä¸€ä¸ªstd::list
     AVPacket pkt;
     struct MyAVPacketListNode* next;
     int serial;
@@ -185,15 +185,15 @@ public:
         return speed;
     }
     void init_clock(int* queue_serial);
-    void sync_clock_to_slave(Clock* slave); // °ÑslaveÊ±ÖÓÍ¬²½µ½×Ô¼º
+    void sync_clock_to_slave(Clock* slave); // æŠŠslaveæ—¶é’ŸåŒæ­¥åˆ°è‡ªå·±
 
     double pts;           /* clock base */
     int paused;
     int serial;           /* clock is based on a packet with this serial */
 
 protected:
-    double pts_drift;     // clock base minus time at which we updated the clock. ptsÏà¶ÔÓÚÍâ½çÊ±ÖÓµÄÆ«ÒÆ¡£
-    double last_updated;  // Íâ½çÊ±ÖÓµÄ¡®´òµã¡¯
+    double pts_drift;     // clock base minus time at which we updated the clock. ptsç›¸å¯¹äºå¤–ç•Œæ—¶é’Ÿçš„åç§»ã€‚
+    double last_updated;  // å¤–ç•Œæ—¶é’Ÿçš„â€˜æ‰“ç‚¹â€™
     double speed;
 
     int* queue_serial;    /* pointer to the current packet queue serial, used for obsolete clock detection */
@@ -221,17 +221,17 @@ public:
     void frame_queue_destory();
     void frame_queue_signal();
 
-    Frame* frame_queue_peek();          // ÎŞ²¢·¢±£»¤£¬»ñµÃ¡®¶ÁÍ·¡¯,Âß¼­ÉÏ¡®½ÓÏÂÀ´ÒªÉÏÆÁµÄÖ¡¡¯
-    Frame* frame_queue_peek_next();     // ÎŞ²¢·¢±£»¤ ,¡®½ÓÏÂÀ´ÒªÉÏÆÁµÄÖ¡¡¯ µÄ¡®ºóÒ»Ö¡¡¯
-    Frame* frame_queue_peek_last();     // ÎŞ²¢·¢±£»¤£¬Âß¼­ÉÏ ¡®ÒÑ¾­ÉÏÆÁµÄÖ¡¡¯
+    Frame* frame_queue_peek();          // æ— å¹¶å‘ä¿æŠ¤ï¼Œè·å¾—â€˜è¯»å¤´â€™,é€»è¾‘ä¸Šâ€˜æ¥ä¸‹æ¥è¦ä¸Šå±çš„å¸§â€™
+    Frame* frame_queue_peek_next();     // æ— å¹¶å‘ä¿æŠ¤ ,â€˜æ¥ä¸‹æ¥è¦ä¸Šå±çš„å¸§â€™ çš„â€˜åä¸€å¸§â€™
+    Frame* frame_queue_peek_last();     // æ— å¹¶å‘ä¿æŠ¤ï¼Œé€»è¾‘ä¸Š â€˜å·²ç»ä¸Šå±çš„å¸§â€™
 
-    Frame* frame_queue_peek_readable(); // ÓĞ²¢·¢±£»¤
-    Frame* frame_queue_peek_readable_nowait(); // ÓĞ²¢·¢±£»¤
+    Frame* frame_queue_peek_readable(); // æœ‰å¹¶å‘ä¿æŠ¤
+    Frame* frame_queue_peek_readable_nowait(); // æœ‰å¹¶å‘ä¿æŠ¤
 
-    void frame_queue_next();        //  ÒÆ¶¯¡®¶ÁÍ·¡¯£¬aka ¡®³ö¶ÓÁĞ¡¯
+    void frame_queue_next();        //  ç§»åŠ¨â€˜è¯»å¤´â€™ï¼Œaka â€˜å‡ºé˜Ÿåˆ—â€™
 
-    Frame* frame_queue_peek_writable();   // »ñµÃ¡®Ğ´Í·¡¯£¬Ğ´ÍêÖ®ºóÓÃ frame_queue_push ÒÆ¶¯¡®Ğ´Í·¡¯¡£ÓĞ²¢·¢±£»¤
-    void frame_queue_push();              // ¡®Èë¶ÓÁĞ¡¯
+    Frame* frame_queue_peek_writable();   // è·å¾—â€˜å†™å¤´â€™ï¼Œå†™å®Œä¹‹åç”¨ frame_queue_push ç§»åŠ¨â€˜å†™å¤´â€™ã€‚æœ‰å¹¶å‘ä¿æŠ¤
+    void frame_queue_push();              // â€˜å…¥é˜Ÿåˆ—â€™
 
     static void unref_item(Frame* vp);
 
@@ -252,13 +252,13 @@ public:
 
 protected:
     Frame queue[FRAME_QUEUE_SIZE];
-    int rindex;         // ×î³õµÄ¡®¶ÁÍ·¡¯
-    int rindex_shown;   // rindexÖ¸ÏòµÄÎ»ÖÃ£¬ÊÇ·ñÔø¾­±» shown¹ı
-                        // rindex + rindex_shown ¹¹³ÉÂß¼­ÉÏµÄ¡®¶ÁÍ·¡¯ 
-                        // Èç¹ûkeeplast (ÖØ»­×îºóÒ»Ö¡ĞèÒª)£¬ÄÇÃ´µÚÒ»´Î¡®ÒÆ¶¯¶ÁÍ·¡¯²»ÄÜ¶¯rindex, ¶øÊÇÒª rindex_shown = 1¡£
-                        // ÕâÑù rindex + rindex_shown ÊÇ¡®¶ÁÍ·¡¯ , ÓÃ frame_queue_peek() ¿´;
-                        // rindex ÊÇ¡®¸Õ¸Õ»­¹ıµÄÒ»Ö¡¡¯, ÓÃ frame_queue_peek_last() ¿´;
-                        // rindex + rindex_shown + 1 ÊÇ¡®¶ÁÍ·¡¯ºóÃæÒ»Ö¡, ÓÃ frame_queue_peek_next() ¿´¡£
+    int rindex;         // æœ€åˆçš„â€˜è¯»å¤´â€™
+    int rindex_shown;   // rindexæŒ‡å‘çš„ä½ç½®ï¼Œæ˜¯å¦æ›¾ç»è¢« shownè¿‡
+                        // rindex + rindex_shown æ„æˆé€»è¾‘ä¸Šçš„â€˜è¯»å¤´â€™ 
+                        // å¦‚æœkeeplast (é‡ç”»æœ€åä¸€å¸§éœ€è¦)ï¼Œé‚£ä¹ˆç¬¬ä¸€æ¬¡â€˜ç§»åŠ¨è¯»å¤´â€™ä¸èƒ½åŠ¨rindex, è€Œæ˜¯è¦ rindex_shown = 1ã€‚
+                        // è¿™æ · rindex + rindex_shown æ˜¯â€˜è¯»å¤´â€™ , ç”¨ frame_queue_peek() çœ‹;
+                        // rindex æ˜¯â€˜åˆšåˆšç”»è¿‡çš„ä¸€å¸§â€™, ç”¨ frame_queue_peek_last() çœ‹;
+                        // rindex + rindex_shown + 1 æ˜¯â€˜è¯»å¤´â€™åé¢ä¸€å¸§, ç”¨ frame_queue_peek_next() çœ‹ã€‚
     int windex;
     int size;
     int max_size;

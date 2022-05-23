@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 
 #include "utils/utils.h"
 
@@ -51,21 +51,21 @@ public:
 	virtual int GetFileTotalTime(int* seconds);	
 
 
-	virtual int  Faster();	 //¼ÓËÙÒ»µµ	
-	virtual int  Slower();	 //½µËÙÒ»µµ	
+	virtual int  Faster();	 //åŠ é€Ÿä¸€æ¡£	
+	virtual int  Slower();	 //é™é€Ÿä¸€æ¡£	
 	virtual int  GetSpeed(int* speed);	// [-4, +4]
 	int _speed;
 
-	virtual int  FrameBack(void);    //µ¥Ö¡Ïòºó	
-	virtual int  FrameForward(void);  //µ¥Ö¡ÏòÇ°
+	virtual int  FrameBack(void);    //å•å¸§å‘å	
+	virtual int  FrameForward(void);  //å•å¸§å‘å‰
 
 	virtual int  OpenSound();
 	virtual int  CloseSound();
 		
-	virtual int  GetVolume(unsigned short* vol);  // »ñµÃÒôÁ¿¡£ range: 0 - VOLUME_MAX	
-	virtual int  SetVolume(unsigned short  vol);  // Éè¶¨ÒôÁ¿¡£ range: 0 - VOLUME_MAX
+	virtual int  GetVolume(unsigned short* vol);  // è·å¾—éŸ³é‡ã€‚ range: 0 - VOLUME_MAX	
+	virtual int  SetVolume(unsigned short  vol);  // è®¾å®šéŸ³é‡ã€‚ range: 0 - VOLUME_MAX
 
-	virtual int GetPictureSize(int* width, int* height);      // »ñµÃÍ¼Ïñ³ß´ç
+	virtual int GetPictureSize(int* width, int* height);      // è·å¾—å›¾åƒå°ºå¯¸
 	int _width;
 	int _height;
 	// }}} BaseDecoder section

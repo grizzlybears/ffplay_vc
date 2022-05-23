@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 #include "common_def.h"
 
 typedef enum
@@ -7,7 +7,7 @@ typedef enum
 	,PS_LOADED
 	,PS_PLAYING
 	,PS_PAUSED
-	,PS_STEPPING  // ÓĞµÄSDK´Óµ¥²½»Ö¸´Òªµ÷ play£¬´ÓÔİÍ£»Ö¸´µ÷ resume£¬ĞèÒª·ÖÒ»ÏÂ¡£
+	,PS_STEPPING  // æœ‰çš„SDKä»å•æ­¥æ¢å¤è¦è°ƒ playï¼Œä»æš‚åœæ¢å¤è°ƒ resumeï¼Œéœ€è¦åˆ†ä¸€ä¸‹ã€‚
 	,PS_INVALID
 } PLAY_STATE;
 
@@ -21,7 +21,7 @@ public:
 	{
 	}
 
-	// ·µ»Ø PLAY_STATE ĞÍ
+	// è¿”å› PLAY_STATE å‹
 	virtual int get_state() = 0;
 
 	virtual int open_file(const char * media_file) = 0;
@@ -31,17 +31,17 @@ public:
 	virtual int pause() = 0;
 	virtual int stop() = 0;
 	
-	virtual int get_played_time(int* seconds)	//»ñÈ¡ÎÄ¼şµ±Ç°²¥·ÅÎ»ÖÃ£¨Ãë£©
+	virtual int get_played_time(int* seconds)	//è·å–æ–‡ä»¶å½“å‰æ’­æ”¾ä½ç½®ï¼ˆç§’ï¼‰
 	{
 		return DEC_NOT_SUPPORTED;
 	}
 
-	virtual int set_played_time(int seconds)	 //ÉèÖÃÎÄ¼şµ±Ç°²¥·ÅÎ»ÖÃ£¨Ãë£©
+	virtual int set_played_time(int seconds)	 //è®¾ç½®æ–‡ä»¶å½“å‰æ’­æ”¾ä½ç½®ï¼ˆç§’ï¼‰
 	{
 		return DEC_NOT_SUPPORTED;
 	}
 
-	virtual int get_file_total_time(int* seconds)	//»ñÈ¡ÎÄ¼ş×ÜÊ±³¤£¨Ãë£©
+	virtual int get_file_total_time(int* seconds)	//è·å–æ–‡ä»¶æ€»æ—¶é•¿ï¼ˆç§’ï¼‰
 	{
 		return DEC_NOT_SUPPORTED;
 	}
@@ -71,16 +71,16 @@ public:
 		return DEC_NOT_SUPPORTED;
 	}
 
-	virtual int  get_volume(unsigned short* vol)  // »ñµÃÒôÁ¿¡£ range: 0 - VOLUME_MAX
+	virtual int  get_volume(unsigned short* vol)  // è·å¾—éŸ³é‡ã€‚ range: 0 - VOLUME_MAX
 	{
 		return DEC_NOT_SUPPORTED;
 	}
-	virtual int  set_volume(unsigned short  vol)  // Éè¶¨ÒôÁ¿¡£   range: 0 - VOLUME_MAX
+	virtual int  set_volume(unsigned short  vol)  // è®¾å®šéŸ³é‡ã€‚   range: 0 - VOLUME_MAX
 	{
 		return DEC_NOT_SUPPORTED;
 	}
 
-	virtual int get_picture_size(int* width, int* heighte)      // »ñµÃÍ¼Ïñ³ß´ç
+	virtual int get_picture_size(int* width, int* heighte)      // è·å¾—å›¾åƒå°ºå¯¸
 	{
 		return DEC_NOT_SUPPORTED;
 	}

@@ -1,4 +1,4 @@
-#include "stdafx.h"
+ï»¿#include "stdafx.h"
 #include <atldlgs.h>
 
 #include "MainDlg.h"
@@ -16,45 +16,45 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 {
 	CreateSimpleStatusBar();
 	
-	// µÚÒ»²ã 
-	m_splitter_lr.SetSplitterExtendedStyle(SPLIT_FIXEDBARSIZE| SPLIT_RIGHTALIGNED | SPLIT_NONINTERACTIVE); // ²»ÄÜÍÏ¶¯
+	// ç¬¬ä¸€å±‚ 
+	m_splitter_lr.SetSplitterExtendedStyle(SPLIT_FIXEDBARSIZE| SPLIT_RIGHTALIGNED | SPLIT_NONINTERACTIVE); // ä¸èƒ½æ‹–åŠ¨
 	
 	m_hWndClient = m_splitter_lr.Create(m_hWnd, rcDefault
 		, NULL, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN
 		);
 
-	// µÚÒ»²ã ÓÒ²à²¥·ÅÁĞ±í
+	// ç¬¬ä¸€å±‚ å³ä¾§æ’­æ”¾åˆ—è¡¨
 	m_playlist_pane.SetPaneContainerExtendedStyle(PANECNT_NOBORDER);
-	m_playlist_pane.Create(m_splitter_lr, _T("²¥·ÅÁĞ±í"), WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN);
+	m_playlist_pane.Create(m_splitter_lr, _T("æ’­æ”¾åˆ—è¡¨"), WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN);
 	m_playlist.Create(m_playlist_pane, rcDefault, NULL
 		, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN | LVS_LIST | LVS_SINGLESEL
 		, WS_EX_CLIENTEDGE);
 	m_playlist_pane.SetClient(m_playlist);
 
 	
-	// µÚÒ»²ã ×ó²àÖ÷ÇøÓò
-	m_splitter_tb.SetSplitterExtendedStyle(SPLIT_FIXEDBARSIZE | SPLIT_BOTTOMALIGNED | SPLIT_NONINTERACTIVE); // ²»ÄÜÍÏ¶¯
+	// ç¬¬ä¸€å±‚ å·¦ä¾§ä¸»åŒºåŸŸ
+	m_splitter_tb.SetSplitterExtendedStyle(SPLIT_FIXEDBARSIZE | SPLIT_BOTTOMALIGNED | SPLIT_NONINTERACTIVE); // ä¸èƒ½æ‹–åŠ¨
 
 	m_splitter_tb.Create(m_splitter_lr, rcDefault
 		, NULL, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN
 		);
 	
-	// µÚÒ»²ã×°Ìî
+	// ç¬¬ä¸€å±‚è£…å¡«
 	m_splitter_lr.SetSplitterPanes(m_splitter_tb, m_playlist_pane);
 
-	// µÚ¶ş²ã ÉÏ·½ÊÓÆµÇøÓò
+	// ç¬¬äºŒå±‚ ä¸Šæ–¹è§†é¢‘åŒºåŸŸ
 	m_view.Create(m_splitter_tb, rcDefault, NULL, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN, WS_EX_CLIENTEDGE);
 
-	// µÚ¶ş²ã ÏÂ·½¿ØÖÆÃæ°å
+	// ç¬¬äºŒå±‚ ä¸‹æ–¹æ§åˆ¶é¢æ¿
 	m_ctrl_panel.Create(m_splitter_tb);
 
-	// µÚ¶ş²ã×°Ìî
+	// ç¬¬äºŒå±‚è£…å¡«
 	m_splitter_tb.SetSplitterPanes(m_view, m_ctrl_panel);
 
 	UpdateLayout();
 
 
-	// Éè¶¨ÓÒ²à²¥·ÅÁĞ±í¿í¶È
+	// è®¾å®šå³ä¾§æ’­æ”¾åˆ—è¡¨å®½åº¦
 	RECT rc;
 	m_splitter_lr.GetSplitterRect(&rc);
 	m_splitter_lr.SetSplitterPos(rc.right - rc.left - PLAY_LIST_WIDTH);
@@ -66,7 +66,7 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 	PostMessage(WM_FAKE_VIEW_STATUS, 0, 0);  // hide status bar on initial
 
 
-	// Éè¶¨ÏÂ·½¿ØÖÆÃæ°å¸ß¶È
+	// è®¾å®šä¸‹æ–¹æ§åˆ¶é¢æ¿é«˜åº¦
 	m_splitter_tb.GetSplitterRect(&rc);
 	m_splitter_tb.SetSplitterPos(rc.bottom - rc.top - CTRL_PANEL_HEIGHT);
 
@@ -142,7 +142,7 @@ LRESULT CMainFrame::OnFileDropped(UINT /*uMsg*/, WPARAM wParam, LPARAM /*lParam*
     HDROP hDrop = (HDROP) wParam; 
     AutoDropFinish always(hDrop );
 
-    // Ê¹ÓÃ DragQueryFileA »ñµÃÍÏÈëµÄÎÄ¼şÁĞ±í¡£
+    // ä½¿ç”¨ DragQueryFileA è·å¾—æ‹–å…¥çš„æ–‡ä»¶åˆ—è¡¨ã€‚
 	UINT  ucount = DragQueryFileA(hDrop, 0xFFFFFFFF, NULL, 0);
 	char path[MAX_PATH] = { 0 };
 	if (ucount > 0)
@@ -154,13 +154,13 @@ LRESULT CMainFrame::OnFileDropped(UINT /*uMsg*/, WPARAM wParam, LPARAM /*lParam*
 	{
 		LOG_ERROR("open file fail\n");
 	}
-	// open_fileµÚÒ»¸öÎÄ¼ş;
+	// open_fileç¬¬ä¸€ä¸ªæ–‡ä»¶;
 	INT_PTR r = open_file(path);
 	if (r)
 	{
 		return 0;
 	}
-	//²¥·Å¸ÃÎÄ¼ş
+	//æ’­æ”¾è¯¥æ–‡ä»¶
 	play(m_view);
 	return 0;
 }
@@ -682,8 +682,8 @@ void CCtrlPanel::refresh_progress(int cur, int total)
 
 	m_txtProgress.SetWindowText(progress.GetString());
 
-	// ´ó»ª½âÂë¿âÔÚ close A½ô¸ú×Å open B Ö®ºó£¬È¥ GetPlayPos + GetTotalTime£¬ÓĞ¿ÉÄÜ·µ»Ø A µÄ½ø¶ÈºÍ×Ü³¤¶È£¬µ¼ÖÂ½ñºóµÄ½ø¶ÈÌõ¶¼²»¶Ô¡£È»¶øºóĞøµÄ¡®B½ø¶È¡¯ÊÇ¶ÔµÄ¡£
-	// Ö»ÄÜÎşÉüÒ»ÏÂĞÔÄÜÁË		 
+	// å¤§åè§£ç åº“åœ¨ close Aç´§è·Ÿç€ open B ä¹‹åï¼Œå» GetPlayPos + GetTotalTimeï¼Œæœ‰å¯èƒ½è¿”å› A çš„è¿›åº¦å’Œæ€»é•¿åº¦ï¼Œå¯¼è‡´ä»Šåçš„è¿›åº¦æ¡éƒ½ä¸å¯¹ã€‚ç„¶è€Œåç»­çš„â€˜Bè¿›åº¦â€™æ˜¯å¯¹çš„ã€‚
+	// åªèƒ½ç‰ºç‰²ä¸€ä¸‹æ€§èƒ½äº†		 
 	// if (total && !_v_slider_range) 	
 	{
 		//printf("v slider range: 0 - %d\n", _v_slider_max);
@@ -779,15 +779,15 @@ void CMainFrame::fit_picture_size(int w, int h)
 
 	int w_extra, h_extra;  //
 
-	w_extra = rcFrame.Width() - rcView.Width() + 4 ;   // ViewµÄ ClientRect ±ÈÍâ¿ò Ğ¡ 4
-	h_extra = rcFrame.Height() - rcView.Height() + 4 +40 ; // todo: '40' ÊÇ taskbar ¸ß¶È£¬ µ«ÊÇ taskbar ¸ß¶È¿ÉÄÜÓĞ±ä£¬taskbarÎ»ÖÃÒ²²»Ò»¶¨ÊÇºáµÄ
+	w_extra = rcFrame.Width() - rcView.Width() + 4 ;   // Viewçš„ ClientRect æ¯”å¤–æ¡† å° 4
+	h_extra = rcFrame.Height() - rcView.Height() + 4 +40 ; // todo: '40' æ˜¯ taskbar é«˜åº¦ï¼Œ ä½†æ˜¯ taskbar é«˜åº¦å¯èƒ½æœ‰å˜ï¼Œtaskbarä½ç½®ä¹Ÿä¸ä¸€å®šæ˜¯æ¨ªçš„
 
 	int numerator[] = { 1,7,3,2,1,1,1 };
 	int denomiator[] = { 1,8,4,3,2,3,4 };
 
 	int i;
 	int first_match = -1;   // 
-	int first_exact_match = -1; //Õû³ı
+	int first_exact_match = -1; //æ•´é™¤
 	int w_target, h_target;
 
 	for (i = 0; i < ARRAY_SIZE(numerator); i++)
@@ -832,7 +832,7 @@ void CMainFrame::fit_picture_size(int w, int h)
 	int scale_ratio = first_match;
 
 	if (first_exact_match >= 0 && 
-		first_exact_match <= first_match+1  // Èç¹ûÓĞÕû³ı±ÈÂÊ£¬ÇÒËõµÃ²»¶à£¬¾ÍÓÃÕû³ı±ÈÂÊ
+		first_exact_match <= first_match+1  // å¦‚æœæœ‰æ•´é™¤æ¯”ç‡ï¼Œä¸”ç¼©å¾—ä¸å¤šï¼Œå°±ç”¨æ•´é™¤æ¯”ç‡
 		)
 	{
 		LOG_DEBUG("choose exact scale ratio: %d/%d\n", numerator[first_exact_match], denomiator[first_exact_match]);
@@ -914,7 +914,7 @@ void CMainFrame::Maximize()
 
 	// move frame!
 
-	//¸¡ÔÚ¶¥²ã
+	//æµ®åœ¨é¡¶å±‚
 	//LONG_PTR ex_style = GetWindowLongPtr(GWL_EXSTYLE);
 	//ex_style &= WS_EX_TOPMOST;
 	//SetWindowLongPtr(GWL_EXSTYLE, ex_style);
@@ -925,7 +925,7 @@ void CMainFrame::Maximize()
 
 void CMainFrame::Restore()
 {
-	//²»ÔÙ¸¡ÔÚ¶¥²ã
+	//ä¸å†æµ®åœ¨é¡¶å±‚
 	//LONG_PTR ex_style = GetWindowLongPtr(GWL_EXSTYLE);
 	//ex_style &= ~WS_EX_TOPMOST;
 	//SetWindowLongPtr(GWL_EXSTYLE, ex_style);

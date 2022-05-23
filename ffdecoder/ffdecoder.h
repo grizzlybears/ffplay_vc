@@ -1,4 +1,4 @@
-#pragma  once
+ï»¿#pragma  once
 
 #include "SimpleAvCommon.h"
 
@@ -85,7 +85,7 @@ protected:
 
     RenderBase* get_render();
     
-    AVPacket pending_pkt;  // when avcodec_send_packet returns E_AGAIN£¬we need to hold the pkt.
+    AVPacket pending_pkt;  // when avcodec_send_packet returns E_AGAINï¼Œwe need to hold the pkt.
     int is_packet_pending;
     int pkt_serial;        // 'serial' of current pkt  
     int finished;
@@ -129,8 +129,8 @@ protected:
     virtual void on_got_new_frame(AVFrame* frame);
     void video_image_display(); 
     
-    double frame_timer; // when SHOULD ¡®current showing picture¡¯ be put on screen.
-                        // i.e.  'pts' of ¡®current showing picture¡¯ is 00:05:38.04,
+    double frame_timer; // when SHOULD â€˜current showing pictureâ€™ be put on screen.
+                        // i.e.  'pts' of â€˜current showing pictureâ€™ is 00:05:38.04,
                         // then even it was put on to screen at 00:05:38.05
                         // still we have  frame_timer == 00:05:38.04
     
@@ -284,13 +284,13 @@ public:
 
     RenderBase*  render;
     
-    // mask:  bit0  -- V opened £¬ bit1 -- A opened 
+    // mask:  bit0  -- V opened ï¼Œ bit1 -- A opened 
     int   open_stream_from_avformat(AVFormatContext* format_context,  int* vstream_id, int* astream_id);
 
     // Return:  0 -- success, non-zero -- error.
     int   open_stream(const AVCodecParameters * codec_para, const StreamParam* extra_para); 
 
-    int   get_opened_streams_mask();  // mask:  bit0  -- V opened £¬ bit1 -- A opened 
+    int   get_opened_streams_mask();  // mask:  bit0  -- V opened ï¼Œ bit1 -- A opened 
     void  close_all_stream();
     
     // called to display each frame (from event loop )
@@ -399,8 +399,8 @@ public:
     // }}} stream operation section
 
     // {{  some ffplay cmd line opt  
-    int64_t streamopt_start_time;  // ÃüÁîĞĞ -ss £¬ÓÉ av_parse_time ½âÎöÎª microseconds
-    int64_t streamopt_duration;    // ÃüÁîĞĞ -t  £¬ÓÉ av_parse_time ½âÎöÎª microseconds
+    int64_t streamopt_start_time;  // å‘½ä»¤è¡Œ -ss ï¼Œç”± av_parse_time è§£æä¸º microseconds
+    int64_t streamopt_duration;    // å‘½ä»¤è¡Œ -t  ï¼Œç”± av_parse_time è§£æä¸º microseconds
     int     streamopt_autoexit;
     // }}
     
@@ -418,13 +418,13 @@ protected:
     virtual  ThreadRetType thread_main();  //  stream reader thread 
     static int decode_interrupt_cb(void* ctx); // Chance for 'avformat' to 'break reading' 
 
-    AVInputFormat* iformat;   // ÃüÁîĞĞÖ¸¶¨ÈİÆ÷¸ñÊ½£¬ref only
-    AString file_to_play; // ²¥·ÅµÄÎÄ¼ş or url
+    AVInputFormat* iformat;   // å‘½ä»¤è¡ŒæŒ‡å®šå®¹å™¨æ ¼å¼ï¼Œref only
+    AString file_to_play; // æ’­æ”¾çš„æ–‡ä»¶ or url
   
     // format status section {{
     int paused;
     // }}  format status section
-    int last_paused; // Ö®Ç°Ò»´Îreader loopµÄÊ±ºò£¬ÊÇ·ñÊÇpaused
+    int last_paused; // ä¹‹å‰ä¸€æ¬¡reader loopçš„æ—¶å€™ï¼Œæ˜¯å¦æ˜¯paused
 
     int open_stream_file();
     int last_video_stream, last_audio_stream ;
