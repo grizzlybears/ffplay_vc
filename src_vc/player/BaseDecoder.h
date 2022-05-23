@@ -31,13 +31,13 @@ public:
 	virtual int  Init(DecoderEventCB* event_cb) = 0;	//初始化
 	virtual void Release(void) = 0;	    //释放
 
-	virtual int  Open(const char* fileName) = 0;	 //打开文件
-	virtual void Close(void) = 0;              //关闭文件
+	virtual int  Open(const char* fileName) = 0;	// open media file
+	virtual void Close(void) = 0;              //close media
+	virtual int  Play(HWND  screen) = 0;
+	virtual int  Stop() = 0;
 
-	virtual int  Play(HWND  screen) = 0;	 //播放
-	virtual int  Pause() = 0;      //暂停
-	virtual int  Resume() = 0;     //恢复
-	virtual int  Stop() = 0;	   //停止
+	virtual int  Pause() = 0; 
+	virtual int  Resume() = 0; 
 
 	virtual int  Faster()	 //加速一档
 	{
