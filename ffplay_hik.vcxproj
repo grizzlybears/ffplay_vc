@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>15.0</VCProjectVersion>
+    <ProjectGuid>{3C8BDBAD-6FCD-42F4-9028-12376FF397D1}</ProjectGuid>
+    <RootNamespace>ffplay-hik</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0.17763.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v141</PlatformToolset>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v141</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v141</PlatformToolset>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v141</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <OutDir>bin.hik\</OutDir>
+    <IntDir>$(Platform)\$(Configuration)_hik\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <OutDir>bin.hik\</OutDir>
+    <IntDir>$(Platform)\$(Configuration)_hik\</IntDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>dep_on_windows\wtl.10.0.10077\lib\native\include; src_vc; .; min_ffmpeg; dep_on_windows\include; dep_on_windows\include\SDL2;</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_MBCS; _CRT_SECURE_NO_WARNINGS; FFPLAY_VC; %(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalDependencies>avcodec.lib; avformat.lib; avutil.lib; avdevice.lib; avfilter.lib; swresample.lib; swscale.lib;SDL2.lib;SDL2main.lib; kernel32.lib;user32.lib;gdi32.lib; winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib; %(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>dep_on_windows\lib; </AdditionalLibraryDirectories>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <SDLCheck>true</SDLCheck>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <SDLCheck>true</SDLCheck>
+      <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>dep_on_windows\wtl.10.0.10077\lib\native\include; src_vc; .; min_ffmpeg; dep_on_windows\include; dep_on_windows\include\SDL2;</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_MBCS; _CRT_SECURE_NO_WARNINGS; FFPLAY_VC; %(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <AdditionalDependencies>avcodec.lib; avformat.lib; avutil.lib; avdevice.lib; avfilter.lib; swresample.lib; swscale.lib;SDL2.lib;SDL2main.lib; kernel32.lib;user32.lib;gdi32.lib; winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib; %(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>dep_on_windows\lib; </AdditionalLibraryDirectories>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ResourceCompile Include="src_vc\ffplayer_vc.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="ffdecoder\ffdecoder.h" />
+    <ClInclude Include="ffdecoder\SimpleAvCommon.h" />
+    <ClInclude Include="src\cmdutils.h" />
+    <ClInclude Include="src_vc\globals.h" />
+    <ClInclude Include="src_vc\player\BaseDecoder.h" />
+    <ClInclude Include="src_vc\player\BasePlayer.h" />
+    <ClInclude Include="src_vc\player\common_def.h" />
+    <ClInclude Include="src_vc\player\FFMpegWrapper.h" />
+    <ClInclude Include="src_vc\player\SingleFilePlayer.h" />
+    <ClInclude Include="src_vc\player\win_render.h" />
+    <ClInclude Include="src_vc\resource.h" />
+    <ClInclude Include="src_vc\stdafx.h" />
+    <ClInclude Include="src_vc\UI\AboutDlg.h" />
+    <ClInclude Include="src_vc\UI\MainDlg.h" />
+    <ClInclude Include="src_vc\UI\VideoView.h" />
+    <ClInclude Include="utils\CStringWrapper.h" />
+    <ClInclude Include="utils\thread_utils.h" />
+    <ClInclude Include="utils\utils.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="ffdecoder\ffdecoder.cpp" />
+    <ClCompile Include="ffdecoder\SimpleAvCommon.cpp" />
+    <ClCompile Include="src\cmdutils.c" />
+    <ClCompile Include="src_vc\main.cpp" />
+    <ClCompile Include="src_vc\player\FFMpegWrapper.cpp" />
+    <ClCompile Include="src_vc\player\SingleFilePlayer.cpp" />
+    <ClCompile Include="src_vc\player\win_render.cpp" />
+    <ClCompile Include="src_vc\stdafx.cpp" />
+    <ClCompile Include="src_vc\UI\MainDlg.cpp" />
+    <ClCompile Include="utils\thread_utils.cpp" />
+    <ClCompile Include="utils\utils.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="src_vc\res\camera.bmp" />
+    <Image Include="src_vc\res\fast.bmp" />
+    <Image Include="src_vc\res\FullScreen.bmp" />
+    <Image Include="src_vc\res\icon1.ico" />
+    <Image Include="src_vc\res\pause.bmp" />
+    <Image Include="src_vc\res\play.bmp" />
+    <Image Include="src_vc\res\slow.bmp" />
+    <Image Include="src_vc\res\sound.bmp" />
+    <Image Include="src_vc\res\step_backward.bmp" />
+    <Image Include="src_vc\res\step_forward.bmp" />
+    <Image Include="src_vc\res\stop.bmp" />
+    <Image Include="src_vc\res\w2.ico" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
