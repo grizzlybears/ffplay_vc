@@ -23,8 +23,9 @@ public:
 
 		_width = 0;
 		_height = 0;
-
-		vs = NULL;
+		
+		login_ssesion = -1;
+		play_handle = -1;
 	}
 	virtual ~DecoderFFMpegWrapper();
 
@@ -76,7 +77,11 @@ public:
 	virtual void on_eof(const char* file_Playing);
 	// }}} ParserCB section
 
-	VideoState* vs;
+	LONG login_ssesion;
+	LONG play_handle;
+	SimpleAVDecoder av_decoder;
+
+	void handle_hik_ES_cb(LONG lPreviewHandle, NET_DVR_PACKET_INFO_EX* pstruPackInfo);
 	DecoderEventCB* _event_cb;
 
 };
