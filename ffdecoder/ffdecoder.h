@@ -330,10 +330,11 @@ public:
     int  is_buffer_full();
     void feed_null_pkt(); // 
     void feed_pkt(AVPacket* pkt, const AVPacketExtra* extra  ); // take ownership of 'pkt'
-    
+	
+	AudioDecoder    auddec;
+	VideoDecoder    viddec;
+
 protected:
-    AudioDecoder    auddec;
-    VideoDecoder    viddec;
 
     int av_sync_type;
     Clock extclk;

@@ -10,6 +10,7 @@
 #define HIK_NVR_PASS "12345"
 #define HIK_NVR_CHAN_TO_PLAY 34
 
+#define TRACE_FRAMES (1)
 
 #if defined(_WIN32) && defined(_DEBUG) 
 #define new DEBUG_NEW
@@ -166,6 +167,11 @@ void DecoderFFMpegWrapper::on_eof(const char* file_Playing)
 }
 
 
+static void CALLBACK noneed_real_cb(LONG lRealHandle, DWORD dwDataType, BYTE* pBuffer, DWORD dwBufSize, void* pUser)
+{
+}
+
+
 int  DecoderFFMpegWrapper::Play(HWND  screen)
 {
 	CHECK_IF_INITED(1);
@@ -181,8 +187,9 @@ int  DecoderFFMpegWrapper::Play(HWND  screen)
 	preview_info.bBlocked = 1;
 	preview_info.byProtoType = 0; //应用层取流协议：0- 私有协议，1- RTSP协议。
 
+	
 	//start 'real play' 
-	play_handle = NET_DVR_RealPlay_V40(login_ssesion, &preview_info, NULL, NULL);
+	play_handle = NET_DVR_RealPlay_V40(login_ssesion, &preview_info, noneed_real_cb, NULL);
 
 	if (play_handle < 0)
 	{
@@ -197,7 +204,31 @@ int  DecoderFFMpegWrapper::Play(HWND  screen)
 		goto FAILED;
 	}
 
+	{
+		AVCodecParameters codec_para;
+		memset((void*)&codec_para, 0, sizeof codec_para);
+		codec_para.codec_id = AV_CODEC_ID_H264;  // yes, must be figured out manually.
+		codec_para.codec_type = AVMEDIA_TYPE_VIDEO;
 
+		StreamParam  extra_para = { 0 };
+		extra_para.time_base = av_make_q(1, AV_TIME_BASE);
+		extra_para.guessed_vframe_rate = av_make_q(1, 25);
+
+		Decoder * decoder = &av_decoder.viddec;
+
+		AVCodecContext* codec_context = Decoder::create_codec_directly(&codec_para, &extra_para);
+		if (!codec_context)
+		{
+			goto FAILED;
+		}
+
+		if (decoder->decoder_init(codec_context, &extra_para))
+		{
+			goto FAILED;
+		}
+
+	}
+	
 	
 	render-> attach_to_window(screen);
 
@@ -206,7 +237,10 @@ int  DecoderFFMpegWrapper::Play(HWND  screen)
 		av_decoder.internal_toggle_pause();
 	}
 
+	return 0;
+
 FAILED:
+	LOG_ERROR("Oops, some thing not right.\n");
 
 	if (play_handle >= 0)
 	{
@@ -214,7 +248,7 @@ FAILED:
 		play_handle = -1;
 	}
 
-	return 0;
+	return 1;
 }
 void CALLBACK PlayESCallBack(LONG lPreviewHandle, NET_DVR_PACKET_INFO_EX* pstruPackInfo, void* pUser)
 {
@@ -224,6 +258,44 @@ void CALLBACK PlayESCallBack(LONG lPreviewHandle, NET_DVR_PACKET_INFO_EX* pstruP
 
 void DecoderFFMpegWrapper::handle_hik_ES_cb(LONG lPreviewHandle, NET_DVR_PACKET_INFO_EX* pstruPackInfo)
 {
+	const char * s;
+	switch (pstruPackInfo->dwPacketType)
+	{
+	case 0: //"Header";
+	case 11: //"Private"
+		return;
+
+	case 10: // "Audio"
+		s = "A";
+		break;
+	case 1: //"I";
+		s = "I";
+		break;
+	case 2: // "B";
+		s = "B";
+		break;
+	case 3: // "P";
+		s = "P";
+		break;
+
+	default:
+		LOG_WARN("Warn! Unknown packet type %d\n", pstruPackInfo->dwPacketType);
+		return;
+	}
+
+
+#if	TRACE_FRAMES
+	static int _dot_count = 0;
+	OutputDebugStringA(s);
+	_dot_count++;
+
+	if (100 == _dot_count)
+	{
+		OutputDebugStringA("\n");
+		_dot_count = 0;
+	}
+#endif
+
 }
 
 int  DecoderFFMpegWrapper::Pause()  
@@ -251,7 +323,7 @@ int  DecoderFFMpegWrapper::Stop()
 		av_decoder.internal_toggle_pause();
 	}
 	av_decoder.discard_buffer(0);
-
+	av_decoder.close_all_stream();
 
 	WinRender* render = (WinRender*)av_decoder.render;
 	render->dettach_from_window();
@@ -317,11 +389,9 @@ int DecoderFFMpegWrapper::GetFileTotalTime(int* seconds)			//获取文件总时�
 {
 	CHECK_IF_MEDIA_PRESENT(1);
 
-	LOG_DEBUG("replay == live cast\n");
-
-	
+	// LOG_DEBUG("replay == live cast\n");
 	*seconds = (int)99999999;
-	
+
 	return 0;
 }
 
