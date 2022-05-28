@@ -10,7 +10,7 @@
 #define HIK_NVR_PASS "12345"
 #define HIK_NVR_CHAN_TO_PLAY 34
 
-#define TRACE_FRAMES (1)
+//#define TRACE_FRAMES (1)
 
 #if defined(_WIN32) && defined(_DEBUG) 
 #define new DEBUG_NEW
@@ -166,12 +166,6 @@ void DecoderFFMpegWrapper::on_eof(const char* file_Playing)
 	}
 }
 
-
-static void CALLBACK noneed_real_cb(LONG lRealHandle, DWORD dwDataType, BYTE* pBuffer, DWORD dwBufSize, void* pUser)
-{
-}
-
-
 int  DecoderFFMpegWrapper::Play(HWND  screen)
 {
 	CHECK_IF_INITED(1);
@@ -189,7 +183,7 @@ int  DecoderFFMpegWrapper::Play(HWND  screen)
 
 	
 	//start 'real play' 
-	play_handle = NET_DVR_RealPlay_V40(login_ssesion, &preview_info, noneed_real_cb, NULL);
+	play_handle = NET_DVR_RealPlay_V40(login_ssesion, &preview_info, NULL, NULL);
 
 	if (play_handle < 0)
 	{
@@ -211,6 +205,7 @@ int  DecoderFFMpegWrapper::Play(HWND  screen)
 		codec_para.codec_type = AVMEDIA_TYPE_VIDEO;
 
 		StreamParam  extra_para = { 0 };
+		extra_para.start_time = av_gettime_relative(); // we are live-casting
 		extra_para.time_base = av_make_q(1, AV_TIME_BASE);
 		extra_para.guessed_vframe_rate = av_make_q(1, 25);
 
@@ -258,6 +253,8 @@ void CALLBACK PlayESCallBack(LONG lPreviewHandle, NET_DVR_PACKET_INFO_EX* pstruP
 
 void DecoderFFMpegWrapper::handle_hik_ES_cb(LONG lPreviewHandle, NET_DVR_PACKET_INFO_EX* pstruPackInfo)
 {
+	AVPacketExtra extra;
+
 	const char * s;
 	switch (pstruPackInfo->dwPacketType)
 	{
@@ -266,16 +263,20 @@ void DecoderFFMpegWrapper::handle_hik_ES_cb(LONG lPreviewHandle, NET_DVR_PACKET_
 		return;
 
 	case 10: // "Audio"
+		extra.v_or_a = PSI_AUDIO;
 		s = "A";
 		break;
 	case 1: //"I";
 		s = "I";
+		extra.v_or_a = PSI_VIDEO;
 		break;
 	case 2: // "B";
 		s = "B";
+		extra.v_or_a = PSI_VIDEO;
 		break;
 	case 3: // "P";
 		s = "P";
+		extra.v_or_a = PSI_VIDEO;
 		break;
 
 	default:
@@ -295,6 +296,28 @@ void DecoderFFMpegWrapper::handle_hik_ES_cb(LONG lPreviewHandle, NET_DVR_PACKET_
 		_dot_count = 0;
 	}
 #endif
+	unsigned char * pkt_data = (unsigned char*)av_malloc(pstruPackInfo->dwPacketSize + AV_INPUT_BUFFER_PADDING_SIZE);
+	if (!pkt_data)
+	{
+		LOG_ERROR("not enough memory for new AvPacket\n");
+		return;
+	}
+
+	memcpy(pkt_data, pstruPackInfo->pPacketBuffer, pstruPackInfo->dwPacketSize);
+
+
+	AVPacket packet;
+	av_init_packet(&packet);
+
+	int r = av_packet_from_data(&packet, pkt_data, pstruPackInfo->dwPacketSize);
+	if (r)
+	{
+		LOG_WARN("failed in av_packet_from_data \n");
+		return ;
+	}
+
+	packet.pts = av_gettime_relative(); // we are live-casting
+	av_decoder.feed_pkt(&packet, &extra);
 
 }
 

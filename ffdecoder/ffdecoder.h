@@ -277,6 +277,7 @@ public:
         show_status = -1;
         decoder_reorder_pts = -1;  
         render = NULL;
+		max_frame_duration = 10;
     } 
     virtual ~SimpleAVDecoder();
 

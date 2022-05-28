@@ -549,6 +549,12 @@ double SimpleAVDecoder::compute_target_delay(double frame_duration)
 }
 
 double SimpleAVDecoder::vp_duration(Frame *vp, Frame *nextvp) {
+
+	if (vp == nextvp)
+	{
+		return 0.01;
+	}
+
     if (vp->serial == nextvp->serial) {
         double duration = nextvp->pts - vp->pts;
         if (isnan(duration) || duration <= 0 || duration > this->max_frame_duration)
