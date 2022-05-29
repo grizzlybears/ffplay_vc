@@ -36,11 +36,9 @@ BaseDecoder* create_ffmpeg_wrapper(DecoderEventCB* cb)
 }
 
 
-
 DecoderFFMpegWrapper::~DecoderFFMpegWrapper()
 {
 }
-
 
 int  DecoderFFMpegWrapper::Init(DecoderEventCB* event_cb)
 {
@@ -54,8 +52,6 @@ int  DecoderFFMpegWrapper::Init(DecoderEventCB* event_cb)
 		LOG_ERROR("Failed to init Hik.\n");
 		return 1;
 	}
-
-	
 
 	RenderBase* render = new WinRender(&av_decoder, event_cb);
 	if (!render)
@@ -72,8 +68,8 @@ int  DecoderFFMpegWrapper::Init(DecoderEventCB* event_cb)
 	}
 
 	av_decoder.render = render;
-	av_decoder.set_master_sync_type(AV_SYNC_AUDIO_MASTER); 
-	//vs->av_decoder.set_master_sync_type(AV_SYNC_VIDEO_MASTER);
+	av_decoder.set_master_sync_type(AV_SYNC_EXTERNAL_CLOCK );
+	//vs->av_decoder.set_master_sync_type(AV_SYNC_AUDIO_MASTER);
 
 	guard2.dismiss();
 	
@@ -135,8 +131,6 @@ int  DecoderFFMpegWrapper::Open(const char* fileName)
 		LOG_HIK_ERROR("NET_DVR_Login_V40 failed,");
 		return -1;
 	}
-
-	
 
 	return 0;
 }
@@ -223,7 +217,6 @@ int  DecoderFFMpegWrapper::Play(HWND  screen)
 		}
 
 	}
-	
 	
 	render-> attach_to_window(screen);
 
@@ -316,9 +309,12 @@ void DecoderFFMpegWrapper::handle_hik_ES_cb(LONG lPreviewHandle, NET_DVR_PACKET_
 		return ;
 	}
 
-	packet.pts = av_gettime_relative(); // we are live-casting
-	av_decoder.feed_pkt(&packet, &extra);
+	// in unit of millisecond 
+	uint64_t hik_ts = MakeInt64(pstruPackInfo->dwTimeStampHigh, pstruPackInfo->dwTimeStamp);
 
+	packet.pts = hik_ts*1000; //  ffmpeg requires pts in 'us' unit
+
+	av_decoder.feed_pkt(&packet, &extra);
 }
 
 int  DecoderFFMpegWrapper::Pause()  
@@ -451,5 +447,4 @@ int DecoderFFMpegWrapper::SetVolume(unsigned short  vol)
 	LOG_ERROR("Not implemented\n");
 	return DEC_NOT_SUPPORTED;
 }
-
 
