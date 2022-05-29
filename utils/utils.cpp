@@ -558,7 +558,7 @@ time_t str_to_time(const char * yyyy_mm_dd_hh_mm_ss)
 void seconds_2_hms(int seconds, int* hh, int* mm, int* ss)
 {
 	*hh = seconds / 3600;
-	*mm = seconds / 60;
+	*mm = (seconds % 3600) / 60;
 	*ss = seconds % 60;
 }
 
