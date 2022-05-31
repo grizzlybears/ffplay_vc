@@ -28,7 +28,10 @@ We need a 'clean' ffplay providing  above API, and yes here it is.
 ```
 on Windows:
     No extra dependencies is required, the working copy carries a set of ffmpeg+SDL2 in 'dep_on_windows'.
-    Just open the .sln with VC2017 or higher and build/run. There are two 'vcproj's, 'ffplay' is the 'classic' command line style 'ffplay', and 'ffplay_vc' is a windows GUI behaving as a simplest video player.
+    Just open the .sln with VC2017 or higher and build/run. There are 3 'vcproj's.
+    'ffplay' is the 'classic' command line style 'ffplay'.
+    'ffplay_vc' is a windows GUI behaving as a simplest video player.
+    'ffplay_hik' is variation of 'ffplay_vc' which fetches video stream by Hik(海康) API and play it by 'AV Decoder'.
 ```
 
 ```
@@ -74,12 +77,12 @@ class VideoState  // high level wrapper,  function like 'AV Player' mentioned in
 ## class details
 
 (under construction...) 
-For now you can take a look at ${working_copy_root}/src_vc/player/FFMpegWrapper.{h|cpp}
+For now you can take a look at [${root}/src_vc/player/FFMpegWrapper.{h|cpp}](src_vc/player/FFMpegWrapper.h)
 It  embeds  'AV Player' into existing  'player framework'  in less than 300 lines of code. ( em, maybe also in 30 minutes :- )
 
 # TODO:
 For linux version, I guess 'so be it', the purpose of linux version is simply 'to check my code by valgrind'. :)
 
 On windows, the final object is to shape 'ffplay_vc' to  'native windows style',  that is 'drawing pictures by d3d and playing sound by XAudio'. 
-And also a demo to play video from Hik(海康) NVR without Hik playlib is planned.
+Enhance the ‘ffplay_hik’  demo to play video record with ‘speed+-’ and ‘seek’.
 
