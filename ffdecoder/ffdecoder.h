@@ -277,6 +277,7 @@ public:
         show_status = -1;
         decoder_reorder_pts = -1;  
         render = NULL;
+		max_frame_duration = 10;
     } 
     virtual ~SimpleAVDecoder();
 
@@ -330,10 +331,11 @@ public:
     int  is_buffer_full();
     void feed_null_pkt(); // 
     void feed_pkt(AVPacket* pkt, const AVPacketExtra* extra  ); // take ownership of 'pkt'
-    
+	
+	AudioDecoder    auddec;
+	VideoDecoder    viddec;
+
 protected:
-    AudioDecoder    auddec;
-    VideoDecoder    viddec;
 
     int av_sync_type;
     Clock extclk;

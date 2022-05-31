@@ -298,7 +298,7 @@ ThreadRetType WinRender::thread_main()
 
 	sql_event_loop();
 
-	LOG_DEBUG("SQL thread quit.\n");
+	LOG_DEBUG("SDL thread quit.\n");
 	SDL_Quit();
 	return 0;
 }

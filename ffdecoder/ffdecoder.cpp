@@ -549,6 +549,12 @@ double SimpleAVDecoder::compute_target_delay(double frame_duration)
 }
 
 double SimpleAVDecoder::vp_duration(Frame *vp, Frame *nextvp) {
+
+	if (vp == nextvp)
+	{
+		return 0.01;
+	}
+
     if (vp->serial == nextvp->serial) {
         double duration = nextvp->pts - vp->pts;
         if (isnan(duration) || duration <= 0 || duration > this->max_frame_duration)
@@ -563,7 +569,11 @@ double SimpleAVDecoder::vp_duration(Frame *vp, Frame *nextvp) {
 void SimpleAVDecoder::update_video_clock(double pts, int64_t pos, int serial) {
     /* update current video pts */
     viddec.stream_clock.set_clock( pts, serial);
-    extclk.sync_clock_to_slave( &viddec.stream_clock);
+
+	if (isnan(extclk.get_clock()))
+	{
+		extclk.sync_clock_to_slave(&viddec.stream_clock);
+	}
 }
 
 void SimpleAVDecoder::toggle_need_drawing(int need_drawing)
