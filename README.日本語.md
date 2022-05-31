@@ -28,7 +28,10 @@
 ```
 on Windows:
     ほかの依頼は不要、working copyに「ffmpeg+SDL2」セットを持ちます、'dep_on_windows'に御参照できます。
-    直ちに .slnをVC2017もしくはそれ以上のVSで開キ、そして build/runできます。二つ'vcproj'はありますs。'ffplay' は従来の'command line style' ffplayであり, そして 'ffplay_vc' は windows GUIの簡単なビデオプレーヤです。 
+    直ちに .slnをVC2017もしくはそれ以上のVSで開キ、そして build/runできます。三つの'vcproj'はあります。
+    'ffplay' は従来の'command line style' ffplayです。
+    'ffplay_vc' は windows GUIの簡単なビデオプレーヤです。 
+    'ffplay_hik' は 'ffplay_vc'の変化形であり、Hik(海康)のAPIでストリームを取得し、'AV Decoder'で再生します。 
 ```
 
 ```
@@ -72,11 +75,11 @@ class VideoState  //上位ラッパー,  「Brief」の載っている 'AV Playe
 ## class details
 
 (under construction...) 
-For now you can take a look at ${working_copy_root}/src_vc/player/FFMpegWrapper.{h|cpp}
+For now you can take a look at [${root}/src_vc/player/FFMpegWrapper.{h|cpp}](src_vc/player/FFMpegWrapper.h)
 It embeds  'AV Player' into existing  'player framework'  in less than 300 lines of code. ( em, maybe also in 30 minutes :- )
 
 # TODO:
 Linux versionなら恐らく「このまま置いていく」となります。そもそもlinux versionの目的は、「valgrind」でのコードチェックでした：） 
 
-On windows, 最終目標は'native windows style'のプレーヤになること、それは「D3Dでイメージを描画し、XAudioで音声を放送ます、SDLにさようなら」。また、Hik(海康) NVR よりのストリームを再生するサンプルはこれから加ます（Hik PlayLibを使わずに）。
+On windows, 最終目標は'native windows style'のプレーヤになること、それは「D3Dでイメージを描画し、XAudioで音声を放送ます、SDLにさようなら」。また、'ffplay_hik'も強化する予定、録画を’スピード調整可能’かつ’シーク可能’で性再生できるように。
 
