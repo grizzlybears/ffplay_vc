@@ -304,7 +304,7 @@ void opt_input_file(void *optctx, const char *filename)
 static int dummy;
 
 static const OptionDef options[] = {
-#if defined(__GNUC__) || ( _MSC_VER >= 1920)
+#if defined(__GNUC__) 
     CMDUTILS_COMMON_OPTIONS
     { "s", HAS_ARG | OPT_VIDEO, { .func_arg = opt_frame_size }, "set frame size (WxH or abbreviation)", "size" },
     { "ss", HAS_ARG, { .func_arg = opt_seek }, "seek to a given position in seconds", "pos" },

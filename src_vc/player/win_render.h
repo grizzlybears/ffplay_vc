@@ -6,7 +6,7 @@
 #include "ffdecoder/ffdecoder.h"
 #include "BaseDecoder.h"
 #include <SDL.h>
-
+class CVideoCanvus;
 class WinRender : public RenderBase
 	, public BaseThread
 {
@@ -72,10 +72,64 @@ protected:
 	AVFrame *pFrameRGB;
 	uint8_t * rgb_buffer;
 
-	HWND  canvas;
 	int   need_pic_size;
+	CVideoCanvus* attatched;
 
 	SDL_AudioDeviceID audio_dev;
 
 };
 
+
+class CVideoCanvus : public CWindowImpl<CVideoCanvus>
+{
+public:
+	DECLARE_WND_CLASS(NULL)
+
+	CVideoCanvus(WinRender* outer, HWND  to_attach)
+	{
+		_outer = outer;
+		SubclassWindow(to_attach);
+		attached = 1;
+	}
+
+	virtual ~CVideoCanvus()
+	{
+		unattach();
+	}
+
+	WinRender* _outer;
+	int attached;
+
+	void unattach()
+	{
+		if (!attached)
+			return;
+
+		UnsubclassWindow();
+		attached = 0;
+	}
+
+	BOOL PreTranslateMessage(MSG* pMsg)
+	{
+		pMsg;
+		return FALSE;
+	}
+
+	BEGIN_MSG_MAP(CVideoCanvus)
+		MESSAGE_HANDLER(WM_PAINT, OnPaint)
+	END_MSG_MAP()
+
+	// Handler prototypes (uncomment arguments if needed):
+	//	LRESULT MessageHandler(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/)
+	//	LRESULT CommandHandler(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
+	//	LRESULT NotifyHandler(int /*idCtrl*/, LPNMHDR /*pnmh*/, BOOL& /*bHandled*/)
+
+	LRESULT OnPaint(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/)
+	{
+		CPaintDC dc(m_hWnd);
+		_outer->associated_decoder->toggle_need_drawing(1);
+
+		return 0;
+	}
+
+};

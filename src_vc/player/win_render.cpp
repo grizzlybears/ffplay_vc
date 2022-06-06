@@ -13,7 +13,6 @@ WinRender::WinRender(SimpleAVDecoder* decoder, DecoderEventCB* e)
 {
 	associated_decoder = decoder;
 	_event_cb = e;
-	canvas = NULL;
     img_convert_ctx = NULL; 
 	need_pic_size = 0;
 	
@@ -21,6 +20,7 @@ WinRender::WinRender(SimpleAVDecoder* decoder, DecoderEventCB* e)
 	rgb_buffer = NULL;
 
 	audio_dev = 0;
+	attatched = NULL;
 }
 
 int WinRender::init(int audio_disable, int alwaysontop)
@@ -32,8 +32,8 @@ int WinRender::init(int audio_disable, int alwaysontop)
 void WinRender::attach_to_window(HWND  hWnd)
 {
 	need_pic_size = 1;
-	canvas = hWnd;
-
+	attatched = new CVideoCanvus(this, hWnd);
+	
 	SDL_Event event;
 	event.type = RESET_REFRESH_COUNT_EVENT;
 	SDL_PushEvent(&event);
@@ -42,8 +42,13 @@ void WinRender::attach_to_window(HWND  hWnd)
 
 void WinRender::dettach_from_window()
 {
+	if (attatched)
+	{
+		delete attatched;
+		attatched = NULL;
+	}
 	need_pic_size = 0;
-	canvas = NULL;
+
 }
 
 void WinRender::pause_audio(int pause_on )
@@ -106,7 +111,7 @@ void WinRender::upload_and_draw_frame(Frame* vp)
 	frame_num++;
 #endif
 
-	if (!canvas)
+	if (!attatched || !vp)
 	{
 		return;
 	}
@@ -157,7 +162,7 @@ void WinRender::upload_and_draw_frame(Frame* vp)
 		, 0, frame->height
 		, pFrameRGB->data, pFrameRGB->linesize);
 
-	draw_frame_gdi(rgb_buffer, frame->width, frame->height, canvas);
+	draw_frame_gdi(rgb_buffer, frame->width, frame->height, attatched->operator HWND());
 
 }
 
