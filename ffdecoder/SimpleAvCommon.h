@@ -282,3 +282,8 @@ inline int float_equal(double a, double b)
     return fabs( a - b ) < 0.00001;
 }
 
+#if _MSC_VER > 1916      // prevent xxxx already defined in some_source.cpp
+template<> void AutoReleasePtr<AVFormatContext>::release();
+template<> void AutoReleasePtr<AVCodecContext>::release();
+#endif
+

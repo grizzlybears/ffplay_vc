@@ -25,7 +25,7 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 
 	// 第一层 右侧播放列表
 	m_playlist_pane.SetPaneContainerExtendedStyle(PANECNT_NOBORDER);
-	m_playlist_pane.Create(m_splitter_lr, _T("播放列表"), WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN);
+	m_playlist_pane.Create(m_splitter_lr, _T("PlayList"), WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN);
 	m_playlist.Create(m_playlist_pane, rcDefault, NULL
 		, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN | LVS_LIST | LVS_SINGLESEL
 		, WS_EX_CLIENTEDGE);

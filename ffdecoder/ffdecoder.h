@@ -448,6 +448,9 @@ protected:
     // }}} 'reader thread' section
 };
 
+#if _MSC_VER > 1916     // prevent xxxx already defined in some_source.cpp
+template<> void AutoReleasePtr<VideoState>::release();
+#endif
 
 /**
  * Print an error message to stderr, indicating filename and a human
